@@ -1,0 +1,57 @@
+/* The worlds: each theme's roles as bromigOS ships them (themes/<name>/colors.toml).
+   The server's world sets data-world on <html> (lib/world.ts); the Wick is the default.
+   Taken from the Lab board prototype's stylesheet (mockups-artifact.html, the DRIFTGLASS
+   mock-ups); the class names are the prototype's, so a page reads like its mock-up. */
+
+/* Tokens: each theme's roles as bromigOS ships them (themes/<name>/colors.toml), under the names
+   the start page gives them (theme/templates/startpage.css.tpl: void, panel, guard = selection,
+   phosphor = primary, soft, dim, amber = warn, danger, static = muted, text). line, rule and glow
+   are that template's formulas; tile-hover is #031a03 in the Wick and the selection elsewhere. */
+:root {
+  /* The Wick: themes/wick/colors.toml */
+  --void: #000500; --panel: #001300; --guard: #003b00; --phosphor: #39ff14; --soft: #9cff8a; --dim: #159b09; --text: #c4f5bb; --static: #7e927e; --faint: #4e6b4e; --amber: #d4af37; --danger: #ff766f; --warn-surface: #4a3a0a; --danger-surface: #1a0503; --danger-text: #ffd9d6; --cyan: #3fe0c5; --white: #e8ffe0;
+  --tile-hover: #031a03;
+  --line: color-mix(in srgb, var(--dim) 45%, transparent);
+  --rule: color-mix(in srgb, var(--dim) 18%, transparent);
+  --glow: color-mix(in srgb, var(--phosphor) 25%, transparent);
+  --frame: color-mix(in srgb, var(--dim) 60%, transparent);
+  --glass: color-mix(in srgb, var(--panel) 90%, transparent);
+  --lit: color-mix(in srgb, var(--phosphor) 70%, transparent);
+  /* the holograms' scanlines are black at 10% (bromigos_glass.py, _scanlines) */
+  --scan-black: color-mix(in srgb, black 10%, transparent);
+  /* the app icons' disc (theme/tools/build-app-icons.py, DISC_IN and DISC_OUT): Wick only */
+  --disc-in: #0e2a0c; --disc-out: #040904;
+  --mono: "Geist Mono", ui-monospace, "DejaVu Sans Mono", monospace;
+  color-scheme: dark;
+  /* each world's accent, for the world list's swatches (the phosphor of each themes/<name>/colors.toml) */
+  --sw-wick: #39ff14; --sw-mire: #b8e05a; --sw-tidewell: #3fd8e8; --sw-rime: #9fe3ff; --sw-sunder: #ffb347; --sw-cinder: #ff7a2a; --sw-lowtown: #ff5fa8; --sw-highwind: #f5c76a; --sw-deepvein: #b388ff; --sw-wick-tidewell: #3fd8e8; --sw-wick-mire: #b8e05a;
+  /* the design notes' own colour, apart from the product's: a pale mix of the world's white and cyan */
+  --note: color-mix(in srgb, var(--white) 55%, var(--cyan));
+}
+/* Mire: themes/mire/colors.toml (and themes/wick-mire/colors.toml, the same values) */
+:root[data-world="mire"], :root[data-world="wick-mire"] { --void: #05090a; --panel: #0c1513; --guard: #1c2d27; --phosphor: #b8e05a; --soft: #d6e8b4; --dim: #5d7a4b; --text: #cfdcc4; --static: #7a8a78; --faint: #4a5a4c; --amber: #e8a040; --danger: #e0604f; --warn-surface: #3e2c0e; --danger-surface: #1c0806; --danger-text: #ffd9d2; --cyan: #58e0e8; --white: #eef4e0; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Tidewell: themes/tidewell/colors.toml (and themes/wick-tidewell/colors.toml, the same values) */
+:root[data-world="tidewell"], :root[data-world="wick-tidewell"] { --void: #02070d; --panel: #08131d; --guard: #12283a; --phosphor: #3fd8e8; --soft: #a6e6f0; --dim: #2a7488; --text: #c6dce6; --static: #7890a0; --faint: #465868; --amber: #f0b850; --danger: #ff6b6b; --warn-surface: #3a2c0c; --danger-surface: #1c0608; --danger-text: #ffd9d9; --cyan: #3fd8e8; --white: #eef6ff; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Rime: themes/rime/colors.toml */
+:root[data-world="rime"] { --void: #02050a; --panel: #0b1422; --guard: #14263a; --phosphor: #9fe3ff; --soft: #d6f1ff; --dim: #3f7fa6; --text: #cfe6f5; --static: #7a94a8; --faint: #4a5c6b; --amber: #ffd27a; --danger: #ff6b7a; --warn-surface: #3a2e10; --danger-surface: #2a0a10; --danger-text: #ffd9dd; --cyan: #7ff5e8; --white: #f2fbff; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Sunder: themes/sunder/colors.toml */
+:root[data-world="sunder"] { --void: #060403; --panel: #1a1410; --guard: #2e2418; --phosphor: #ffb347; --soft: #f5deb3; --dim: #8a6a3a; --text: #e9dcc7; --static: #9a8a76; --faint: #5c5046; --amber: #ff8c3a; --danger: #ff4d4d; --warn-surface: #3d2410; --danger-surface: #2a0a0a; --danger-text: #ffd6d6; --cyan: #7fd3c8; --white: #fff3e0; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Cinder: themes/cinder/colors.toml */
+:root[data-world="cinder"] { --void: #050303; --panel: #171010; --guard: #2b1a16; --phosphor: #ff7a2a; --soft: #ffc8a0; --dim: #8a3f1e; --text: #f0dcd0; --static: #9a8078; --faint: #5a4a44; --amber: #ffcf5a; --danger: #ff3b3b; --warn-surface: #3d2a0a; --danger-surface: #2b0808; --danger-text: #ffd8d8; --cyan: #6fd3ff; --white: #fff0e6; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Lowtown: themes/lowtown/colors.toml */
+:root[data-world="lowtown"] { --void: #030304; --panel: #12121a; --guard: #22223a; --phosphor: #ff5fa8; --soft: #ffc2e0; --dim: #8a3a6a; --text: #e6e1ef; --static: #8c86a0; --faint: #534f66; --amber: #ffd84a; --danger: #ff5252; --warn-surface: #3a3010; --danger-surface: #2a0a12; --danger-text: #ffd6de; --cyan: #4fe3ff; --white: #f5f0ff; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Highwind: themes/highwind/colors.toml */
+:root[data-world="highwind"] { --void: #05070f; --panel: #141a2e; --guard: #243052; --phosphor: #f5c76a; --soft: #f8e6bf; --dim: #8a7540; --text: #e4e9f7; --static: #8c94b3; --faint: #525a78; --amber: #ff9f5a; --danger: #ff6670; --warn-surface: #3a2a10; --danger-surface: #2a0d12; --danger-text: #ffd9dc; --cyan: #8ad8ff; --white: #f6f9ff; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* Deepvein: themes/deepvein/colors.toml */
+:root[data-world="deepvein"] { --void: #030207; --panel: #120c1e; --guard: #261a3a; --phosphor: #b388ff; --soft: #dcc8ff; --dim: #5e3f9c; --text: #e6ddf5; --static: #8f84a8; --faint: #574c70; --amber: #f0c060; --danger: #ff5c7a; --warn-surface: #3a2c10; --danger-surface: #2a0a18; --danger-text: #ffd6e1; --cyan: #6ff0d8; --white: #f6efff; --tile-hover: var(--guard); --disc-in: var(--guard); --disc-out: var(--void); }
+/* the rack's colour outside the Wick: a CSS tint of the one shipped render, an approximation (the page says so) */
+:root[data-world="mire"] { --rack-tint: hue-rotate(-30deg) saturate(.75); }
+:root[data-world="tidewell"] { --rack-tint: hue-rotate(76deg); }
+:root[data-world="rime"] { --rack-tint: hue-rotate(88deg) saturate(.8) brightness(1.15); }
+:root[data-world="sunder"] { --rack-tint: hue-rotate(-74deg) saturate(1.1); }
+:root[data-world="cinder"] { --rack-tint: hue-rotate(-90deg) saturate(1.3); }
+:root[data-world="lowtown"] { --rack-tint: hue-rotate(222deg) saturate(1.1); }
+:root[data-world="highwind"] { --rack-tint: hue-rotate(-68deg) saturate(.8); }
+:root[data-world="deepvein"] { --rack-tint: hue-rotate(152deg) saturate(.9) brightness(1.1); }
+:root[data-world="wick-tidewell"] { --rack-tint: hue-rotate(76deg); }
+:root[data-world="wick-mire"] { --rack-tint: hue-rotate(-30deg) saturate(.75); }

@@ -30,6 +30,7 @@ names, in backticks, with an explicit decision: **yes** (who, date) or **no**
 | Bromigos logos, favicons, lockups and house palette (`brand/`) | Traced from the canon `bromigos-logo.png` | yes, as brand assets | Source only, not packaged. No likeness |
 | The canonical burn-in (`theme/emblem/identity.json`, `flame.svg`) | Bromigos original | yes, as a brand asset | In `bromigos-core`. Every emblem kit is drawn from it |
 | Geist and Geist Mono fonts | Vercel, SIL OFL | yes | Keep the licence file |
+| The Lab board's icon family and device glyphs (`board/web/components/sprite.ts`) | Drawn for bromigOS as SVG on a 24 grid, in the Lab board's design | yes | `MIT OR Apache-2.0`; no outside logos. Geist Mono reaches the page as links to `ttf-geist-mono`'s files |
 | Icons and cursor | Generated or recoloured from Breeze Dark (LGPL) | **yes** (operator, 2026-10-08) | Keep Breeze's attribution where derived |
 | The bar's battery and power-profile icons (`theme/icons/{bat,power}*.svg`) | Drawn for bromigOS | yes | Recoloured per theme |
 | The bar's idle and Settings icons (`theme/icons/{eye,cup,gear}*.svg`) | Drawn in code by `theme/tools/build-icons.py` | yes | Recoloured per theme |
@@ -48,6 +49,7 @@ names, in backticks, with an explicit decision: **yes** (who, date) or **no**
 | Tidewell actors and loops | Generated with nolgia, matted locally | **yes** (operator, 2026-10-08) | The Choir is an original creature |
 | Craft overhead in Mire and Tidewell | Generated with nolgia, cut locally | **yes** (operator, 2026-10-08) | Original designs |
 | 3D holograms: the workstation, the Wick and the rack | nolgia concepts, image-to-3D; the rack's job in `homelab/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | On bromigos.org, without live readings |
+| The Lab board's machine holograms (`board/web/public/holo/rack.bin` and `workstation.bin`, with their part lists) | The same rack and workstation as bromigos.org, in its `bromigos-holo-web/1` format | yes | Lit by the server's own readings. The storage, node, router, battery, phone and dish meshes (Pixal3D, DINOv3 licence not cleared) are **not** shipped: those machines show their kind's glyph |
 | 3D holograms made on the homelab: the worlds' posts, creatures and craft | Open models on the homelab, no credits; each job in `themes/*/holo/generations.jsonl` and `theme/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | Research and community licences. See [the notes](#3d-holograms) |
 | 3D burn-in emblem | Extruded from the Wick's emblem | yes, as a brand asset | In `bromigos-vector` |
 | The Drift map's lore catalogue (`live/lore/catalog.json`) | bromigos.org's public lore export, copied by `tools/lore/sync-catalog.py` | yes, as a brand asset | In `bromigos-live`. A user's `[driftmap] catalog` replaces it |

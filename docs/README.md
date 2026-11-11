@@ -96,6 +96,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers, backups and getting files back from them |
 | [salvage.md](salvage.md) | Salvage scan: what an old PC can do as a home server, judged by the catalogue's budget logic (`bromigos hw salvage`) |
 | [alerts.md](alerts.md) | `bromigos alerts`: the checks that find what needs you (drives, disk space, updates, backups, the UPS, services), the notification, and your own checks |
+| [board.md](board.md) | The Lab board's page: the server's own web page, its routes, what it reads from the server, fixture mode, its tests and its package |
 | [activity.md](activity.md) | `bromigos activity`: long jobs as records with named steps, each in a systemd unit of its own; jobs that ask a question, wait for a lock, and say when stopping is safe; the record's fields, and how to make a script a job |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |

@@ -1,0 +1,109 @@
+name: board web
+
+# The Lab board's page (board/web/, docs/board.md) on a pull request: types, the real build
+# and its rules (no other site, no inline script or style), and the Playwright suite in
+# headless Chromium against the fixture build, served with the board's Content-Security-Policy.
+# The package build (packaging/bromigos-board-web) builds the same page once it is on main.
+
+on:
+  pull_request:
+    paths:
+      - "board/**"
+      - "packaging/bromigos-board-web/**"
+      - ".github/workflows/board-web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: board-web-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  # the same release ttf-geist-mono pins (packaging/ttf-geist-mono/PKGBUILD)
+  GEIST_VERSION: "1.7.2"
+  GEIST_SHA256: "7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2"
+
+jobs:
+  web:
+    name: Build and test the page
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: board/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: board/web/package-lock.json
+      - name: npm ci
+        # no dependency's install script runs: the lock file pins each package by its hash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: types
+        run: npm run typecheck
+      - name: the package's build (no fixtures), twice the same
+        run: |
+          npm run build
+          test ! -e out/fixtures
+          ! grep -rlq '/fixtures/' out/_next/static
+          test -d "out/_next/static/$(git rev-parse --short=12 HEAD)"
+          cp -r out "$RUNNER_TEMP/out-first"
+          npm run build
+          diff -r "$RUNNER_TEMP/out-first" out
+      - name: Geist Mono, as ttf-geist-mono installs it
+        run: |
+          curl -fsSL -o /tmp/geist.zip "https://github.com/vercel/geist-font/releases/download/v${GEIST_VERSION}/geist-font-v${GEIST_VERSION}.zip"
+          echo "${GEIST_SHA256}  /tmp/geist.zip" | sha256sum -c -
+          unzip -q -o /tmp/geist.zip -d /tmp/geist
+          mkdir -p /tmp/fonts && cp /tmp/geist/geist-font/GeistMono/ttf/GeistMono-*.ttf /tmp/fonts/
+      - name: the fixture build
+        run: npm run build:fixtures
+      - name: headless Chromium
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Playwright
+        env:
+          CI: "1"
+          BOARD_FONTS: /tmp/fonts
+        run: npx playwright test
+      - name: the report, when something failed
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            board/web/playwright-report
+            board/web/test-results
+          retention-days: 7
+
+
+  shapes:
+    name: The service's shapes are the ones the page's tests hold
+    # The page's contract tests run against real answers of the service, kept in
+    # board/web/tests/contract/service.json. This makes them again from the service's and the
+    # commands' own code, and fails when a shape changed (a key, a type): then the samples
+    # are made again (board/web/scripts/make-contract.py) and the page follows. It runs once
+    # the service's code is in the checkout.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: is the service here?
+        id: service
+        run: |
+          if [ -d board/lib/bromigos_board ]; then
+            echo "here=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "The board's service isn't in this checkout yet, so there is nothing to compare."
+          fi
+      - name: the service's libraries
+        if: steps.service.outputs.here == '1'
+        run: python3 -m pip install --quiet --break-system-packages starlette httpx
+      - name: the shapes
+        if: steps.service.outputs.here == '1'
+        run: python3 board/web/scripts/make-contract.py --shapes

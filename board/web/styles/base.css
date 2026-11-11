@@ -1,0 +1,539 @@
+/* DRIFTGLASS on the web: type, Glass panels, icons, buttons, states, chips, tiles,
+   readings, steps, the strip, jobs, menus and forms.
+   Taken from the Lab board prototype's stylesheet (mockups-artifact.html, the DRIFTGLASS
+   mock-ups); the class names are the prototype's, so a page reads like its mock-up. */
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+body { background: var(--void); color: var(--text); font: 14px/1.5 var(--mono); -webkit-text-size-adjust: 100%; }
+a { color: inherit; }
+h1 { font-size: 24px; line-height: 1.15; letter-spacing: .05em; color: var(--phosphor); margin: 0 0 6px; text-wrap: balance; }
+h2 { font-size: 20px; line-height: 1.2; margin: 0; color: var(--soft); text-wrap: balance; }
+/* a panel's heading: the start page's (desktop/startpage/style.css, h2) */
+h3 { font-size: 12px; font-weight: 600; letter-spacing: .22em; color: var(--phosphor); margin: 0 0 12px; display: flex; justify-content: space-between; gap: 8px 12px; align-items: center; flex-wrap: wrap; min-height: 20px; }
+h3 > span:first-child:not(.st) { display: inline-flex; align-items: center; gap: 8px; }
+p { margin: 0 0 10px; max-width: 68ch; }
+.muted { color: var(--static); } .soft { color: var(--soft); } .warn { color: var(--amber); } .bad { color: var(--danger); }
+.small { font-size: 12px; line-height: 1.4; }
+.over { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+code, .code { font-family: var(--mono); color: var(--soft); overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+
+/* the one EXAMPLE DATA mark a frame carries, and the tint and planned marks: dashed, so they never read as states */
+.ex, .approx, .pl { display: inline-block; border: 1px dashed var(--static); color: var(--static); font-size: 11px; font-weight: 700; letter-spacing: .12em; padding: 0 6px; line-height: 18px; white-space: nowrap; cursor: help; text-transform: none; }
+.pl { border-color: color-mix(in srgb, var(--cyan) 70%, transparent); color: var(--cyan); text-transform: uppercase; }
+/* the bars: the installer's (gui.py, .bi-bar) */
+
+.body { padding: 14px; }
+
+/* Glass, the start page's panel with its two lit corner brackets (desktop/startpage/style.css, .panel) */
+.panel { position: relative; background: var(--panel) radial-gradient(ellipse 75% 60% at 50% 0%, color-mix(in srgb, var(--phosphor) 6%, transparent), transparent); border: 1px solid var(--line); padding: 14px 16px 16px; min-width: 0; }
+.panel::before, .panel::after { content: ""; position: absolute; width: 10px; height: 10px; pointer-events: none; border-color: var(--phosphor); border-style: solid; }
+.panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+.panel::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+.panel.is-warn { border-color: var(--amber); } .panel.is-warn::before, .panel.is-warn::after { border-color: var(--amber); }
+.panel.quiet { background: var(--void); }
+.panel.is-warn { background-image: radial-gradient(ellipse 75% 60% at 50% 0%, color-mix(in srgb, var(--amber) 7%, transparent), transparent); }
+
+/* icons: BRODEC's holo icons (holo_icons.dart): 24 grid, 1.5 stroke, square caps, mitre joins, no fills but the odd dot */
+svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; flex: none; overflow: visible; }
+svg.i.s16 { width: 16px; height: 16px; } svg.i.s20 { width: 20px; height: 20px; } svg.i.s32 { width: 32px; height: 32px; } svg.i.s40 { width: 40px; height: 40px; }
+.dot { fill: currentColor; stroke: none; }
+.halo { fill: currentColor; stroke: none; opacity: .16; }
+/* buttons: the Settings and installer buttons (bromigos_settings/style.py: button, .suggested-action, .destructive-action) */
+.ib { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1px solid var(--frame); color: var(--soft); cursor: pointer; font: inherit; position: relative; border-radius: 0; }
+.ib:hover, .ib:focus-visible { color: var(--phosphor); background: color-mix(in srgb, var(--phosphor) 12%, transparent); }
+.ib.on { border-color: var(--phosphor); color: var(--phosphor); box-shadow: inset 0 -3px 0 var(--phosphor); background: color-mix(in srgb, var(--phosphor) 13%, transparent); }
+.ib.big { width: 56px; height: 56px; background: var(--phosphor); border-color: var(--phosphor); color: var(--void); }
+.ib.big:hover, .ib.big:focus-visible { background: var(--soft); border-color: var(--soft); color: var(--void); }
+.ib.danger { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 60%, transparent); } .ib.danger:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.ib.off { background: transparent; color: var(--faint); border-color: color-mix(in srgb, var(--dim) 40%, transparent); cursor: not-allowed; } .ib.off:hover { color: var(--faint); background: transparent; }
+.ib .count { position: absolute; top: -8px; right: -8px; min-width: 18px; height: 18px; padding: 0 4px; background: var(--phosphor); color: var(--void); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.ib .count:empty { display: none; }
+.ib.big .count { background: var(--soft); box-shadow: 0 0 0 2px var(--void); }
+.ib .count.w { background: var(--amber); }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* each icon moves once on hover, and never under reduced motion */
+@keyframes mv-turn { to { transform: rotate(360deg); } }
+@keyframes mv-wind { to { transform: rotate(-360deg); } }
+@keyframes mv-lift { 50% { transform: translateY(-4px); } }
+@keyframes mv-drop { 50% { transform: translateY(3px); } }
+@keyframes mv-slide { 50% { transform: translateX(4px); } }
+@keyframes mv-out { 50% { transform: translate(2px, -2px); } }
+@keyframes mv-beat { 40% { transform: scale(1.18); } }
+@keyframes mv-sweep { from { transform: rotate(-90deg); } to { transform: rotate(0deg); } }
+.ib svg, .tile .plate svg { transform-origin: 50% 50%; }
+.ib:hover .m-turn { animation: mv-turn .32s ease-out 1; }
+.ib:hover .m-wind { animation: mv-wind .32s ease-out 1; }
+.ib:hover .m-lift { animation: mv-lift .28s ease-out 1; }
+.ib:hover .m-drop { animation: mv-drop .28s ease-out 1; }
+.ib:hover .m-slide { animation: mv-slide .28s ease-out 1; }
+.ib:hover .m-out { animation: mv-out .28s ease-out 1; }
+.ib:hover .m-beat, .tile:hover .plate .m-beat, .cell:hover .m-beat { animation: mv-beat .28s ease-out 1; }
+.ib:hover .m-sweep { animation: mv-sweep .32s ease-out 1; }
+
+/* state: a shape and a word beside the light, never colour alone (BRODEC's DESIGN.md, "LAB") */
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; }
+.st.ok { color: var(--phosphor); } .st.warn { color: var(--amber); } .st.down { color: var(--danger); } .st.unk { color: var(--static); } .st.busy { color: var(--soft); }
+/* chips: the installer's (bromigos_glass.py, .dg-chip and .dg-chip.quiet) */
+.chip { display: inline-block; border: 1px solid color-mix(in srgb, var(--dim) 70%, transparent); color: var(--static); font-size: 11px; font-weight: 700; letter-spacing: .12em; padding: 2px 8px; white-space: nowrap; }
+.chip.lit { border-color: var(--lit); color: var(--phosphor); } .chip.amber { border-color: var(--amber); color: var(--amber); } .chip.red { border-color: var(--danger); color: var(--danger); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* layout */
+.cols { display: grid; gap: 14px; grid-template-columns: 344px minmax(0, 1fr); align-items: start; }
+.cols > aside { position: sticky; top: 60px; }
+.cols.act { grid-template-columns: minmax(0, 1fr) 380px; }
+.stack { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.two { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.split { display: grid; gap: 16px; grid-template-columns: 320px minmax(0, 1fr); align-items: start; }
+.split.g { grid-template-columns: 192px minmax(0, 1fr); }
+/* VECTOR, the guide (bromigos_glass.py, guide() and .dg-guide): his own render, his name, one short line in his voice */
+.guide { border: 1px solid var(--frame); background: var(--glass); padding: 10px 12px 12px; display: grid; gap: 4px; justify-items: start; align-content: start; }
+.guide img { width: 120px; height: 178px; object-fit: contain; justify-self: center; filter: var(--rack-tint, none); }
+.guide b { color: var(--phosphor); font-weight: 700; letter-spacing: .2em; font-size: 11px; }
+.guide > span:not(.approx) { color: var(--text); font-size: 13px; line-height: 1.4; }
+.guide .approx { position: static; }
+.tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); }
+/* a group's heading: its hologram, then the installer's section label (.dg-section) */
+.grouphead { display: flex; align-items: center; gap: 8px; margin: 18px 0 8px; color: var(--phosphor); font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+.grouphead:first-child { margin-top: 0; }
+.grouphead .meta { color: var(--static); font-weight: 400; letter-spacing: .08em; margin-left: auto; text-transform: none; font-size: 12px; }
+.grouphead svg.gl { width: 44px; height: 44px; flex: none; }
+
+/* the installer's catalogue tile (server_gui.py, _cat_tile: a .dg-card.sv-tile), made permanent:
+   Glass with the Scanline texture and the Emitter's light from the top, lit once chosen. A tile is
+   four things to scan: the job, the app, two or three readings, one state. Its sentence is the hint. */
+.tile { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px 12px; padding: 12px 14px; min-height: 124px; align-content: space-between; align-items: center;
+  border: 1px solid var(--frame); background-color: var(--glass);
+  background-image: repeating-linear-gradient(180deg, color-mix(in srgb, var(--phosphor) 3.5%, transparent) 0 1px, transparent 1px 3px), radial-gradient(ellipse 80% 55% at 50% 0%, color-mix(in srgb, var(--phosphor) 7%, transparent) 0%, transparent 100%); }
+.tile:hover { border-color: color-mix(in srgb, var(--phosphor) 80%, transparent); box-shadow: 0 0 14px var(--glow); }
+.tile.in, .tile.pick { border-color: var(--phosphor); background-color: color-mix(in srgb, var(--phosphor) 7%, var(--panel));
+  background-image: repeating-linear-gradient(180deg, color-mix(in srgb, var(--phosphor) 3.5%, transparent) 0 1px, transparent 1px 3px), radial-gradient(ellipse 85% 65% at 50% 0%, color-mix(in srgb, var(--phosphor) 18%, transparent) 0%, transparent 100%); }
+.tile.pick { box-shadow: 0 0 0 1px var(--phosphor), 0 0 22px color-mix(in srgb, var(--phosphor) 35%, transparent); }
+.tile.nofit { opacity: .78; }
+.tile > .tick { position: absolute; top: 8px; right: 8px; color: var(--phosphor); display: none; }
+.tile.in > .tick, .tile.pick > .tick { display: block; }
+/* an app's plate: the app icons' ring with its notch at twelve (theme/tools/build-app-icons.py) */
+.plate { width: 44px; height: 44px; border: 2px solid var(--phosphor); border-radius: 50%; display: grid; place-items: center; color: var(--phosphor); background: radial-gradient(circle at 50% 45%, var(--disc-in), var(--disc-out) 55%); position: relative; flex: none; }
+.plate::after { content: ""; position: absolute; top: -2px; left: 50%; width: 2px; height: 6px; margin-left: -1px; background: var(--phosphor); }
+.plate.big { width: 72px; height: 72px; border-width: 3px; box-shadow: 0 0 22px var(--glow); } .plate.big::after { top: -3px; height: 9px; }
+.plate.sm { width: 32px; height: 32px; } .plate.sm::after { height: 6px; }
+.plate.off, .tile[data-id]:not(.in):not(.pick) .plate { color: var(--dim); border-color: var(--dim); } .plate.off::after, .tile[data-id]:not(.in):not(.pick) .plate::after { background: var(--dim); }
+.plate.amber { color: var(--amber); border-color: var(--amber); } .plate.amber::after { background: var(--amber); }
+.plate .mono2 { font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+/* the card's title (.dg-card-title) and the app under it */
+.tile b { display: block; font-size: 16px; color: var(--phosphor); font-weight: 700; letter-spacing: .06em; line-height: 1.2; text-wrap: balance; padding-right: 14px; }
+.tile .app { display: block; font-size: 11px; color: var(--static); letter-spacing: .08em; margin-top: 2px; }
+.tile .nm { min-width: 0; }
+/* small readings: an icon and a figure */
+.specs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; font-weight: 600; color: var(--soft); font-variant-numeric: tabular-nums; }
+.spec { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.spec svg { color: var(--dim); }
+.spec.warn svg { color: var(--amber); }
+.tile .foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.tile .foot .ib { width: 32px; height: 32px; margin-left: auto; }
+.tile .read { grid-column: 1 / -1; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .addr { font-size: 12px; color: var(--static); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* what a tile shows once it is picked, and before */
+.tile .if-pick, .tile.pick .if-free { display: none; }
+.tile.pick .if-pick { display: inline-block; }
+.tile.pick svg.if-pick { display: block; }
+.tile.auto .foot .ib { display: none; }
+
+/* the installer's budget meter (bromigos_glass.py, BudgetHolo): four rows of twenty cells, on its holo-table */
+.meter { padding: 18px 20px 16px; }
+.meter > div, .meter > p { position: relative; }
+.meter .top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--soft); margin-bottom: 16px; flex-wrap: wrap; }
+.meter .top .fits { color: var(--phosphor); } .meter .top .fits.over { color: var(--amber); }
+.meter .row { margin-bottom: 14px; }
+.meter .row > .small { margin-top: 4px; }
+.meter .row > div:first-child { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 11px; letter-spacing: .14em; color: var(--static); font-weight: 700; }
+.meter .row > div:first-child span:last-child { color: var(--phosphor); font-size: 15px; font-weight: 700; letter-spacing: .02em; text-align: right; font-variant-numeric: tabular-nums; }
+.meter .row > div:first-child span:last-child small { color: var(--static); font-size: 11px; font-weight: 600; }
+.meter .row .now { display: flex; justify-content: space-between; font-size: 11px; color: var(--static); margin-top: 4px; letter-spacing: .08em; }
+.cells { --w: calc((100% - 57px) / 20); position: relative; height: 12px; margin-top: 5px;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--guard) 90%, transparent) 0 var(--w), transparent var(--w) calc(var(--w) + 3px)); }
+.cells i { position: absolute; inset: 0; --w: calc((100% - 57px) / 20);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--phosphor) 90%, transparent) 0 var(--w), transparent var(--w) calc(var(--w) + 3px)); clip-path: inset(0 calc(100% - var(--lit, 0%)) 0 0); transition: clip-path .35s steps(4); }
+.cells i.add { background: repeating-linear-gradient(90deg, var(--soft) 0 var(--w), transparent var(--w) calc(var(--w) + 3px)); opacity: .55; }
+.cells i.over { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--amber) 90%, transparent) 0 var(--w), transparent var(--w) calc(var(--w) + 3px)); }
+.meter .auto { font-size: 11px; color: var(--cyan); text-align: center; margin: 0; max-width: none; }
+.meter .auto[hidden] { display: none; }
+/* a note: the installer's (bromigos_glass.py, .dg-note) */
+.note { border-left: 3px solid var(--amber); padding: 7px 12px; background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--text); font-size: 12px; margin: 0; max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* depth, one press behind: the installer's expander (a chevron and plain words) */
+details.depth { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 8px; }
+details.depth > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+details.depth > summary::-webkit-details-marker { display: none; }
+details.depth > summary svg { transform: rotate(-90deg); }
+details.depth > summary:hover { color: var(--phosphor); }
+details.depth[open] > summary { margin-bottom: 8px; }
+details.depth[open] > summary svg { transform: none; }
+pre { margin: 0; padding: 10px; background: var(--void); border: 1px solid var(--frame); color: var(--soft); font: 12px/1.45 var(--mono); overflow-x: auto; white-space: pre; }
+dl.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 14px; margin: 0; font-size: 13px; }
+dl.kv dt { color: var(--static); letter-spacing: .16em; font-size: 11px; font-weight: 700; padding-top: 3px; text-transform: uppercase; }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+/* a hero on its holo-table (bromigos_glass.py, _Holo): Glass with the table's glow from below, the
+   floor grid drifting toward you, the picture, black scanlines every 3 px, the Scanline passing
+   down, a faint edge and four lit corner brackets (18 px arms, 2 px) */
+.holo { position: relative; overflow: hidden; isolation: isolate; width: 100%; max-width: 560px; margin-inline: auto; min-width: 0;
+  background: radial-gradient(circle farthest-side at 50% 95%, color-mix(in srgb, var(--phosphor) 13%, transparent), transparent), color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.h-floor, .h-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.h-floor path { fill: none; stroke: var(--phosphor); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.h-floor .fa { stroke-opacity: .07; }
+.h-floor .fx { stroke-opacity: var(--o0); animation: h-drift 8.33s linear infinite; }
+@keyframes h-drift { to { transform: translateY(var(--dy)); stroke-opacity: var(--o1); } }
+.h-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(180deg, var(--scan-black) 0 1px, transparent 1px 3px); }
+.h-scan::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--phosphor) 10%, transparent)) 0 -23px / 100% 23px no-repeat; animation: h-scanline 8.5s linear infinite; }
+@keyframes h-scanline { from { background-position-y: -23px; } to { background-position-y: calc(100% + 23px); } }
+.h-edge { position: absolute; inset: 0; pointer-events: none; border: 1px solid color-mix(in srgb, var(--phosphor) 16%, transparent); --b: color-mix(in srgb, var(--phosphor) 85%, transparent);
+  background: linear-gradient(var(--b), var(--b)) 0 0 / 18px 2px, linear-gradient(var(--b), var(--b)) 0 0 / 2px 18px, linear-gradient(var(--b), var(--b)) 100% 0 / 18px 2px, linear-gradient(var(--b), var(--b)) 100% 0 / 2px 18px,
+    linear-gradient(var(--b), var(--b)) 0 100% / 18px 2px, linear-gradient(var(--b), var(--b)) 0 100% / 2px 18px, linear-gradient(var(--b), var(--b)) 100% 100% / 18px 2px, linear-gradient(var(--b), var(--b)) 100% 100% / 2px 18px; background-repeat: no-repeat; }
+/* the rack: the shipped render (desktop/art/server-rack.png, 24 frames side by side), its light added
+   to what is behind, one turn every 18 s from the gallery's own angle (frame 10), which is also the
+   still frame under reduced motion (bromigos_glass.py, draw_rack) */
+.rk { position: absolute; background: url(/art/server-rack.png) 43.478% 0 / 2400% 100% no-repeat; mix-blend-mode: plus-lighter; animation: rk-turn 18s steps(24) -7.5s infinite; filter: var(--rack-tint, none); }
+.rk.dim { opacity: .45; }
+@keyframes rk-turn { from { background-position-x: 0%; } to { background-position-x: 104.348%; } }
+.h-art text { font-family: var(--mono); font-weight: 700; }
+.t-text { fill: var(--text); } .t-muted { fill: var(--static); } .t-pri { fill: var(--phosphor); } .t-soft { fill: var(--soft); } .t-cyan { fill: var(--cyan); } .t-warn { fill: var(--amber); }
+.ring-track { fill: none; stroke: color-mix(in srgb, var(--guard) 90%, transparent); stroke-width: 6; }
+.ring-done { fill: none; stroke: var(--phosphor); stroke-width: 6; }
+.h-foot { fill: none; stroke: var(--phosphor); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: 0; animation: h-foot 2.22s linear infinite; }
+@keyframes h-foot { from { transform: scale(.44); opacity: .55; } to { transform: scale(1); opacity: 0; } }
+.sweep-band { fill: url(#sweep); }
+.sweep-line { fill: none; stroke: color-mix(in srgb, var(--soft) 90%, transparent); stroke-width: 1.5; }
+.ln { fill: none; stroke: color-mix(in srgb, var(--phosphor) 85%, transparent); stroke-width: 2; }
+.ln.off { stroke: color-mix(in srgb, var(--dim) 45%, transparent); }
+.ln-glow { fill: none; stroke: color-mix(in srgb, var(--phosphor) 10%, transparent); stroke-width: 7; }
+.ln-dot { fill: color-mix(in srgb, var(--soft) 90%, transparent); offset-rotate: 0deg; animation: h-run 1.67s linear infinite; }
+@keyframes h-run { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+.nd { stroke-width: 1.4; }
+.nd.on { fill: var(--lit); stroke: color-mix(in srgb, var(--phosphor) 90%, transparent); }
+.nd.off { fill: color-mix(in srgb, var(--dim) 10%, transparent); stroke: color-mix(in srgb, var(--dim) 90%, transparent); }
+.cd { stroke-width: 1.2; }
+.cd.lit { fill: color-mix(in srgb, var(--phosphor) 14%, transparent); stroke: color-mix(in srgb, var(--phosphor) 90%, transparent); }
+.cd.unlit { fill: color-mix(in srgb, var(--dim) 5%, transparent); stroke: color-mix(in srgb, var(--dim) 35%, transparent); }
+#sweep stop { stop-color: var(--soft); } #gcone stop { stop-color: var(--phosphor); } #gbeam-p stop { stop-color: var(--phosphor); } #gbeam-a stop { stop-color: var(--amber); }
+/* a device's hologram on its Emitter (desktop/lib/bromigos_driftglass.py, glyph): the back, the ribs,
+   the front and its details at the code's own alphas; lit with its glow and beam, or dim and still */
+.gl { color: var(--dim); --gb: .55; --gl: 0; --gbeam: none; overflow: visible; }
+.gl.live { color: var(--phosphor); --gb: 1; --gl: 1; --gbeam: url(#gbeam-p); }
+.gl.warn { color: var(--amber); --gb: 1; --gl: 1; --gbeam: url(#gbeam-a); }
+.g-em, .g-glow, .g-back, .g-rib, .g-front, .g-det { fill: none; stroke: currentColor; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.g-em { opacity: calc(.35 * var(--gb)); }
+.g-beam { stroke: none; fill: var(--gbeam); }
+.g-glow { stroke-width: 3.2; opacity: calc(.16 * var(--gl)); }
+.g-back { opacity: calc(.28 * var(--gb)); } .g-rib { opacity: calc(.22 * var(--gb)); } .g-front { opacity: calc(.95 * var(--gb)); } .g-det { opacity: calc(.8 * var(--gb)); }
+.g-dot { fill: currentColor; stroke: none; opacity: calc(.8 * var(--gb)); }
+.approx { position: absolute; left: 24px; bottom: 12px; display: none; z-index: 3; background: color-mix(in srgb, var(--void) 70%, transparent); }
+
+@keyframes pulse { 50% { opacity: .35; } }
+.pulse { animation: pulse 2.4s ease-in-out infinite; }
+/* the status line: the phone board's words (lab_hero.dart, labStatusLine) in the installer's heading type (.bi-heading) */
+.verdict { font-size: 18px; font-weight: 700; line-height: 1.2; letter-spacing: .14em; color: var(--phosphor); margin: 0; text-shadow: 0 0 8px var(--glow); text-align: center; }
+.verdict.warn { color: var(--amber); text-shadow: none; }
+.statusline { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0; justify-content: center; text-align: center; }
+
+/* rows inside cards */
+.rows { display: grid; gap: 0; margin: 8px 0 0; padding: 0; list-style: none; }
+.rows li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule); font-size: 12px; }
+.rows li > span.grow { min-width: 0; overflow-wrap: anywhere; }
+.rows li b { color: var(--soft); }
+
+/* steps: the installer's phase list (bromigos_glass.py, .dg-phase: to do faint, done soft, now lit and bold) */
+ol.steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 0; }
+ol.steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; padding: 7px 0; border-top: 1px solid var(--rule); align-items: start; font-size: 13px; }
+ol.steps li .d { display: block; color: var(--static); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+ol.steps li.done { color: var(--soft); } ol.steps li.now { color: var(--phosphor); font-weight: 700; } ol.steps li.todo { color: var(--faint); } ol.steps li.ask { color: var(--amber); font-weight: 700; }
+ol.steps li.plain { color: var(--text); }
+/* numbered steps: the installer's (bromigos_glass.py, .dg-num) */
+.num { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--phosphor); color: var(--void); font-size: 11px; font-weight: 700; line-height: 1; }
+/* progress: the installer's bar (gui.py, progressbar) */
+.prog { height: 10px; background: color-mix(in srgb, var(--dim) 30%, transparent); margin-top: 5px; position: relative; } .prog i { position: absolute; inset: 0 auto 0 0; width: var(--v); background: var(--phosphor); box-shadow: 0 0 8px color-mix(in srgb, var(--phosphor) 45%, transparent); }
+
+/* the activity strip: a bar like the installer's bottom bar (.bi-bar) */
+.strip { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 70%, var(--void)); font-size: 12px; }
+.strip.run { border-top-color: var(--phosphor); } .strip.ask { border-top-color: var(--amber); background: color-mix(in srgb, var(--warn-surface) 55%, var(--panel)); } .strip.fail { border-top-color: var(--danger); }
+.strip .what { min-width: 0; } .strip .what b { color: var(--soft); display: block; font-size: 13px; } .strip .what > span { color: var(--static); display: block; overflow-wrap: anywhere; }
+/* a job: the installer's card (gui.py, .bi-card) */
+.job { border: 1px solid color-mix(in srgb, var(--dim) 55%, transparent); padding: 14px 18px; background: color-mix(in srgb, var(--panel) 85%, transparent); }
+.job + .job { margin-top: 8px; }
+.job.ask { border-color: var(--amber); } .job.fail { border-color: var(--danger); }
+.job > .head { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.job > .head b { color: var(--soft); font-size: 14px; display: block; } .job > .head span.sub { color: var(--static); font-size: 12px; display: block; overflow-wrap: anywhere; }
+.confirm { border: 1px solid var(--danger); background: var(--danger-surface); color: var(--danger-text); padding: 14px 18px; }
+.confirm .wordbtn { display: inline-block; border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger); padding: 10px 18px; font: 700 14px/1.2 var(--mono); letter-spacing: .08em; background: transparent; cursor: pointer; border-radius: 0; }
+.field { border: 1px solid var(--dim); background: var(--panel); color: var(--text); font: 14px var(--mono); padding: 8px 10px; width: 100%; max-width: 260px; border-radius: 0; }
+.field::placeholder { color: var(--static); }
+/* the search: the start page's (desktop/startpage/style.css, .search input) */
+.search { display: flex; gap: 8px; margin-bottom: 14px; align-items: stretch; }
+.search .field { max-width: none; flex: 1; min-width: 0; font-size: 18px; padding: 12px 14px; }
+.search .ib { height: auto; min-height: 40px; width: 52px; }
+/* ---- pass 4 ---- */
+/* a Reading: a short label, one large figure in tabular numerals, at most one small line under it */
+.rd { display: grid; gap: 3px; min-width: 0; align-content: start; }
+.rd .k { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .16em; color: var(--static); text-transform: uppercase; white-space: nowrap; }
+.rd .v { font-size: 28px; font-weight: 700; line-height: 1.08; color: var(--phosphor); letter-spacing: .01em; font-variant-numeric: tabular-nums; text-shadow: 0 0 10px var(--glow); white-space: nowrap; }
+.rd .v small { font-size: 13px; font-weight: 600; color: var(--soft); letter-spacing: .06em; margin-left: 4px; text-shadow: none; }
+.rd .v.q { color: var(--static); text-shadow: none; } .rd .v.w { color: var(--amber); text-shadow: none; }
+.rd .v.addr { font-size: 18px; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; }
+.rd .s { font-size: 12px; line-height: 1.35; color: var(--static); }
+.rd .cells { height: 8px; margin-top: 4px; }
+.rdrow { display: grid; gap: 18px 24px; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 2.2fr); }
+.chip:has(svg), .pl:has(svg) { display: inline-flex; align-items: center; gap: 6px; }
+.chip svg { flex: none; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* a dial: a ring of twenty-four cells in the installer's cell style, with the thing's icon inside */
+.dial { flex: none; overflow: visible; }
+.dial circle { fill: none; stroke-width: 8; }
+.dial .tr { stroke: color-mix(in srgb, var(--guard) 90%, transparent); }
+.dial .on { stroke: color-mix(in srgb, var(--phosphor) 90%, transparent); }
+.dial .unk { stroke: var(--static); stroke-width: 2; }
+.dial .di { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; color: var(--phosphor); }
+.dial .di.q { color: var(--static); }
+/* the Lab board's row of Reading tiles */
+.rtiles { display: grid; gap: 14px; grid-template-columns: minmax(0, 2.2fr) repeat(3, minmax(0, 1fr)); align-items: stretch; margin-top: 14px; }
+.rt { display: grid; grid-template-rows: auto 1fr auto; }
+.rt.wide { grid-template-rows: auto 1fr auto auto; }
+.rt h3 { margin-bottom: 14px; flex-wrap: nowrap; letter-spacing: .16em; } .rt h3 .st { letter-spacing: .03em; }
+.rt .mid { display: flex; gap: 14px; align-items: center; min-width: 0; align-self: start; }
+.rt.wide .mid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr); gap: 16px; align-items: center; }
+.rt .tags { margin-top: 14px; }
+.rt .acts { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.drv { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; font-size: 12px; }
+.drv li { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--rule); background: color-mix(in srgb, var(--void) 45%, transparent); min-width: 0; }
+.drv .dh { display: flex; align-items: center; gap: 8px; } .drv .dh .st { margin-left: auto; }
+.drv li b { color: var(--soft); letter-spacing: .06em; }
+.drv .s { color: var(--static); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* a FLARE stage: the holo-table wide, the rack on its Emitter with its cone of light, modules either
+   side on their beams, and the verdict across the top. It tilts a few degrees to the pointer. */
+.stage { position: relative; overflow: hidden; isolation: isolate; min-width: 0; perspective: 1400px; background: color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.stage.board { aspect-ratio: 1180 / 430; --rl: 40.76%; --rw: 18.48%; --rt: 13%; --cx: 50%; }
+.stage.inst { aspect-ratio: 520 / 410; --rl: 12.1%; --rw: 35.75%; --rt: 15%; --cx: 30%; }
+.stage.ready { min-height: 240px; --cx: 96px; }
+.stage.ready .st-rack { left: 20px; top: 8%; height: 84%; width: auto; }
+.tilt { position: absolute; inset: 0; transform: rotateY(calc(var(--px, 0) * 3deg)) rotateX(calc(var(--py, 0) * -2deg)); transition: transform .25s ease-out;
+  background: radial-gradient(ellipse 44% 62% at var(--cx) 98%, color-mix(in srgb, var(--phosphor) 22%, transparent), transparent 72%), color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.tilt > .h-floor { transform: translateX(calc(var(--px, 0) * -10px)); transition: transform .25s ease-out; }
+.st-rack { position: absolute; left: var(--rl); top: var(--rt); width: var(--rw); aspect-ratio: 179 / 300; pointer-events: none; }
+.st-rack .rk { inset: 0; }
+.st-em { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cone { fill: url(#gcone); }
+.rise { fill: color-mix(in srgb, var(--soft) 55%, transparent); opacity: 0; animation: rise 4.8s linear infinite; }
+@keyframes rise { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .45; } 100% { transform: translateY(-236px); opacity: 0; } }
+.beams .ln.off { stroke-width: 1; stroke-dasharray: 2 7; }
+.beams .ln-dot { animation-duration: 3.4s; }
+.mods { position: absolute; inset: 0; pointer-events: none; }
+.mod { pointer-events: auto; position: absolute; top: var(--y); height: 60px; margin-top: -30px; width: 22.5%; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 0 12px 0 6px;
+  border: 1px solid color-mix(in srgb, var(--dim) 40%, transparent); background: color-mix(in srgb, var(--void) 55%, transparent); color: var(--static); }
+.mod.l { left: 2.2%; } .mod.r { right: 2.2%; }
+.mod svg.gl { width: 46px; height: 46px; }
+.mod > svg.i:first-child { justify-self: center; }
+.mod b { display: block; font-size: 12px; font-weight: 700; letter-spacing: .16em; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod i { display: block; font-style: normal; font-size: 11px; letter-spacing: .06em; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod.on { border-color: color-mix(in srgb, var(--phosphor) 90%, transparent); background: color-mix(in srgb, var(--phosphor) 14%, var(--void)); color: var(--phosphor); box-shadow: 0 0 18px var(--glow), inset 0 0 16px color-mix(in srgb, var(--phosphor) 8%, transparent); }
+.mod.on i { color: var(--soft); }
+.mod.now { border-color: var(--soft); color: var(--soft); border-style: dashed; }
+.mod .if-on, .mod.on .if-off { display: none; } .mod.on .if-on { display: block; }
+.item .ln, .item .ln-glow, .item .ln-dot { display: none; } .item.on .ln, .item.on .ln-glow, .item.on .ln-dot { display: inline; }
+.st-top { position: absolute; inset: 0 0 auto 0; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 16px 20px 0; pointer-events: none; }
+.st-top > * { pointer-events: auto; }
+.st-top > :first-child { justify-self: start; } .st-top > :last-child { justify-self: end; }
+.st-top .over { color: var(--static); }
+.stage .chip { background: color-mix(in srgb, var(--void) 60%, transparent); }
+.stage .verdict { font-size: 26px; letter-spacing: .22em; margin-right: -.22em; text-shadow: 0 0 16px var(--lit), 0 0 3px var(--glow); white-space: nowrap; }
+.stage .verdict.warn { text-shadow: 0 0 16px color-mix(in srgb, var(--amber) 55%, transparent); }
+.st-read { position: absolute; right: 5%; bottom: 8%; z-index: 2; text-align: right; display: grid; gap: 2px; justify-items: end; }
+.st-read .big { font-size: 64px; font-weight: 700; line-height: .95; color: var(--phosphor); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px var(--lit); letter-spacing: -.01em; }
+.st-read .big small { font-size: 24px; color: var(--soft); margin-left: 4px; text-shadow: none; }
+.st-text { position: absolute; left: 184px; right: 14px; top: 50%; transform: translateY(-50%); z-index: 2; display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.st-text .big { font-size: 24px; font-weight: 700; line-height: 1.15; color: var(--phosphor); text-shadow: 0 0 14px var(--lit); letter-spacing: .02em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.sweep { transform: translateY(var(--sy, 0px)); transition: transform .5s ease-out; }
+.ring-cells { fill: none; stroke-width: 9; transition: stroke-dasharray .4s steps(3); }
+.pool text { font-family: var(--mono); font-weight: 700; }
+
+/* a way through an update, left to right: four short cells, the fourth the way back */
+.flow { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.flow li { position: relative; border: 1px solid var(--frame); background: var(--void); padding: 10px 10px 12px; display: grid; gap: 8px; justify-items: start; align-content: start; font-size: 12px; line-height: 1.3; color: var(--text); }
+.flow li + li::before { content: ""; position: absolute; left: -11px; top: 22px; width: 10px; height: 1px; background: var(--lit); }
+.flow li > span:first-child { display: flex; align-items: center; gap: 8px; color: var(--phosphor); }
+.flow li.back { border-style: dashed; border-color: color-mix(in srgb, var(--amber) 60%, transparent); }
+.flow li.back > span:first-child { color: var(--amber); }
+.flow li.back::before { background: var(--amber); }
+.vers { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 22px; font-weight: 700; color: var(--static); font-variant-numeric: tabular-nums; }
+.vers b { color: var(--phosphor); text-shadow: 0 0 10px var(--glow); } .vers .x { color: var(--danger); } .vers svg { color: var(--dim); }
+/* steps you do: the number, six words or fewer, and its action */
+ol.steps.do li { grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; padding: 5px 0; }
+ol.steps.do li .ib { width: 36px; height: 36px; }
+ol.steps.do li.done { color: var(--soft); } ol.steps.do li.done .num { background: transparent; color: var(--phosphor); border: 1px solid var(--phosphor); }
+ol.steps li > .small { font-variant-numeric: tabular-nums; }
+/* removing: what stays, said as three readings; two separate choices */
+.confirm h3 { color: var(--danger-text); }
+.confirm .two { gap: 18px 28px; align-items: stretch; }
+.confirm .two > div { display: grid; gap: 12px; align-content: space-between; justify-items: start; min-width: 0; }
+.confirm .two > div + div { border-left: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); padding-left: 28px; }
+.keeps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13px; width: 100%; }
+.keeps li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: center; }
+.keeps b { color: var(--white); letter-spacing: .04em; }
+.keeps code { color: inherit; }
+.confirm .wordbtn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.confirm .wordbtn.armed { background: var(--danger); color: var(--void); border-color: var(--danger); }
+.confirm .field { border-color: var(--danger); color: var(--danger-text); background: color-mix(in srgb, var(--danger-surface) 60%, var(--void)); }
+.confirm .field::placeholder { color: color-mix(in srgb, var(--danger-text) 50%, transparent); }
+/* the door: two ways in, each a picture, a code and three short steps */
+.way { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; border: 1px solid var(--frame); background: color-mix(in srgb, var(--void) 70%, transparent); padding: 14px; }
+.way + .way { margin-top: 10px; }
+.way .code { margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: .28em; line-height: 1.1; color: var(--phosphor); text-shadow: 0 0 12px var(--lit); white-space: nowrap; }
+.way .big-i { width: 132px; display: grid; place-items: center; color: var(--dim); }
+.icol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 13px; line-height: 1.3; }
+.icol li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: center; }
+.icol svg { color: var(--phosphor); }
+.icol.q svg { color: var(--static); } .icol.q { color: var(--static); }
+.plates { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 16px 20px; align-items: center; }
+/* the one-time glow when something changes, then still */
+@keyframes spark { 0% { box-shadow: 0 0 0 0 var(--lit), 0 0 30px var(--phosphor); filter: brightness(1.9); } 100% { box-shadow: 0 0 0 18px transparent, 0 0 0 transparent; filter: none; } }
+.spark { animation: spark .9s ease-out 1; }
+@keyframes spark-t { 0% { text-shadow: 0 0 30px var(--soft), 0 0 8px var(--white); color: var(--white); } }
+.spark-t { animation: spark-t 1s ease-out 1; }
+.strip > .chip { justify-self: end; }
+.cols.inst { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
+.stage.inst .mod b { letter-spacing: .08em; }
+.needs { display: grid; grid-template-columns: 300px minmax(0, .85fr) minmax(0, 1.5fr); gap: 16px 28px; align-items: center; }
+.needs ol.steps { margin-top: 0; } .needs ol.steps li:first-child { border-top: 0; }
+.fixrow { display: flex; flex-wrap: wrap; gap: 14px 32px; align-items: center; } .fixrow .acts { margin-left: auto; }
+.cols.first { grid-template-columns: minmax(0, 7fr) minmax(0, 9fr); align-items: stretch; }
+
+[hidden] { display: none !important; }
+.apphead { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.apphead .nm { flex: 1; min-width: 220px; }
+.apphead h2 { font-size: 32px; line-height: 1.1; color: var(--phosphor); letter-spacing: .16em; text-shadow: 0 0 14px var(--lit); margin-bottom: 8px; }
+.panel > .line { margin: 14px 0 0; max-width: none; color: var(--text); font-size: 15px; }
+.apprw { display: flex; gap: 14px; align-items: center; }
+.tile .nogpu { color: var(--amber); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tile .addr { grid-column: 1 / -1; }
+.tiles.apps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tiles.apps .tile { min-height: 0; gap: 8px 12px; grid-template-columns: 44px minmax(0, 1fr) auto; }
+.tiles.apps .tile b { padding-right: 0; }
+.tiles.apps .tile .st { margin-top: 2px; }
+/* a control that belongs to the mock-up, not the product: dashed, like the EXAMPLE mark */
+.ib.demo { border-style: dashed; border-color: var(--static); color: var(--static); background: transparent; margin-left: auto; }
+.dialw { flex-direction: column; justify-content: center; gap: 8px; width: 100%; }
+.dial { width: 148px; height: 148px; }
+.dial text { font-family: var(--mono); font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.dial .hr { font-size: 11px; font-weight: 600; fill: var(--static); }
+.dial .fig { font-size: 26px; fill: var(--phosphor); filter: drop-shadow(0 0 6px var(--glow)); }
+.dial .fig.q { fill: var(--static); filter: none; }
+.dial .sub { font-size: 11px; letter-spacing: .14em; fill: var(--static); }
+.rt .ft { align-self: end; }
+.rt .dialw + .ft .tags, .rt .dialw + .ft .acts { justify-content: center; }
+.panel.is-warn h3 { color: var(--amber); }
+.if-ok, .cleared .if-warn { display: none; } .cleared .if-ok { display: inline-flex; }
+.job > .head .tags { justify-content: flex-end; }
+
+@container view (max-width: 1100px) {
+  .rtiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .rt.wide { grid-column: 1 / -1; }
+  .needs { grid-template-columns: 280px minmax(0, 1fr); } .needs > :last-child { grid-column: 1 / -1; }
+  .tiles.apps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rdrow { grid-template-columns: repeat(4, minmax(0, 1fr)); } .rdrow > :last-child { grid-column: 1 / -1; }
+  .stage .verdict { font-size: 22px; }
+}
+@container view (max-width: 860px) {
+  .cols, .cols.act, .cols.inst, .cols.first, .two, .split, .split.g, .needs { grid-template-columns: minmax(0, 1fr); }
+  .cols > aside { position: static; }
+  .body { padding: 10px; }
+  h1 { font-size: 20px; }
+  
+     
+      
+  .rtiles { grid-template-columns: minmax(0, 1fr); } .rt.wide .mid { grid-template-columns: minmax(0, 1fr); }
+  .rdrow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flow li + li::before { display: none; }
+  .confirm .two > div + div { border-left: 0; padding-left: 0; border-top: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); padding-top: 14px; }
+  .plan { grid-template-columns: auto minmax(0, 1fr); } .plan > :last-child { grid-column: 1 / -1; }
+  .way { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .stage .verdict { font-size: 17px; letter-spacing: .14em; margin-right: -.14em; }
+  .st-top { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 6px; padding: 12px 10px 0; } .st-top > :first-child, .st-top > :last-child { justify-self: center; }
+  .stage.board { aspect-ratio: auto; }
+  .stage.board .tilt { position: relative; transform: none; padding: 104px 10px 34px; }
+  .stage.board .beams { display: none; }
+  .stage.board .st-rack { position: relative; left: auto; top: auto; width: 150px; margin: 0 auto 10px; }
+  .stage.board .mods { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stage.board .mod { position: static; width: auto; margin: 0; height: 52px; grid-template-columns: 36px minmax(0, 1fr); padding: 0 8px 0 4px; }
+  .stage.board .mod > svg.i { display: none; } .stage.board .mod svg.gl { width: 36px; height: 36px; } .mod b { letter-spacing: .08em; font-size: 11px; }
+  .stage.inst .mod { width: 40%; height: 48px; margin-top: -24px; grid-template-columns: minmax(0, 1fr) auto; padding: 0 8px; } .stage.inst .mod > svg.i:first-child { display: none; }
+  .st-read .big { font-size: 44px; } .st-read .big small { font-size: 18px; }
+  .tiles.apps { grid-template-columns: minmax(0, 1fr); }
+  .apphead h2 { font-size: 24px; }
+  .job { padding: 12px; } .job > .head { grid-template-columns: 24px minmax(0, 1fr); } .job > .head > .tags, .job > .head > .chip { grid-column: 2; justify-self: start; justify-content: flex-start; }
+  .stage.ready { min-height: 230px; --cx: 76px; } .stage.ready .st-rack { left: 8px; } .st-text { left: 150px; right: 8px; } .st-text .big { font-size: 19px; }
+}
+/* ---- pass 5 ---- */
+/* the sticky bar's menus: one component for the three groups of screens and for the world. A closed
+   <details> shows what is current; open, it is a Glass list with the current row marked by a tick. */
+.menu { position: relative; flex: none; }
+.menu > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 10px; border: 1px solid var(--frame); color: var(--static); font-size: 11px; font-weight: 700; letter-spacing: .14em; white-space: nowrap; user-select: none; -webkit-user-select: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary:hover, .menu[open] > summary { color: var(--phosphor); border-color: var(--lit); }
+.menu > summary > svg { transition: transform .15s; } .menu[open] > summary > svg { transform: rotate(180deg); }
+.menu.has > summary { border-color: var(--phosphor); color: var(--phosphor); box-shadow: inset 0 -2px 0 var(--phosphor); background: color-mix(in srgb, var(--phosphor) 10%, transparent); }
+.menu .mcur { display: none; gap: 6px; color: var(--soft); font-variant-numeric: tabular-nums; } .menu.has .mcur { display: inline-flex; }
+.menu .mcur b { color: var(--phosphor); }
+.menu-list, .menu .menu-list.worlds { position: absolute; top: calc(100% + 7px); left: 0; z-index: 40; min-width: 250px; max-width: calc(100vw - 32px); max-height: min(72vh, 520px); overflow: hidden auto; display: grid; gap: 0; margin: 0; padding: 6px; align-items: stretch;
+  border: 1px solid var(--lit); background: color-mix(in srgb, var(--panel) 94%, var(--void)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--void) 80%, transparent), 0 24px 60px -24px var(--lit), 0 0 24px var(--glow); }
+.menu.end .menu-list { left: auto; right: 0; }
+.menu-list a, .menu .menu-list.worlds label { display: grid; grid-template-columns: 24px minmax(0, 1fr) 16px; grid-auto-flow: row; gap: 10px; align-items: center; place-items: center start; min-width: 0; height: auto; min-height: 34px; padding: 0 10px; border: 1px solid transparent; background: transparent;
+  color: var(--text); font-size: 12px; line-height: 1.2; font-weight: 600; letter-spacing: .1em; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.menu-list a:hover, .menu-list a:focus-visible, .menu .menu-list.worlds label:hover { color: var(--phosphor); border-color: var(--lit); background: color-mix(in srgb, var(--phosphor) 10%, transparent); box-shadow: none; }
+.menu-list a.here, .menu .menu-list.worlds input:checked + label { color: var(--phosphor); background: color-mix(in srgb, var(--phosphor) 12%, transparent); border-color: transparent; box-shadow: inset 2px 0 0 var(--phosphor); }
+.menu-list .mk { visibility: hidden; color: var(--phosphor); }
+.menu-list a.here .mk, .menu-list input:checked + label .mk { visibility: visible; }
+.menu-list input { position: absolute; opacity: 0; pointer-events: none; }
+.menu-list input:focus-visible + label { outline: 2px solid var(--phosphor); outline-offset: -2px; }
+.swc { display: inline-block; width: 12px; height: 12px; background: var(--phosphor); box-shadow: 0 0 8px var(--glow); flex: none; }
+.menu.wm { margin-left: auto; }
+[data-go] { cursor: pointer; }
+.holo.wide { max-width: none; }
+.rows.wide li { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; }
+.rows.wide li:first-child { border-top: 0; }
+.vers.sm { font-size: 15px; gap: 6px; }
+.rd .v.m { font-size: 20px; line-height: 1.3; }
+/* a form: the installer's setup form (server_gui.py, the item's [item.setup] fields) */
+.fld { display: grid; gap: 5px; margin-top: 12px; min-width: 0; }
+.fld .k, .sw .k { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--static); text-transform: uppercase; }
+.fld .field { max-width: none; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { border: 1px solid var(--frame); padding: 7px 10px; font-size: 12px; line-height: 1.3; cursor: pointer; color: var(--text); background: color-mix(in srgb, var(--panel) 60%, transparent); }
+.seg label:hover { color: var(--phosphor); }
+.seg input:checked + label { border-color: var(--phosphor); color: var(--phosphor); background: color-mix(in srgb, var(--phosphor) 12%, transparent); box-shadow: inset 0 -2px 0 var(--phosphor); }
+.seg input:focus-visible + label { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+.sw { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.sw input { appearance: none; -webkit-appearance: none; width: 40px; height: 20px; margin: 0; border: 1px solid var(--dim); background: var(--void); position: relative; cursor: pointer; border-radius: 0; flex: none; }
+.sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--dim); }
+.sw input:checked { border-color: var(--phosphor); background: color-mix(in srgb, var(--phosphor) 14%, transparent); }
+.sw input:checked::after { left: 22px; background: var(--phosphor); box-shadow: 0 0 8px var(--glow); }
+.stage.inst .mod.now i { color: var(--static); }
+
+/* updates: three cards in a row; the day ring's three kinds of hour */
+.upd { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, 1.05fr); align-items: stretch; }
+.upall { display: flex; gap: 18px; align-items: center; margin-bottom: 6px; }
+.dial .sys { stroke: color-mix(in srgb, var(--dim) 90%, transparent); }
+.dial .bk { stroke: color-mix(in srgb, var(--soft) 55%, transparent); }
+.sq { display: inline-block; width: 8px; height: 8px; background: var(--phosphor); flex: none; }
+.sq.sys { background: var(--dim); } .sq.bk { background: color-mix(in srgb, var(--soft) 55%, transparent); }
+.chip:has(.sq) { display: inline-flex; align-items: center; gap: 6px; }
+.note.wrap { white-space: normal; }
+
+/* Reduced motion holds every animation: no move, no Pulse, no Sweep, no Spark (docs/DRIFTGLASS.md) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .ln-dot, .h-foot, .rise { display: none !important; }
+  .tilt, .tilt > .h-floor { transform: none; }
+}
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }

@@ -317,6 +317,7 @@ BY_INSTALL = {
 }
 # installed by something else than the meta-package or `bromigos install`
 BY_OTHER = {
+    "bromigos-board-web": "on bromigOS Server, with the Lab board's service (docs/board.md)",
     "xpadneo-dkms": "by `bromigos peripheral enable xbox-controller`, for an Xbox controller",
     "mediamtx": "optional, for `brodec-lab` (BRODEC's lab bridge): its media server, "
                 "`brodec-lab-media.service`",

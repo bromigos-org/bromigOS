@@ -1,0 +1,6 @@
+/* Supply: the readings over Installed, the groups of Browse */
+.su-rd { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.su-rd .seg { margin-top: 4px; }
+.su-group { margin-top: 6px; }
+@container view (max-width: 860px) { .su-rd { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.su-add { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; } .su-add p { margin: 0; }
