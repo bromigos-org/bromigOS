@@ -63,7 +63,6 @@ const goals = (s: Scenario): LampGoals => {
       { state: "progress", title: "A month with no failed backup", detail: "19 of 30 days", xp: 250, cap: "1 a month" },
       { state: "done", title: "The media stack wired", detail: "a named star: MEDIA WIRED", xp: 150, cap: "once" },
       { state: "done", title: "More machines joined", detail: "each docks a new compartment", xp: 200, cap: "2 in all" },
-      { state: "progress", title: "Survived a drive swap", detail: s === "needs" ? "the sdb arc is forming among the stars" : "an arc's outcome names it", xp: 500, cap: "2 a year" },
       { state: "todo", title: "A restore proven again", detail: "a new star in PROVEN", xp: 100, cap: "1 a quarter" },
     ],
   };
@@ -79,7 +78,7 @@ const show = (s: Scenario): LampShow => {
       { when: "NIGHT 1", date: "11-08", title: "FOUND: GETTING WORSE", detail: "8 reallocated sectors appeared in 3 days. The alarm sounded; LINEMAN went to the bay. The first amber star." },
       { when: "NIGHT 2", date: "11-09", title: "THE COPY CHECKED", detail: "5 % read back, clean. sdb held at 8." },
       { when: "NIGHT 3", date: "11-10", title: "STILL AT 8 · A COPY RUNNING", detail: "No new sectors. VECTOR's plan is docked at the booth." },
-      { when: "ENDS", title: "SWAP · REBUILD · SCRUB · COPY", detail: "Then the alarm and the interference clear, the amber stars turn white as SURVIVED A DRIVE SWAP, and the goal pays 500 field XP.", next: true }] } };
+      { when: "ENDS", title: "SWAP · REBUILD · SCRUB · COPY", detail: "Then the alarm and the interference clear and the amber stars turn white as SURVIVED A DRIVE SWAP: a named arc in your sky. A fix never pays XP.", next: true }] } };
   if (s === "goal") return { when: "composed 20:30", cards: [OPEN,
     { over: "A FIRST", title: "A PROVEN RESTORE", detail: "At 20:12 a sample came back, was read and removed. Your copies are a constellation now.", art: "crew/exo-rest", hint: "From restore-test.json test_ok." },
     { kind: "bump", over: "NEW IN YOUR SHOW", title: "THE CREW", art: "bump/crew", hint: "A growth reward: the shipped crew bump joins your roll-call." },
