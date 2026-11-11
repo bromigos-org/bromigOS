@@ -56,7 +56,7 @@ export interface Lab {
   /** The server's clock, in ms: every "ago" on the page is measured against it. */
   now(): number;
   /** Add, restart or remove an app, when the server lets the page (board.actions). */
-  act(verb: "add" | "restart" | "remove", app: string): Promise<ActionAnswer>;
+  act(verb: "add" | "restart" | "remove", app: string, more?: { delete_data: true; code: string }): Promise<ActionAnswer>;
   drawer: "activity" | "depth" | null;
   setDrawer(d: "activity" | "depth" | null): void;
 }
@@ -275,9 +275,9 @@ export function LabProvider({ children }: { children: ReactNode }) {
     },
     refresh: () => pollNow.current(),
     now,
-    async act(verb, app) {
+    async act(verb, app, more) {
       if (!a) throw new ApiError(0, "unreachable", "The server isn't answering.");
-      const said = await a.act(verb, app);
+      const said = await a.act(verb, app, more);
       pollNow.current();
       return said;
     },

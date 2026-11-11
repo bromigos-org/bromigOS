@@ -245,7 +245,8 @@ export interface Board {
   /** The parts the server couldn't read this time, each with why when it said. */
   unread: Part[];
   why: Partial<Record<Part, string>>;
-  /** What the server lets the page do: "add", "restart", "remove". Empty until the service says. */
+  /** What the server lets the page do, in the words of root's [board] actions: "add", "restart",
+   *  "remove", and "delete-data" (removing an app with its data). Empty until the service says. */
   actions: string[];
 }
 

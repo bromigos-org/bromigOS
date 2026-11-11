@@ -6,6 +6,7 @@ import { useLab } from "@/lib/lab";
 import { PLACE_NAME, TABS, type Place } from "@/lib/routes";
 import { Sheet, Tabs } from "@/shell/Shell";
 import { Activity } from "./Activity";
+import { App } from "./App";
 import { Home } from "./Home";
 import { Machine } from "./Machine";
 import { Data } from "./Data";
@@ -132,11 +133,7 @@ export function Pages() {
         </Page>
       );
     case "app":
-      return (
-        <Page label={`App ${route.id}`}>
-          <Stub place="app" title={`Supply › ${route.id}`} />
-        </Page>
-      );
+      return <App id={route.id ?? ""} sheet={route.sheet} />;
     case "cameras":
       return (
         <Page label="Cameras">

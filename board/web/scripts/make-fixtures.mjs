@@ -120,7 +120,7 @@ const F = {
   healthy: { about: "Signed in, one server, everything running; with the readings, trends and tile readings the page has asked for.", door: doorOf(healthy), session: session(),
     board: healthy, activity: jobsOf("activity_healthy"), vitals: VITALS },
   actions: { about: "Signed in; the server lets the page add, restart and remove apps (board.actions).", door: doorOf(healthy), session: session(),
-    board: { ...healthy, actions: ["add", "restart", "remove"] }, activity: jobsOf("activity_healthy") },
+    board: { ...healthy, actions: ["add", "restart", "remove", "delete-data"] }, activity: jobsOf("activity_healthy") },
   running: { about: "Signed in; a backup runs and finishes while you watch (the stream).", door: doorOf(healthy), session: session(), board: board("running"),
     activity: running,
     stream: [
