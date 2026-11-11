@@ -5,6 +5,7 @@ import { Icon, Planned } from "@/components/ui";
 import { useLab } from "@/lib/lab";
 import { PLACE_NAME, TABS, type Place } from "@/lib/routes";
 import { Sheet, Tabs } from "@/shell/Shell";
+import { Home } from "./Home";
 
 const PLACE_ICON: Record<Place, string> = {
   home: "i-home",
@@ -105,7 +106,7 @@ export function Pages() {
       return (
         <>
           <Page label="Home" under={route.sheet === "add-machine"}>
-            <Stub place="home" title="Home" />
+            <Home />
           </Page>
           {route.sheet === "add-machine" && <AddMachine />}
         </>

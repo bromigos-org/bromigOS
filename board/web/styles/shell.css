@@ -231,3 +231,4 @@ ol.steps li.todo { color: var(--static); }
   .sh-rail .sh-add { display: none; }
 }
 .sh-tab { white-space: nowrap; }
+.panel.is-warn h2.ph { color: var(--amber); }

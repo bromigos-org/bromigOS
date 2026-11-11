@@ -1,0 +1,44 @@
+/* Home: NEEDS YOU, This week and a tile per machine, below the hero
+   Taken from the Lab board prototype's stylesheet (mockups-artifact.html, the DRIFTGLASS
+   mock-ups); the class names are the prototype's, so a page reads like its mock-up. */
+
+/* Home below its hero: NEEDS YOU with VECTOR's plan first, This week beside it, a Reading tile a machine */
+.hm-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: stretch; margin-top: 14px; }
+.hm-needs { display: grid; gap: 14px; align-content: start; }
+.hm-needs h3 { margin: 0; }
+.hm-plan { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 14px; padding: 12px; border: 1px dashed color-mix(in srgb, var(--cyan) 60%, transparent); background: color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.hm-plan img { width: 56px; height: 83px; object-fit: contain; filter: var(--rack-tint, none); }
+.hm-pb { display: grid; gap: 8px; min-width: 0; }
+.hm-pb .over b { color: var(--cyan); letter-spacing: .16em; }
+.hm-q { margin: 0; font-size: 15px; color: var(--soft); max-width: none; }
+.hm-steps { margin: 0; } .hm-steps li:first-child { border-top: 0; }
+.hm-chk { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.hm-needs .lb-need { padding-top: 12px; border-top: 1px solid var(--rule); }
+.hm-ic { display: inline-flex; color: var(--dim); cursor: help; }
+.hm-week { display: grid; gap: 12px; align-content: start; justify-items: start; }
+.hm-week h3 { margin: 0; justify-self: stretch; }
+.hm-wk { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; justify-self: stretch; }
+.hm-wk .rd .v { font-size: 24px; }
+.hm-vl { margin: 0; font-size: 13px; color: var(--text); max-width: none; } .hm-vl b { color: var(--phosphor); letter-spacing: .16em; font-size: 11px; margin-right: 6px; }
+.hm-xp { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--soft); cursor: help; } .hm-xp svg { color: var(--phosphor); } .hm-xp b { color: var(--phosphor); }
+.hm-ms { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
+.hm-m { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--frame); background: var(--glass); color: var(--text); text-decoration: none; min-width: 0;
+  background-image: repeating-linear-gradient(180deg, color-mix(in srgb, var(--phosphor) 3.5%, transparent) 0 1px, transparent 1px 3px), radial-gradient(ellipse 80% 55% at 50% 0%, color-mix(in srgb, var(--phosphor) 7%, transparent) 0%, transparent 100%); }
+.hm-m:hover { border-color: color-mix(in srgb, var(--phosphor) 80%, transparent); box-shadow: 0 0 14px var(--glow); }
+.hm-m.warn { border-color: var(--amber); }
+.hm-mh { display: flex; align-items: center; gap: 8px; min-width: 0; } .hm-mh > svg { color: var(--phosphor); } .hm-mh b { color: var(--phosphor); letter-spacing: .08em; font-size: 14px; }
+.hm-mh .st { margin-left: auto; }
+
+/* the hero's frame while Lamplight's module isn't mounted: the holo-table, its floor light and the lab's plain state */
+.stage.lamp { aspect-ratio: 1180 / 430; border: 1px solid var(--line);
+  background: radial-gradient(ellipse 60% 55% at 50% 100%, color-mix(in srgb, var(--phosphor) 12%, transparent), transparent), color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.lamp-mount { position: absolute; inset: 0; display: grid; place-items: center; }
+.lamp-wait { display: inline-flex; align-items: center; gap: 10px; margin: 0; color: var(--static); font-size: 12px; font-weight: 700; letter-spacing: .3em; }
+.verdict.q { color: var(--static); text-shadow: none; }
+.hm-mi { display: grid; min-width: 0; }
+.hm-needs .lb-need { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
+.lb-need .d { display: block; color: var(--static); font-size: 12px; }
+.lb-need b { color: var(--amber); }
+.hm-plans { margin: 0; display: inline-flex; gap: 8px; align-items: center; }
+.spec.q, .spec.q svg { color: var(--static); }
+@container view (max-width: 860px) { .stage.lamp { aspect-ratio: auto; min-height: 200px; } .stage.lamp .st-top { position: relative; } }
