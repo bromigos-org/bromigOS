@@ -33,6 +33,7 @@ export const ROUTES: { hash: string; crumb: RegExp; fixture?: string }[] = [
   { hash: "people", crumb: /People › Household$/ },
   { hash: "people/ways", crumb: /People › Ways in$/ },
   { hash: "activity", crumb: /Activity › Now$/ },
+  { hash: "settings/lab", crumb: /Settings › Lab$/ },
   { hash: "settings", crumb: /Settings › Notifications$/ },
   { hash: "settings/mascot", crumb: /Settings › Mascot$/ },
 ];

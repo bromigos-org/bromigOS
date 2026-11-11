@@ -52,6 +52,8 @@ export interface Lab {
   signIn(code: string): Promise<void>;
   signOut(): Promise<void>;
   signOutBrowser(id: string): Promise<void>;
+  /** Read the session again: the signed-in browsers are the server's list, and it changes elsewhere. */
+  rereadSession(): void;
   refresh(): void;
   /** The server's clock, in ms: every "ago" on the page is measured against it. */
   now(): number;
@@ -116,6 +118,10 @@ export function LabProvider({ children }: { children: ReactNode }) {
       (doc) => setSession({ state: "ok", doc }),
       (e) => setSession((s) => (s.state === "ok" ? s : { state: "error", error: err(e) })),
     );
+  }, [a]);
+
+  const rereadSession = useCallback(() => {
+    a?.session().then((doc) => setSession({ state: "ok", doc }), () => {});
   }, [a]);
 
   useEffect(() => {
@@ -273,6 +279,7 @@ export function LabProvider({ children }: { children: ReactNode }) {
       const s = await a.signOutBrowser(id);
       setSession({ state: "ok", doc: s });
     },
+    rereadSession,
     refresh: () => pollNow.current(),
     now,
     async act(verb, app, more) {

@@ -1,0 +1,10 @@
+/* Settings: how the server is set, read-only, each with the file or command that changes it */
+.st-rd { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+.st-rd > :last-child { grid-column: auto; }
+.st-rd .v.m { font-size: 18px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; }
+.st-note { margin: 12px 0 8px; max-width: none; }
+.st-prob { display: block; }
+.st-chk { display: flex; gap: 6px 14px; flex-wrap: wrap; justify-content: flex-end; }
+.st-set pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.st-set .rows li code { overflow-wrap: anywhere; }
+@container view (max-width: 860px) { .st-rd { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

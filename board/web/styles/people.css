@@ -1,0 +1,11 @@
+/* People › Ways in: how you are signed in, the signed-in browsers, and the steps for another */
+.pp-rd { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pp-rd > :last-child { grid-column: auto; }
+.pp-rd .v.m { font-size: 18px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; }
+.pp-browsers li { grid-template-columns: 22px minmax(0, 1fr) auto; }
+.pp-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pp-steps code { overflow-wrap: anywhere; }
+.pp-facts { margin-top: 12px; display: flex; gap: 6px 18px; flex-wrap: wrap; }
+.pp-cmd { margin-top: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pp-facts li { display: flex; gap: 6px; align-items: center; }
+@container view (max-width: 860px) { .pp-rd { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pp-steps { grid-template-columns: minmax(0, 1fr); } .pp-steps li + li::before { display: none; } }
