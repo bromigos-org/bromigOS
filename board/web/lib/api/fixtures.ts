@@ -1,109 +1,110 @@
 // Fixture mode: a fixture build (BOARD_FIXTURES=1) reads `?fixture=NAME` and answers every API
 // call from fixtures/NAME.json (copied to /fixtures/ by scripts/postbuild.mjs). The package's
-// build leaves this off, so the installed page always talks to the server.
+// build leaves this out, so the installed page always talks to the server.
 //
-// A fixture file is one page state of the whole lab:
-//   { "about": "…", "now": ms,                       what it shows; the clock it is written against
-//     "door": Door, "session": Session, "board": Board | {"$status": 401},
-//     "signin": { "code": "…", "session": Session } | absent,
-//     "activity": [JobRecord…],
-//     "stream": [ { "after_ms": 600, "event": "job" | "gone", "data": … } ] }  replayed after connecting
+// A fixture file is one page state of the whole lab, in the documents the service sends (the
+// same shapes: tests/shapes.spec.ts checks them against real answers), read by the same reader
+// as the real ones (lib/api/read.ts):
+//   { "about": "…",
+//     "door": <GET /api/door>, "session": <GET /api/session>, "board": <GET /api/board>,
+//     "signin": { "code": "…", "session": <the session after it> } | absent,
+//     "activity": [<job record>…],                  the stream's first snapshot
+//     "stream": [ { "after_ms": 600, "event": "job" | "gone", "data": … } ],  replayed after it
+//     "vitals": { "myserver/24h": <GET /api/vitals> } }
 // Any document may be {"$status": N, "$error": {"code", "words"}} to stand for an error answer.
 
 import type { Api } from "./client";
 import { ApiError, cleanCode } from "./errors";
-import type { ActivityEvent, Board, Door, JobRecord, Session, Vitals } from "./types";
+import { readAction, readBoard, readDoor, readEvent, readSession, readVitals } from "./read";
+import type { Session } from "./types";
 
 type Err = { $status: number; $error?: { code: string; words: string } };
-type Doc<T> = T | Err;
 
-export interface Fixture {
-  about: string;
-  now: number;
-  door: Doc<Door>;
-  session: Doc<Session>;
-  board: Doc<Board>;
-  signin?: { code: string; session: Session };
-  activity: JobRecord[];
-  /** Trends by machine and range ("myserver/24h"); a missing one answers 404. */
-  vitals?: Record<string, Vitals>;
-  stream?: { after_ms: number; event: "job" | "gone"; data: JobRecord | { id: string } }[];
+interface Fixture {
+  door: unknown;
+  session: unknown;
+  board: unknown;
+  signin?: { code: string; session: unknown };
+  activity: unknown[];
+  stream?: { after_ms: number; event: string; data: unknown }[];
+  vitals?: Record<string, unknown>;
 }
 
-export const fixturesOn = () => process.env.NEXT_PUBLIC_BOARD_FIXTURES === "1";
-
 export function fixtureName(): string | null {
-  if (!fixturesOn() || typeof window === "undefined") return null;
+  if (typeof window === "undefined") return null;
   const name = new URLSearchParams(window.location.search).get("fixture");
   return name && /^[a-z0-9-]{1,64}$/.test(name) ? name : null;
 }
 
-const SIGNED_OUT: Session = { schema: 1, signed_in: false, role: null, browser: null, expires_at: null, browsers: [] };
+const SIGNED_OUT = readSession(null);
 
 export function fixtureApi(name: string): Api {
-  const loaded = performance.now();
   let fx: Promise<Fixture> | null = null;
-  const load = () => (fx ??= fetch(`/fixtures/${name}.json`, { cache: "no-store" }).then((r) => {
-    if (!r.ok) throw new ApiError(0, "no-fixture", `No fixture named ${name}.`);
-    return r.json() as Promise<Fixture>;
-  }));
+  const load = () =>
+    (fx ??= fetch(`/fixtures/${name}.json`, { cache: "no-store" }).then((r) => {
+      if (!r.ok) throw new ApiError(0, "no-fixture", `No fixture named ${name}.`);
+      return r.json() as Promise<Fixture>;
+    }));
   let session: Session | null = null;
-  let clock = Date.now();
-  load().then((f) => (clock = f.now)).catch(() => {});
 
-  const answer = <T>(d: Doc<T>): T => {
+  const answer = (d: unknown): unknown => {
     if (d && typeof d === "object" && "$status" in (d as object)) {
       const e = d as Err;
       throw new ApiError(e.$status, e.$error?.code ?? `http-${e.$status}`, e.$error?.words ?? "The server couldn't do that.");
     }
-    return d as T;
+    return d;
   };
   const owner = () => {
     if (session && !session.signed_in) throw new ApiError(401, "signed-out", "Sign in first.");
   };
 
   return {
-    door: async () => answer((await load()).door),
-    session: async () => session ?? answer((await load()).session),
+    door: async () => readDoor(answer((await load()).door)),
+    session: async () => session ?? readSession(answer((await load()).session)),
     async signIn(code) {
       const f = await load();
       if (!f.signin || cleanCode(code) !== cleanCode(f.signin.code))
-        throw new ApiError(401, "bad-code", "That code isn't right. Make a new one at the server and type it here.");
-      return (session = f.signin.session);
+        throw new ApiError(401, "bad-code", "That code isn't right, or it was used already. Run sudo bromigos server board code at the server for a new one.");
+      return (session = readSession(f.signin.session));
     },
     signOut: async () => (session = SIGNED_OUT),
     async signOutBrowser(id) {
-      const s = session ?? answer((await load()).session);
+      const s = session ?? readSession(answer((await load()).session));
       return (session = { ...s, browsers: s.browsers.filter((b) => b.id !== id) });
     },
     async board() {
       owner();
-      return answer((await load()).board);
+      return readBoard(answer((await load()).board));
     },
     async vitals(machine, range) {
       owner();
       const v = (await load()).vitals?.[`${machine}/${range}`];
-      if (!v) throw new ApiError(404, "no-trends", "This server keeps no trends yet.");
-      return v;
+      if (!v) throw new ApiError(404, "http-404", "The server couldn't do that.");
+      return readVitals(v, machine, range);
     },
-    activity(on, connected) {
+    activity(on, up) {
       const timers: number[] = [];
       let open = true;
-      load().then((f) => {
-        if (!open) return;
-        connected(true);
-        on({ event: "snapshot", data: { schema: 1, jobs: f.activity } });
-        for (const s of f.stream ?? [])
-          timers.push(window.setTimeout(() => on({ event: s.event, data: s.data } as ActivityEvent), s.after_ms));
-      }, () => connected(false));
-      return () => {
-        open = false;
-        timers.forEach(clearTimeout);
+      const say = (event: string, data: unknown) => {
+        const ev = readEvent(event, data);
+        if (ev && open) on(ev);
+      };
+      load().then(
+        (f) => {
+          if (!open) return;
+          up(true);
+          say("snapshot", { schema: 1, jobs: f.activity });
+          for (const s of f.stream ?? []) timers.push(window.setTimeout(() => say(s.event, s.data), s.after_ms));
+        },
+        () => up(false),
+      );
+      return {
+        close() {
+          open = false;
+          timers.forEach(clearTimeout);
+        },
       };
     },
-    answer: async () => {},
-    cancel: async () => {},
-    retry: async () => {},
-    now: () => clock + (performance.now() - loaded),
+    act: async (verb, app) => readAction({ ok: true, job: null, words: `${verb} ${app}: a fixture starts nothing.` }),
   };
 }

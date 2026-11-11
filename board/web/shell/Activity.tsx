@@ -9,7 +9,7 @@ import { useLab } from "@/lib/lab";
 import { clock } from "@/lib/time";
 
 export function Strip() {
-  const { jobs, board, now, drawer, setDrawer } = useLab();
+  const { jobs, jobsKnown, live, board, now, drawer, setDrawer } = useLab();
   const pick = stripPick(jobs, board.state === "ok" ? board.doc : null, now());
   let look = "", icon = "s-done", iconCls = "muted", title = "", sub = "", hint = "";
   if (pick.kind === "job") {
@@ -19,7 +19,7 @@ export function Strip() {
     iconCls = pick.look === "run" ? "lit" : pick.look === "" ? "muted" : pick.look === "fail" && j.state === "failed" ? "bad" : "warn";
     title = j.title;
     sub = [STATE_WORD[j.state], j.state === "needs-you" ? j.question?.text : progressWords(j), j.error?.words].filter(Boolean).join(" · ");
-    hint = j.state === "needs-you" ? "The activity strip: a job waits for your answer. Press the arrow to see it." : "The activity strip: the job that most needs a look now. Press the arrow to raise the drawer of jobs.";
+    hint = j.state === "needs-you" ? "The activity strip: a job waits for an answer. Press the arrow to see it." : "The activity strip: the job that most needs a look now. Press the arrow to raise the drawer of jobs.";
   } else if (pick.kind === "alert") {
     look = "ask";
     icon = "i-alert";
@@ -27,11 +27,19 @@ export function Strip() {
     title = `${pick.machine} · ${pick.words}`;
     sub = ["needs you", pick.detail].filter(Boolean).join(" · ");
     hint = "The activity strip: the alarm that most needs you, with the machine it is on";
+  } else if (!jobsKnown) {
+    // never "nothing running" before the jobs have been read
+    icon = "s-unk";
+    title = "Reading the jobs";
+    sub = "connecting to the server";
+    hint = "The activity strip: the jobs haven't been read yet";
   } else {
     title = "Nothing running";
     sub = pick.last ? `Last: ${pick.last.title} · ${STATE_WORD[pick.last.state]} ${pick.last.ended_at ? clock(pick.last.ended_at) : ""}` : "No jobs yet";
     hint = "The activity strip when nothing runs: the last job that finished";
   }
+  // the list in hand is the last one read: say so while the stream is away
+  if (jobsKnown && !live) sub = [sub, "not live · reconnecting"].filter(Boolean).join(" · ");
   const up = drawer === "activity";
   return (
     <section className="sh-strip" aria-label="Activity strip">
@@ -63,7 +71,7 @@ export function family(jobs: JobRecord[]): { job: JobRecord; children: JobRecord
 }
 
 export function ActivityDrawer() {
-  const { jobs, live, drawer, setDrawer } = useLab();
+  const { jobs, jobsKnown, live, drawer, setDrawer } = useLab();
   if (drawer !== "activity") return null;
   const all = family(jobs);
   const open = all.filter((f) => isOpen(f.job));
@@ -101,7 +109,7 @@ export function ActivityDrawer() {
         <div className="body">
           {!all.length && (
             <p className="muted" title="Jobs appear here when something long runs: an install, an update, a backup, a drive test">
-              No jobs yet.
+              {jobsKnown ? "No jobs yet." : "The jobs haven't been read yet."}
             </p>
           )}
           {[...open, ...done].map((f) => (

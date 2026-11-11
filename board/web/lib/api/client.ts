@@ -1,16 +1,23 @@
-// The typed client for the board's API: /api/door, /api/session, /api/board and the activity
-// stream /api/activity (Server-Sent Events). Same origin only; the session is the service's
-// HttpOnly cookie, which this code never reads. Every request that changes something carries
-// X-Bromigos-Board: 1 (the service refuses one without it: no other site can set it).
+// The client for the board's API: /api/door, /api/session, /api/board, /api/vitals, the activity
+// stream /api/activity (Server-Sent Events) and /api/actions. Same origin only; the session is
+// the service's HttpOnly cookie, which this code never reads. Every request that changes
+// something carries X-Bromigos-Board: 1 and a JSON body (the service refuses one without them).
+// Every answer goes through lib/api/read.ts before anything else sees it.
 //
 // In a fixture build (BOARD_FIXTURES=1, never the package's) `?fixture=NAME` swaps the API
-// for fixtures/NAME.json, so pages can be built and tested before the service answers.
+// for fixtures/NAME.json, so pages can be built and tested without a server.
 
-import type { ActivityEvent, ApiErrorDoc, Board, Door, JobRecord, Session, Vitals, VitalsRange } from "./types";
-import { fixtureApi, fixtureName } from "./fixtures";
 import { ApiError, cleanCode } from "./errors";
+import { fixtureApi, fixtureName } from "./fixtures";
+import { readAction, readBoard, readDoor, readEvent, readSession, readVitals } from "./read";
+import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session, Vitals, VitalsRange } from "./types";
 
 export { ApiError, cleanCode } from "./errors";
+
+/** The stream as the page sees it: open, or closed and trying again. */
+export interface Stream {
+  close(): void;
+}
 
 /** The calls the page makes. The real one talks to the service; the fixture one reads a file. */
 export interface Api {
@@ -22,69 +29,96 @@ export interface Api {
   board(): Promise<Board>;
   /** One machine's trends; ApiError 404 while the server keeps none. */
   vitals(machine: string, range: VitalsRange): Promise<Vitals>;
-  /** Opens the activity stream; returns a function that closes it. */
-  activity(on: (ev: ActivityEvent) => void, connected: (up: boolean) => void): () => void;
-  answer(job: string, choice: string): Promise<void>;
-  cancel(job: string): Promise<void>;
-  retry(job: string): Promise<void>;
-  /** The clock the page reads times against: the fixture's own in a fixture build. */
-  now(): number;
+  /** Opens the activity stream, and reopens it whenever it ends, until close(). `up` says
+   *  whether it is connected; `ended` is called each time a connection is refused or lost. */
+  activity(on: (ev: ActivityEvent) => void, up: (connected: boolean) => void, ended: () => void): Stream;
+  /** Add, restart or remove an app (the service's actions). */
+  act(verb: "add" | "restart" | "remove", app: string): Promise<ActionAnswer>;
 }
 
 const HEADERS = { "X-Bromigos-Board": "1", "Content-Type": "application/json" };
+const TIMEOUT_MS = 20_000;
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+async function call(path: string, init?: RequestInit): Promise<unknown> {
   let res: Response;
   try {
-    res = await fetch(path, { credentials: "same-origin", cache: "no-store", ...init });
+    res = await fetch(path, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS), ...init });
   } catch {
-    throw new ApiError(0, "unreachable", "The server didn't answer.");
+    throw new ApiError(0, "unreachable", "The server isn't answering.");
   }
-  const text = await res.text();
   let doc: unknown = null;
   try {
-    doc = text ? JSON.parse(text) : null;
+    doc = JSON.parse(await res.text());
   } catch {
-    doc = null;
+    doc = null; // not JSON: a proxy's error page, or a route the service doesn't have
   }
   if (!res.ok) {
-    const err = (doc as ApiErrorDoc | null)?.error;
-    throw new ApiError(res.status, err?.code ?? `http-${res.status}`, err?.words ?? "The server couldn't do that.");
+    const err = (doc as { error?: { code?: unknown; words?: unknown } } | null)?.error;
+    const retry = Number(res.headers.get("Retry-After"));
+    throw new ApiError(
+      res.status,
+      typeof err?.code === "string" ? err.code : `http-${res.status}`,
+      typeof err?.words === "string" && err.words ? err.words : res.status >= 500 ? "The server couldn't answer just now." : "The server couldn't do that.",
+      Number.isFinite(retry) && retry > 0 ? retry : null,
+    );
   }
-  return doc as T;
+  if (doc === null) throw new ApiError(res.status, "not-json", "The server's answer couldn't be read.");
+  return doc;
 }
 
-const send = <T>(method: string, path: string, body?: unknown) =>
-  call<T>(path, { method, headers: HEADERS, body: JSON.stringify(body ?? {}) });
+const send = (method: string, path: string, body?: unknown) => call(path, { method, headers: HEADERS, body: JSON.stringify(body ?? {}) });
+
+const REOPEN_MS = [1_000, 3_000, 5_000, 15_000];
 
 const realApi: Api = {
-  door: () => call<Door>("/api/door"),
-  session: () => call<Session>("/api/session"),
-  signIn: (code) => send<Session>("POST", "/api/session", { code: cleanCode(code) }),
-  signOut: () => send<Session>("DELETE", "/api/session"),
-  signOutBrowser: (id) => send<Session>("DELETE", `/api/session/${encodeURIComponent(id)}`),
-  board: () => call<Board>("/api/board"),
-  vitals: (machine, range) => call<Vitals>(`/api/vitals?machine=${encodeURIComponent(machine)}&range=${range}`),
-  activity(on, connected) {
-    const es = new EventSource("/api/activity");
-    const pass = (event: ActivityEvent["event"]) => (m: MessageEvent) => {
-      try {
-        on({ event, data: JSON.parse(m.data) } as ActivityEvent);
-      } catch {
-        /* a broken event is skipped; the next snapshot puts it right */
-      }
+  door: async () => readDoor(await call("/api/door")),
+  session: async () => readSession(await call("/api/session")),
+  signIn: async (code) => readSession(await send("POST", "/api/session", { code: cleanCode(code) })),
+  signOut: async () => readSession(await send("DELETE", "/api/session")),
+  signOutBrowser: async (id) => readSession(await send("DELETE", `/api/session/${encodeURIComponent(id)}`)),
+  board: async () => readBoard(await call("/api/board")),
+  vitals: async (machine, range) => readVitals(await call(`/api/vitals?machine=${encodeURIComponent(machine)}&range=${range}`), machine, range),
+  activity(on, up, ended) {
+    let es: EventSource | null = null, timer = 0, tries = 0, closed = false;
+    const open = () => {
+      if (closed) return;
+      const src = (es = new EventSource("/api/activity"));
+      const pass = (event: string) => (m: MessageEvent) => {
+        let data: unknown = null;
+        try {
+          data = JSON.parse(m.data);
+        } catch {
+          return; // a broken event is skipped; the next snapshot puts it right
+        }
+        const ev = readEvent(event, data);
+        if (ev) on(ev);
+      };
+      for (const e of ["snapshot", "job", "gone", "signed-out"]) src.addEventListener(e, pass(e));
+      src.onopen = () => {
+        tries = 0;
+        up(true);
+      };
+      // An error ends this connection. The browser retries a dropped one by itself, but not one
+      // the server refused (a 502 while the service restarts, a 401): either way this one is
+      // closed and a new one opened on a timer, so the stream always comes back.
+      src.onerror = () => {
+        src.close();
+        if (closed || es !== src) return;
+        up(false);
+        ended();
+        timer = window.setTimeout(open, REOPEN_MS[Math.min(tries++, REOPEN_MS.length - 1)]);
+      };
     };
-    es.addEventListener("snapshot", pass("snapshot"));
-    es.addEventListener("job", pass("job"));
-    es.addEventListener("gone", pass("gone"));
-    es.onopen = () => connected(true);
-    es.onerror = () => connected(false); // EventSource reconnects by itself
-    return () => es.close();
+    open();
+    return {
+      close() {
+        closed = true;
+        window.clearTimeout(timer);
+        es?.close();
+      },
+    };
   },
-  answer: (job, choice) => send("POST", `/api/activity/${encodeURIComponent(job)}/answer`, { choice }),
-  cancel: (job) => send("POST", `/api/activity/${encodeURIComponent(job)}/cancel`),
-  retry: (job) => send("POST", `/api/activity/${encodeURIComponent(job)}/retry`),
-  now: () => Date.now(),
+  act: async (verb, app) => readAction(await send("POST", "/api/actions", { verb, app })),
 };
 
 let chosen: Api | null = null;
@@ -99,5 +133,5 @@ export function api(): Api {
   return chosen;
 }
 
-/** Newest first; children after nothing in particular. */
+/** Newest first. */
 export const byNewest = (a: JobRecord, b: JobRecord) => b.started_at - a.started_at || (a.id < b.id ? 1 : -1);

@@ -114,7 +114,12 @@ const NAME = /^[a-z0-9][a-z0-9._-]{0,62}$/i;
 const tabIds = (p: Place) => (TABS[p] ?? []).map((t) => t.id);
 
 export function parse(hash: string): Route {
-  const raw = decodeURIComponent(hash.replace(/^#\/?/, "")).trim();
+  let raw = "";
+  try {
+    raw = decodeURIComponent(hash.replace(/^#\/?/, "")).trim();
+  } catch {
+    raw = ""; // "#%" and its kind aren't an address of the page: Home
+  }
   const [head = "", a = "", b = ""] = raw.split("/");
   const r = (place: Place, tab = "", id: string | null = null, sheet: string | null = null, sheetId: string | null = null): Route => ({
     place,

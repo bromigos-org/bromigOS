@@ -1,29 +1,26 @@
 // Home (IA.md §2): "Is the lab all right, and what do I do first?" The hero (Lamplight), one
 // status line, NEEDS YOU (only what a person can act on, each with its machine), This week
 // (planned), and a tile per machine with its readings.
+import { Boundary } from "@/components/Boundary";
 import { Lamplight } from "@/components/Lamplight";
+import { NoBoard } from "@/components/NoBoard";
 import { Icon, Planned, State } from "@/components/ui";
 import type { Board, Machine, NeedsYou } from "@/lib/api/types";
 import { useLab } from "@/lib/lab";
 import { href } from "@/lib/routes";
 import { ago, stale } from "@/lib/time";
+import { PART_WORDS } from "@/lib/words";
 import { KIND_ICON } from "@/shell/Rail";
 
 function NeedRow({ n, machine }: { n: NeedsYou; machine?: Machine }) {
   const go = n.go ? `#${n.go}` : href("machine", "", n.machine);
   return (
-    <div className="lb-need" title={`On ${n.machine}: ${n.words}${n.subject ? ` (${n.subject.name})` : ""}${n.detail ? `. What to do: ${n.detail}` : ""}.`}>
+    <div className="lb-need" title={`On ${n.machine}: ${n.words}.${n.detail ? ` ${n.detail}` : ""}`}>
       <span className="hm-ic" title={`On ${n.machine}`}>
         <Icon id={machine ? KIND_ICON[machine.kind] : "i-module"} size={20} />
       </span>
       <span>
-        {n.words}
-        {n.subject && (
-          <>
-            : <b>{n.subject.name}</b>
-          </>
-        )}{" "}
-        · {n.machine}
+        {n.words} · {n.machine}
         {n.detail && <span className="d">{n.detail}</span>}
       </span>
       <a className="ib" href={go} title={`Open it where it is${n.go ? "" : `: ${n.machine}'s page`}`} aria-label={`Open: ${n.words}`}>
@@ -57,12 +54,20 @@ function Needs({ b }: { b: Board }) {
       </section>
     );
   }
+  // "nothing needs you" is said only when both the alerts and the jobs were read
+  const blind = b.unread.filter((p) => p === "alerts" || p === "jobs");
   return (
     <section className={`panel hm-needs${items.length ? " is-warn" : ""}`} title="Needs you, across the lab: only what a person can act on, each with its machine">
       <h2 className="ph">
         <span>NEEDS YOU · {items.length}</span>
-        {!items.length && <State shape="ok" word="nothing" hint="Nothing needs you: no alert and no job waiting for an answer" />}
+        {!items.length && !blind.length && <State shape="ok" word="nothing" hint="Nothing needs you: the alerts and the jobs were read, and none waits for a person" />}
+        {blind.length > 0 && <State shape="unknown" word="can't check" hint={`The server couldn't read ${blind.map((p) => PART_WORDS[p]).join(" or ")} this time, so there may be more that needs you`} />}
       </h2>
+      {blind.map((p) => (
+        <p key={p} className="small muted hm-blind">
+          {PART_WORDS[p][0].toUpperCase() + PART_WORDS[p].slice(1)} couldn't be read{b.why[p] ? `: ${b.why[p]}` : ""}.
+        </p>
+      ))}
       {items.map((n) => (
         <NeedRow key={n.id} n={n} machine={byName.get(n.machine)} />
       ))}
@@ -137,7 +142,7 @@ function MachineTile({ m, now }: { m: Machine; now: number }) {
             {read("i-temp", r.temp_c, "°C", "Hottest drive")}
           </>
         ) : (
-          <span className="spec q" title="No readings from this machine: it hasn't reported">
+          <span className="spec q" title="Processor, memory and heat aren't measured for this machine yet">
             <Icon id="s-unk" size={16} />
             no readings
           </span>
@@ -161,29 +166,31 @@ function MachineTile({ m, now }: { m: Machine; now: number }) {
 export function Home() {
   const { board, now } = useLab();
   if (board.state === "loading") return null;
-  if (board.state === "error")
-    return (
-      <div className="unreach" title="The board couldn't be read from the server">
-        <Icon id="i-offline" size={40} />
-        <p>{board.error.words} The page tries again every 15 seconds.</p>
-      </div>
-    );
+  if (board.state === "error") return <NoBoard error={board.error} />;
   const b = board.doc;
   const t = now();
   return (
     <>
-      <Lamplight board={b} />
+      <Boundary what="The lab's status">
+        <Lamplight board={b} />
+      </Boundary>
       <div className="hm-grid">
-        <Needs b={b} />
-        <Week />
+        <Boundary what="What needs you">
+          <Needs b={b} />
+        </Boundary>
+        <Boundary what="This week">
+          <Week />
+        </Boundary>
       </div>
-      <div className="hm-ms" role="list" aria-label="The machines">
-        {b.machines.map((m) => (
-          <div role="listitem" key={m.name} className="hm-mi">
-            <MachineTile m={m} now={t} />
-          </div>
-        ))}
-      </div>
+      <Boundary what="The machines">
+        <div className="hm-ms" role="list" aria-label="The machines">
+          {b.machines.map((m) => (
+            <div role="listitem" key={m.name} className="hm-mi">
+              <MachineTile m={m} now={t} />
+            </div>
+          ))}
+        </div>
+      </Boundary>
     </>
   );
 }

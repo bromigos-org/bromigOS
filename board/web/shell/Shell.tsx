@@ -2,6 +2,7 @@
 // the activity strip along the bottom, and the two drawers. Signed out, it is the door: no rail,
 // no strip, no search, no You.
 import { useEffect, type ReactNode } from "react";
+import { Boundary } from "@/components/Boundary";
 import { Icon, IconButton, Planned } from "@/components/ui";
 import { depthFor } from "@/lib/depth";
 import { useLab } from "@/lib/lab";
@@ -97,17 +98,33 @@ export function Shell({ signedIn, children }: { signedIn: boolean; children: Rea
   return (
     <div className="proto">
       <div className={`shell${signedIn ? "" : " signed-out"}${drawer === "activity" ? " act-open" : ""}${drawer === "depth" ? " depth-open" : ""}`}>
-        {signedIn && <Rail />}
+        {signedIn && (
+          <Boundary what="The rail">
+            <Rail />
+          </Boundary>
+        )}
         <div className="sh-main">
-          <TopBar signedIn={signedIn} />
+          <Boundary what="The top bar">
+            <TopBar signedIn={signedIn} />
+          </Boundary>
           <main className="sh-view" id="view">
             {children}
           </main>
-          {signedIn && <Strip />}
+          {signedIn && (
+            <Boundary what="The activity strip">
+              <Strip />
+            </Boundary>
+          )}
         </div>
       </div>
-      <DepthDrawer signedIn={signedIn} />
-      {signedIn && <ActivityDrawer />}
+      <Boundary what="The Depth drawer">
+        <DepthDrawer signedIn={signedIn} />
+      </Boundary>
+      {signedIn && (
+        <Boundary what="The activity drawer">
+          <ActivityDrawer />
+        </Boundary>
+      )}
     </div>
   );
 }

@@ -21,21 +21,67 @@ test("Overview, healthy: the verdict, the lit groups, the three readings and the
 
 test("Overview, one thing wrong: the verdict, the drive and what fixed itself", async ({ page }) => {
   await open(page, "needs-you", "m/myserver");
-  await expect(page.locator(".stage.board .verdict")).toHaveText("1 THING NEEDS YOU");
+  await expect(page.locator(".stage.board .verdict")).toHaveText("2 THINGS NEED YOU");
   await expect(page.locator(".rt", { hasText: "STORAGE" })).toContainText("getting worse");
-  await expect(page.locator(".panel", { hasText: "FIXED BY ITSELF" })).toContainText("Photos' update was put back");
+  await expect(page.locator(".panel", { hasText: "FIXED BY ITSELF" })).toContainText("Updating Photos");
+  await expect(page.locator(".panel", { hasText: "FIXED BY ITSELF" })).toContainText("It failed and put things back by itself.");
   await page.locator(".rt", { hasText: "STORAGE" }).click();
   await expect(page.locator(".sh-crumb")).toHaveText(/Data › Drives$/);
 });
 
-test("the hero draws the rack, or keeps its glyph without WebGL, with one context at most", async ({ page }) => {
+test("the hero draws the rack: one canvas, and something on it", async ({ page }) => {
   const { errors } = await open(page, "healthy", "m/myserver");
   const mount = page.locator(".holo-mount");
   await expect(mount).toHaveAttribute("aria-label", "myserver's hologram");
-  await expect(mount.locator("canvas, svg.gl").first()).toBeAttached();
-  await page.waitForTimeout(1500);
-  expect(await page.locator("canvas").count()).toBeLessThanOrEqual(1);
+  await expect(mount).toHaveClass(/drawn/, { timeout: 30_000 });
+  await expect(page.locator("canvas")).toHaveCount(1);
+  await expect(mount.locator("svg.gl")).toHaveCount(0);
+  // the canvas carries a picture: the hero looks different with it than without it
+  const rack = page.locator(".st-rack");
+  await expect
+    .poll(async () => {
+      const withIt = await rack.screenshot();
+      await page.locator("canvas").evaluate((c) => ((c as HTMLElement).hidden = true));
+      const without = await rack.screenshot();
+      await page.locator("canvas").evaluate((c) => ((c as HTMLElement).hidden = false));
+      return Buffer.compare(withIt, without) !== 0;
+    }, { timeout: 20_000 })
+    .toBe(true);
   expect(errors).toEqual([]);
+});
+
+test("without WebGL the machine's glyph stays, and nothing breaks", async ({ page }) => {
+  await page.addInitScript(() => {
+    const get = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...rest: unknown[]) {
+      return /webgl/.test(kind) ? null : (get as any).call(this, kind, ...rest);
+    } as typeof get;
+  });
+  const failures: string[] = [];
+  page.on("pageerror", (e) => failures.push(e.message));
+  await page.goto("/?fixture=healthy#m/myserver");
+  await expect(page.locator(".stage.board .verdict")).toHaveText("ALL SYSTEMS NOMINAL");
+  await expect(page.locator(".holo-mount svg.gl")).toBeVisible();
+  await page.waitForTimeout(1500);
+  await expect(page.locator(".holo-mount")).not.toHaveClass(/drawn/);
+  await expect(page.locator(".holo-mount canvas")).toHaveCount(0);
+  expect(await page.locator(".broken").count()).toBe(0);
+  expect(failures).toEqual([]);
+});
+
+test("a model that fails to load once is asked for again by the next view", async ({ page }) => {
+  let asked = 0;
+  await page.route("**/holo/rack.bin", (route) => (++asked === 1 ? route.fulfill({ status: 503, body: "" }) : route.fallback()));
+  await page.goto("/?fixture=healthy#m/myserver");
+  await expect(page.locator(".holo-mount svg.gl")).toBeVisible();
+  await expect.poll(() => asked).toBe(1);
+  // away and back: the failed load wasn't kept, and no half-made view is left behind
+  await page.evaluate(() => (window.location.hash = "home"));
+  await expect(page.locator(".stage.lamp")).toBeVisible();
+  await page.evaluate(() => (window.location.hash = "m/myserver"));
+  await expect(page.locator(".holo-mount")).toHaveClass(/drawn/, { timeout: 30_000 });
+  expect(asked).toBe(2);
+  await expect(page.locator("canvas")).toHaveCount(1);
 });
 
 test("Vitals: four gauges, then the trend, series by series", async ({ page }) => {

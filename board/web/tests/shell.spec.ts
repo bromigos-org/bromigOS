@@ -93,7 +93,7 @@ test("the strip follows the activity stream", async ({ page }) => {
   await expect(strip).toContainText("Last: Backing up this server · done");
 });
 
-test("the strip puts the job that asks you first, and its drawer answers", async ({ page }) => {
+test("the strip puts the job that asks you first, and its drawer shows the question", async ({ page }) => {
   await open(page, "needs-you", "home");
   const strip = page.locator(".sh-strip .strip");
   await expect(strip).toHaveClass(/ask/);
@@ -102,8 +102,9 @@ test("the strip puts the job that asks you first, and its drawer answers", async
   const drawer = page.getByRole("complementary", { name: "Activity" });
   await expect(drawer).toBeVisible();
   await expect(drawer.locator(".job").first()).toContainText("Swap the drive now");
-  await expect(drawer.getByRole("button", { name: "I've swapped it" })).toBeVisible();
-  await expect(drawer.locator(".job.ask ol.steps li")).toHaveCount(5);
+  await expect(drawer.locator(".job.ask .job-as")).toContainText("I've swapped it");
+  await expect(drawer.locator(".job.ask pre")).toContainText("sudo bromigos activity answer");
+  await expect(drawer.locator(".job.ask ol.steps li")).toHaveCount(3);
   await expect(drawer.locator(".job", { hasText: "Updating Photos" })).toContainText("no answer in 2 minutes");
   await drawer.getByRole("link", { name: "Show all jobs" }).click();
   await expect(page.locator(".sh-crumb")).toHaveText(/Activity › Now$/);
@@ -139,4 +140,13 @@ test("search finds an app and goes there", async ({ page }, info) => {
   await page.getByLabel("Ask VECTOR or search").fill("immich");
   await page.getByLabel("Ask VECTOR or search").press("Enter");
   await expect(page).toHaveURL(/#app\/photos$/);
+});
+
+test("the search field shows where the keyboard is", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "search is in the top bar on a wide screen");
+  await open(page, "healthy", "home");
+  const ring = () => page.locator(".sh-search").evaluate((e) => getComputedStyle(e).outlineStyle + " " + getComputedStyle(e).outlineWidth);
+  expect(await ring()).toMatch(/^none|0px$/);
+  await page.getByLabel("Ask VECTOR or search").focus();
+  expect(await ring()).toBe("solid 2px");
 });

@@ -42,3 +42,9 @@ export function took(ms: number): string {
 
 /** A reading older than its max_age_s is stale: drawn static grey with its age (DESIGN §3). */
 export const stale = (at: number, maxAgeS: number, now: number) => now - at > maxAgeS * 1000;
+
+/** How long, with no "ago": "under a minute", "4 min", "2 h", "3 days". */
+export function span(ms: number): string {
+  const said = ago(0, Math.max(0, ms));
+  return said === "just now" ? "under a minute" : said.replace(/ ago$/, "");
+}

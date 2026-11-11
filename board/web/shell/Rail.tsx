@@ -40,12 +40,13 @@ function machineHint(m: Machine): string {
 }
 
 /** Cameras earns its rail entry only when a machine runs it (UniFi OS's rule, IA.md §1). */
-const hasCameras = (b: Board | null) => !!b?.apps.some((t) => t.installed && (t.group === "cameras" || t.id === "cameras"));
+const hasCameras = (b: Board | null) => !!b?.apps?.some((t) => t.installed && (t.group === "cameras" || t.id === "cameras"));
 
 export function Rail() {
-  const { route, board, scope } = useLab();
+  const { route, board, door, scope } = useLab();
   const b = board.state === "ok" ? board.doc : null;
-  const labName = b?.lab.name ?? "MYLAB";
+  // the lab's own name, as the server gives it; never a made-up one
+  const labName = (b?.lab.name ?? (door.state === "ok" ? door.doc.lab.name : "")).toUpperCase() || "LAB";
   const on = (place: Place) => route.place === place || (place === "supply" && route.place === "app");
   const cur = (yes: boolean) => (yes ? { "aria-current": "page" as const } : {});
   return (

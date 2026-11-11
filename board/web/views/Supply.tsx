@@ -1,16 +1,20 @@
 // Supply (IA.md §2): what runs, what the lab can run, and what changes tonight. Installed and
-// Browse read the board's tiles (`bromigos lab apps list --all --json`, DESIGN.md §3); Updates
-// reads each tile's `update` and the system's update. The Add sheet shows what an app asks of the
-// server and the exact command; adding it from the page waits for the service's action verbs.
+// Browse read the board's tiles (`bromigos lab apps list --json`: every catalogue item, installed
+// or not; DESIGN.md §3); Updates reads each tile's `update` and the system's update. The Add
+// sheet shows what an app asks of the server and the exact command, and adds it from the page
+// when the server says the page may (board.actions; the service's POST /api/actions).
 import { useMemo, useState } from "react";
-import { Icon, IconLink, Planned, State } from "@/components/ui";
-import type { Board, Tile, UpdatesStatus } from "@/lib/api/types";
+import { Boundary } from "@/components/Boundary";
+import { NoBoard } from "@/components/NoBoard";
+import { Icon, IconButton, IconLink, Planned, State } from "@/components/ui";
+import { ApiError } from "@/lib/api/errors";
+import type { Board, Tile } from "@/lib/api/types";
 import { holoIcon } from "@/lib/icons";
 import { useLab } from "@/lib/lab";
 import { href } from "@/lib/routes";
 import { when } from "@/lib/time";
 import { Sheet, Tabs } from "@/shell/Shell";
-import { AppTile } from "./Machine";
+import { AppTile, PHASE, tileShape, Unread } from "./Machine";
 
 const GB = 1024 ** 3;
 const gb = (b: number) => (b / GB >= 10 ? Math.round(b / GB) : Math.round((b / GB) * 10) / 10);
@@ -27,20 +31,20 @@ const GROUPS: [string, string][] = [
   ["brodec", "BRODEC"],
 ];
 
-function Installed({ b, scope }: { b: Board; scope: string | null }) {
+function Installed({ apps, server, scope }: { apps: Tile[]; server: string; scope: string | null }) {
   const { now } = useLab();
   const [sort, setSort] = useState<"name" | "memory">("name");
-  const mine = b.apps.filter((t) => t.installed && (!scope || (t.machine ?? b.server.name) === scope));
-  const ram = mine.map((t) => t.measured?.ram_bytes).filter((x): x is number => typeof x === "number");
-  const disk = mine.map((t) => t.measured?.disk_bytes).filter((x): x is number => typeof x === "number");
+  const mine = apps.filter((t) => t.installed && (!scope || (t.machine ?? server) === scope));
+  const ram = mine.map((t) => t.measured.ram_bytes).filter((x): x is number => typeof x === "number");
+  const disk = mine.map((t) => t.measured.disk_bytes).filter((x): x is number => typeof x === "number");
   const up = mine.filter((t) => t.state === "ok").length;
-  const sorted = [...mine].sort((a, z) => (sort === "memory" ? (z.measured?.ram_bytes ?? -1) - (a.measured?.ram_bytes ?? -1) : a.job.localeCompare(z.job)));
+  const sorted = [...mine].sort((a, z) => (sort === "memory" ? (z.measured.ram_bytes ?? -1) - (a.measured.ram_bytes ?? -1) : a.job.localeCompare(z.job)));
   return (
     <>
       <section className="panel" title="What runs: how many, and what they use, measured on the server">
         <div className="rdrow su-rd">
-          <div className="rd" title="Installed apps, and how many are running">
-            <span className="k">Running</span>
+          <div className="rd" title="Installed apps, and how many are well: running, or set up when they have no service of their own">
+            <span className="k">Well</span>
             <span className="v">
               {up}
               <small>of {mine.length}</small>
@@ -122,7 +126,7 @@ function BrowseTile({ t }: { t: Tile }) {
         </span>
       )}
       <span className="foot">
-        {t.installed ? <State shape="ok" word="installed" /> : <span />}
+        {t.installed ? <State shape={tileShape(t)} word={t.state_word ?? "Unknown"} hint="Installed; its state as the server reads it" /> : <span />}
         {t.installed ? (
           <IconLink icon="i-open" href={href("app", "", t.id)} label={`${t.job}'s page`} hint={`${t.job}'s page: restart, logs, roll back, remove`} />
         ) : (
@@ -133,16 +137,18 @@ function BrowseTile({ t }: { t: Tile }) {
   );
 }
 
-function Browse({ b }: { b: Board }) {
+function Browse({ apps }: { apps: Tile[] }) {
   const [q, setQ] = useState("");
   const words = q.trim().toLowerCase();
-  const shown = useMemo(() => b.apps.filter((t) => !words || `${t.job} ${t.app} ${t.id}`.toLowerCase().includes(words)), [b.apps, words]);
+  const shown = useMemo(() => apps.filter((t) => !words || `${t.job} ${t.app} ${t.id}`.toLowerCase().includes(words)), [apps, words]);
+  const known = new Set(GROUPS.map(([g]) => g));
+  const groups: [string, string][] = [...GROUPS, ...[...new Set(shown.map((t) => t.group))].filter((g) => !known.has(g)).map((g): [string, string] => [g, (g || "other").toUpperCase()])];
   return (
     <>
       <label className="search" title="Find an app by its job or its name">
         <input className="field" type="search" placeholder="Find an app" aria-label="Find an app" title="Find an app by its job or its name" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
-      {GROUPS.map(([g, name]) => {
+      {groups.map(([g, name]) => {
         const ts = shown.filter((t) => t.group === g);
         if (!ts.length) return null;
         return (
@@ -166,12 +172,13 @@ function Browse({ b }: { b: Board }) {
   );
 }
 
-function Updates({ b }: { b: Board }) {
+function Updates({ b, apps }: { b: Board; apps: Tile[] | null }) {
   const { now } = useLab();
-  const waiting = b.apps.filter((t) => t.installed && t.update?.available);
-  const known = b.apps.some((t) => t.installed && t.update);
-  const sys = b.updates as UpdatesStatus | null;
-  const at = sys?.finished_ts ? sys.finished_ts * 1000 : null;
+  const installed = (apps ?? []).filter((t) => t.installed);
+  const reporting = installed.filter((t) => t.update);
+  const waiting = reporting.filter((t) => t.update!.available);
+  const sys = b.updates;
+  const [words, shape] = sys ? (PHASE[sys.phase] ?? [sys.phase, "unknown" as const]) : ["couldn't be read", "unknown" as const];
   return (
     <>
       <section className="panel" title="The system's own update: snapshot, update, check, and roll back by itself if it doesn't come back healthy">
@@ -180,9 +187,18 @@ function Updates({ b }: { b: Board }) {
             <Icon id="i-update" size={16} />
             THE SYSTEM
           </span>
-          {sys && <span className="chip">{sys.window ? `WINDOW ${sys.window}` : sys.mode.toUpperCase()}</span>}
+          <State shape={shape} word={words} />
         </h2>
-        <p className="small">{sys ? `${sys.auto ? "Updates by itself" : "Waits for you"}${at ? `; the last one finished ${when(at, now())}` : ""}.` : "The system's update couldn't be read."}</p>
+        {sys ? (
+          <p className="small">
+            {sys.auto ? "Updates by itself" : "Waits for you"}
+            {sys.window ? `, restarting only between ${sys.window.replace("-", " and ")}` : ""}
+            {sys.finished_at ? `; the last one finished ${when(sys.finished_at, now())}` : ""}.
+            {sys.rollbacks > 0 ? ` ${sys.rollbacks} update${sys.rollbacks === 1 ? " was" : "s were"} rolled back.` : ""}
+          </p>
+        ) : (
+          <Unread what="The system's update" why={b.why.updates} />
+        )}
       </section>
       <section className="panel" title="The apps' updates: each behind a snapshot, with a way back. Planned: the update path (DESIGN.md §2).">
         <h2 className="ph">
@@ -190,37 +206,73 @@ function Updates({ b }: { b: Board }) {
             <Icon id="i-updateall" size={16} />
             THE APPS
           </span>
-          {!known && <Planned hint="Planned: app updates behind a snapshot, with a way back (DESIGN.md §7, PR 5)" />}
+          {apps && !reporting.length && <Planned hint="Planned: app updates behind a snapshot, with a way back (DESIGN.md §7, PR 5)" />}
         </h2>
-        {known ? (
-          waiting.length ? (
-            <ul className="rows wide">
-              {waiting.map((t) => (
-                <li key={t.id} title={`${t.job}: ${t.version ?? "?"} to ${t.update!.to ?? "?"}${t.update!.note ? `. ${t.update!.note}` : ""}`}>
-                  <Icon id={holoIcon(t.holo).id} size={20} />
-                  <span className="grow">
-                    <b>{t.job}</b> {t.version} → {t.update!.to}
-                    {t.update!.manual && <span className="small warn"> · by hand</span>}
-                  </span>
-                  <a className="hw-go" href={href("app", "", t.id)} title={`${t.job}'s page`}>
-                    OPEN
-                  </a>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="small">Every app is up to date.</p>
-          )
-        ) : (
+        {!apps ? (
+          <Unread what="The apps" why={b.why.apps} />
+        ) : !reporting.length ? (
           <p className="small muted">The apps don't report updates yet.</p>
+        ) : (
+          <>
+            {waiting.length > 0 && (
+              <ul className="rows wide">
+                {waiting.map((t) => (
+                  <li key={t.id} title={`${t.job}: ${t.version ?? "?"} to ${t.update!.to ?? "?"}${t.update!.note ? `. ${t.update!.note}` : ""}`}>
+                    <Icon id={holoIcon(t.holo).id} size={20} />
+                    <span className="grow">
+                      <b>{t.job}</b> {t.version} → {t.update!.to}
+                      {t.update!.manual && <span className="small warn"> · by hand</span>}
+                    </span>
+                    <a className="hw-go" href={href("app", "", t.id)} title={`${t.job}'s page`}>
+                      OPEN
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {/* "up to date" is said only of the apps that report; the rest are named as not reporting */}
+            <p className="small">
+              {waiting.length ? "" : reporting.length === installed.length ? "Every app is up to date." : `No update is waiting for the ${reporting.length} app${reporting.length === 1 ? "" : "s"} that report${reporting.length === 1 ? "s" : ""} one.`}
+              {reporting.length < installed.length ? ` ${installed.length - reporting.length} of ${installed.length} don't report updates yet.` : ""}
+            </p>
+          </>
         )}
       </section>
     </>
   );
 }
 
-function Add({ b, id }: { b: Board; id: string | null }) {
-  const t = b.apps.find((x) => x.id === id);
+function AddIt({ t }: { t: Tile }) {
+  const { act } = useLab();
+  const [state, setState] = useState<{ at: "idle" | "asking" | "started" | "refused"; words: string }>({ at: "idle", words: "" });
+  return (
+    <div className="su-add">
+      <IconButton
+        icon="i-add"
+        move="drop"
+        kind={state.at === "idle" || state.at === "refused" ? "big" : "off"}
+        label={`Add ${t.job}`}
+        hint={`Add ${t.job} (${t.app}): the server adds it, with what it needs, as one job in the activity strip`}
+        aria-disabled={state.at === "asking" || state.at === "started"}
+        onClick={() => {
+          if (state.at === "asking" || state.at === "started") return;
+          setState({ at: "asking", words: "" });
+          act("add", t.id).then(
+            (said) => setState({ at: "started", words: said.words || `Adding ${t.job}.` }),
+            (e) => setState({ at: "refused", words: e instanceof ApiError ? e.words : "The server couldn't do that." }),
+          );
+        }}
+      />
+      <p className={state.at === "refused" ? "signin-err" : "small"} role="status">
+        {state.at === "asking" ? "Asking the server…" : state.at === "started" ? `${state.words} Its steps are in the activity strip.` : state.words}
+      </p>
+    </div>
+  );
+}
+
+function Add({ b, apps, id }: { b: Board; apps: Tile[]; id: string | null }) {
+  const t = apps.find((x) => x.id === id);
+  const may = !!t && !t.installed && b.actions.includes("add") && t.can.includes("add");
   return (
     <Sheet title={t ? `Add ${t.job}` : "Add"} close="#supply/browse" closeHint="Close: back to Supply › Browse">
       {!t ? (
@@ -234,7 +286,7 @@ function Add({ b, id }: { b: Board; id: string | null }) {
               </span>
               <div className="nm">
                 <h2>{t.job.toUpperCase()}</h2>
-                <span className="chip">{t.app.toUpperCase()}</span>
+                {t.app && <span className="chip">{t.app.toUpperCase()}</span>}
               </div>
             </div>
             {t.requires && (
@@ -265,10 +317,15 @@ function Add({ b, id }: { b: Board; id: string | null }) {
           </section>
           <section className="panel" title="What adding it does: the plan first, then the install as one job in the activity strip">
             <h2 className="ph">
-              <span>ADD IT</span>
-              <Planned hint="Planned: adding from the page waits for the board service's app verbs. Today: the command below, at the server." />
+              <span>{t.installed ? "INSTALLED" : "ADD IT"}</span>
+              {!may && !t.installed && <Planned hint="This server doesn't take adds from the page yet. Today: the commands below, at the server." />}
             </h2>
-            <pre>{`sudo bromigos lab apps add ${t.id} --plan   # what it adds, and what it asks of the server\nsudo bromigos lab apps add ${t.id}          # add it`}</pre>
+            {may && <AddIt t={t} />}
+            {t.installed ? (
+              <p className="small">{t.job} is installed already.</p>
+            ) : (
+              <pre>{`sudo bromigos lab apps add ${t.id} --plan   # what it adds, and what it asks of the server\nsudo bromigos lab apps add ${t.id}          # add it`}</pre>
+            )}
           </section>
         </div>
       )}
@@ -278,15 +335,40 @@ function Add({ b, id }: { b: Board; id: string | null }) {
 
 export function Supply({ tab, sheet, sheetId }: { tab: string; sheet: string | null; sheetId: string | null }) {
   const { board, scope } = useLab();
-  if (board.state !== "ok") return board.state === "loading" ? null : <p className="muted">{board.error.words}</p>;
+  if (board.state === "loading") return null;
+  if (board.state === "error")
+    return (
+      <section className="page" aria-label="Supply">
+        <Tabs place="supply" label="Supply" />
+        <NoBoard error={board.error} />
+      </section>
+    );
   const b = board.doc;
+  const apps = b.apps;
   return (
     <>
       <section className={`page${sheet ? " sh-under" : ""}`} aria-label="Supply" inert={sheet ? true : undefined}>
         <Tabs place="supply" label="Supply" />
-        {tab === "browse" ? <Browse b={b} /> : tab === "updates" ? <Updates b={b} /> : <Installed b={b} scope={scope} />}
+        <Boundary what="Supply" again={tab}>
+          {tab === "updates" ? (
+            <Updates b={b} apps={apps} />
+          ) : !apps ? (
+            <div className="unreach" role="status">
+              <Icon id="s-unk" size={40} />
+              <Unread what="The apps" why={b.why.apps} />
+            </div>
+          ) : tab === "browse" ? (
+            <Browse apps={apps} />
+          ) : (
+            <Installed apps={apps} server={b.server.name} scope={scope} />
+          )}
+        </Boundary>
       </section>
-      {sheet === "add" && <Add b={b} id={sheetId} />}
+      {sheet === "add" && (
+        <Boundary what="The Add sheet" again={sheetId ?? ""}>
+          <Add b={b} apps={apps ?? []} id={sheetId} />
+        </Boundary>
+      )}
       {sheet === "stacks" && (
         <Sheet title="Stacks · Media" close="#supply/browse" closeHint="Close: back to Supply › Browse">
           <p className="muted" title="The media stack: films, shows and music wired together. Planned.">

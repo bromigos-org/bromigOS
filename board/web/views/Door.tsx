@@ -90,9 +90,9 @@ function Apps({ door }: { door: DoorDoc }) {
           <Icon id="i-lock" size={20} />
         </span>
         {!door.tiles.length && (
-          <span className="st unk" title="Nothing yet: no app has been added">
+          <span className="st unk" title={door.door ? "Nothing yet: no app with a page has been added" : "The owner turned the door's app list off on this server"}>
             <Icon id="s-unk" size={16} />
-            nothing yet
+            {door.door ? "nothing yet" : "turned off"}
           </span>
         )}
       </h2>
@@ -115,9 +115,9 @@ function Apps({ door }: { door: DoorDoc }) {
         </div>
       ) : (
         <ul className="icol q">
-          <li title="Apps appear here to open once the owner adds them">
+          <li title={door.door ? "Apps appear here to open once the owner adds them" : "The owner turned the app list off for this door ([board] door in the server's settings)"}>
             <Icon id="i-supply" size={20} />
-            Apps appear here to open
+            {door.door ? "Apps appear here to open" : "The app list is turned off here"}
           </li>
           <li title="No readings, drives, backups or controls show before sign-in">
             <Icon id="i-vpn" size={20} />
@@ -201,6 +201,11 @@ export function SignIn() {
               </label>
               <div className="row">
                 <IconButton type="submit" icon="i-signin" move="slide" kind={code.trim() && !busy ? "big" : "off"} label="Sign in" hint="Sign in: this browser becomes the owner's for 30 days" aria-disabled={!code.trim() || busy} />
+                {busy && (
+                  <p className="small" role="status">
+                    Checking the code…
+                  </p>
+                )}
                 {why && (
                   <p className="signin-err" id="signin-why" role="alert">
                     {why}
@@ -220,9 +225,9 @@ export function Door({ withSignIn }: { withSignIn: boolean }) {
   if (door.state === "loading") return null;
   if (door.state === "error")
     return (
-      <div className="unreach" title="The page loaded, but the server's board service didn't answer">
+      <div className="unreach" role="status" title="The page loaded, but the server's board service didn't answer">
         <Icon id="i-offline" size={40} />
-        <p>{door.error.words} The board service may be starting; this page tries again when you reload it.</p>
+        <p>{door.error.words} The board's service may be starting. The page asks again when you look at it again, or reload it.</p>
       </div>
     );
   return (

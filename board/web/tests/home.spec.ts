@@ -8,7 +8,7 @@ test("healthy: all machines nominal, nothing needs you", async ({ page }) => {
   await expect(page.locator("[data-lamplight='mount']")).toHaveCount(1);
   await expect(page.locator(".stage.lamp .verdict")).toHaveText("ALL MACHINES NOMINAL");
   await expect(page.locator(".stage.lamp .over")).toHaveText("1 MACHINE");
-  await expect(page.locator(".stage.lamp .chip")).toHaveText("14:01 · JUST NOW");
+  await expect(page.locator(".stage.lamp .chip")).toHaveText("21:53 · JUST NOW");
   await expect(page.locator(".hm-needs")).toContainText("NEEDS YOU · 0");
   await expect(page.locator(".hm-needs .lb-need")).toHaveCount(0);
 });
@@ -17,9 +17,10 @@ test("needs you: the verdict, the item and where it is fixed", async ({ page }) 
   await open(page, "needs-you", "home");
   await expect(page.locator(".stage.lamp .verdict")).toHaveText("1 MACHINE NEEDS YOU");
   const need = page.locator(".hm-needs .lb-need");
-  await expect(need).toHaveCount(1);
-  await expect(need).toContainText("A drive is getting worse: sdb · myserver");
-  await need.getByRole("link").click();
+  await expect(need).toHaveCount(2);
+  await expect(need.first()).toContainText("A drive is getting worse: WDC WD40EFRX-68N32N0 (sdb) · myserver");
+  await expect(need.nth(1)).toContainText("Replacing a drive: sdb · myserver");
+  await need.first().getByRole("link").click();
   await expect(page.locator(".sh-crumb")).toHaveText(/Data › Drives$/);
 });
 
@@ -44,7 +45,9 @@ test("a tile per machine, with its readings and its page", async ({ page }) => {
 
 test("stale: the verdict says how old, and the readings go grey", async ({ page }) => {
   await open(page, "stale", "home");
-  await expect(page.locator(".stage.lamp .verdict")).toHaveText("NOT READ FOR 20 MIN");
+  // just opened: the page is still reading; after that, how old the server's reading is
+  await expect(page.locator(".stage.lamp .verdict")).toHaveText("READING THE SERVER");
+  await expect(page.locator(".stage.lamp .verdict")).toHaveText("NOT READ FOR 5 MIN", { timeout: 20_000 });
   await expect(page.locator(".hm-m .spec.q")).toHaveCount(3);
 });
 

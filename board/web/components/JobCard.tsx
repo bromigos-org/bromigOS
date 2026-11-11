@@ -1,10 +1,9 @@
-// One job as the activity drawer and the Activity page draw it (the prototype's .job card): its
-// icon, title, state and where it came from; its steps (the one Steps list, IA.md §4); its
-// question with the answers as controls; and what it ended with.
-import { useState, type CSSProperties } from "react";
-import { Icon, IconButton } from "@/components/ui";
-import { api } from "@/lib/api/client";
-import { ApiError } from "@/lib/api/errors";
+// One job as the activity drawer draws it (the prototype's .job card): its icon, title, state
+// and where it came from; its steps (the one Steps list, IA.md §4); the question it asks; and
+// what it ended with. The page can't answer, cancel or retry a job yet (the service has no
+// route for it), so it shows the question and its answers with the command that gives one.
+import type { CSSProperties } from "react";
+import { Icon, Planned } from "@/components/ui";
 import type { JobRecord } from "@/lib/api/types";
 import { jobIcon, progressWords, STATE_CHIP, STATE_HINT, STATE_WORD, STEP, waitWord } from "@/lib/jobs";
 import { useLab } from "@/lib/lab";
@@ -14,22 +13,16 @@ const VIA: Record<string, string> = { board: "via board", phone: "via phone", cl
 
 export function JobCard({ job, children = [] }: { job: JobRecord; children?: JobRecord[] }) {
   const { now } = useLab();
-  const [said, setSaid] = useState<string | null>(null);
   const t = now();
   const look = job.state === "needs-you" ? " ask" : job.state === "failed" ? " fail" : "";
   const sub = [
     waitWord(job),
     job.kind,
     `started ${when(job.started_at, t)}`,
-    VIA[job.requested_by.via] ?? "",
+    VIA[job.via] ?? "",
     children.length ? `${children.filter((c) => c.state === "succeeded").length} of ${children.length} done` : "",
     job.ended_at ? `after ${took(job.ended_at - job.started_at)}` : "",
   ].filter(Boolean);
-  const act = (what: Promise<void>) =>
-    what.then(
-      () => setSaid(null),
-      (e) => setSaid(e instanceof ApiError ? e.words : "The server couldn't do that."),
-    );
   return (
     <article className={`job${look}`} title={`${job.title}: ${STATE_HINT[job.state]}`} data-job={job.id}>
       <div className="head">
@@ -48,7 +41,7 @@ export function JobCard({ job, children = [] }: { job: JobRecord; children?: Job
         <ol className="steps">
           {children.length
             ? children.map((c) => {
-                const s = c.state === "succeeded" ? STEP.done : c.state === "running" ? STEP.running : c.state === "needs-you" ? STEP.waiting : c.state === "failed" || c.state === "rolled-back" ? STEP.failed : STEP.todo;
+                const s = c.state === "succeeded" ? STEP.done : c.state === "running" ? STEP.running : c.state === "needs-you" || c.state === "waiting" ? STEP.waiting : c.state === "queued" ? STEP.todo : STEP.failed;
                 return (
                   <li key={c.id} className={s.cls} title={`${c.title}: ${STATE_HINT[c.state]}`}>
                     <Icon id={s.icon} size={20} className={c.state === "running" ? "pulse" : ""} />
@@ -64,7 +57,7 @@ export function JobCard({ job, children = [] }: { job: JobRecord; children?: Job
                 const k = STEP[s.state];
                 return (
                   <li key={s.id} className={k.cls} title={`${s.label}: ${k.word}`}>
-                    <Icon id={k.icon} size={20} className={s.state === "running" ? "pulse" : ""} />
+                    <Icon id={k.icon} size={20} className={s.state === "running" && job.state === "running" ? "pulse" : ""} />
                     <span>
                       {s.label}
                       {s.detail && <span className="d">{s.detail}</span>}
@@ -82,45 +75,34 @@ export function JobCard({ job, children = [] }: { job: JobRecord; children?: Job
       )}
       {job.pct !== null && job.state === "running" && (
         <div className="prog" title={`${job.pct} % done, as the job measures it`} role="progressbar" aria-label="How far" aria-valuenow={job.pct} aria-valuemin={0} aria-valuemax={100}>
-          <i style={{ "--v": `${job.pct}%` } as CSSProperties} />
+          <i style={{ "--v": `${Math.max(0, Math.min(100, job.pct))}%` } as CSSProperties} />
         </div>
       )}
       {job.question && job.state === "needs-you" && (
-        <div className="job-q">
+        <div className="job-q" title="The job waits for an answer. Answering from this page is planned; the command below answers it at the server.">
           <p className="warn">{job.question.text}</p>
-          <div className="acts">
+          <ul className="job-as">
             {job.question.choices.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`wordbtn${c.danger ? " danger" : ""}`}
-                title={`Answer “${c.label}”: the job carries on with this answer`}
-                onClick={() => act(api().answer(job.id, c.id))}
-              >
-                {c.label}
-              </button>
+              <li key={c.id}>
+                <code>{c.id}</code> {c.label}
+              </li>
             ))}
-          </div>
+          </ul>
+          <pre>{`sudo bromigos activity answer ${job.id} ${job.question.choices[0]?.id ?? "CHOICE"}`}</pre>
+          <Planned hint="Planned: answering a job from this page. Today the command above answers it, at the server or over SSH." />
         </div>
       )}
       {job.error && (job.state === "failed" || job.state === "rolled-back" || job.state === "interrupted") && (
         <p className="small job-why" title="Why it stopped, in plain words">
           {job.error.words}
-          {job.error.fix && <span className="muted"> · {job.error.fix.label}</span>}
+          {job.error.fix && <span className="muted"> · {job.error.fix}</span>}
         </p>
       )}
-      {job.result && job.state === "succeeded" && (
-        <p className="small muted job-why" title="What it did">
+      {job.result && job.result.summary && (job.state === "succeeded" || job.state === "rolled-back") && (
+        <p className="small muted job-why" title={job.state === "succeeded" ? "What it did" : "How it ended"}>
           {job.result.summary}
         </p>
       )}
-      {(job.can.includes("cancel") || job.can.includes("retry")) && (
-        <div className="acts job-acts">
-          {job.can.includes("retry") && <IconButton icon="i-restart" move="turn" label="Retry" hint="Retry: start the job again from where it can safely start" onClick={() => act(api().retry(job.id))} />}
-          {job.can.includes("cancel") && <IconButton icon="i-cancel" label="Cancel" hint={`Cancel: stop the job now. It is safe to stop it here.`} onClick={() => act(api().cancel(job.id))} />}
-        </div>
-      )}
-      {said && <p className="signin-err">{said}</p>}
     </article>
   );
 }

@@ -57,11 +57,12 @@ export function IconLink({ icon, label, hint, move = "out", kind, className = ""
 const SHAPE: Record<Shape, string> = { ok: "s-ok", warn: "s-warn", down: "s-down", unknown: "s-unk" };
 const STCLASS: Record<Shape, string> = { ok: "ok", warn: "warn", down: "down", unknown: "unk" };
 
-/** A state: its shape, then its word (BRODEC's DESIGN.md, "LAB"). */
-export function State({ shape, word, hint }: { shape: Shape; word: string; hint?: string }) {
+/** A state: its shape, then its word (BRODEC's DESIGN.md, "LAB"). "busy" is the half ring:
+ *  starting, updating, checking: on its way, not yet well. */
+export function State({ shape, word, hint }: { shape: Shape | "busy"; word: string; hint?: string }) {
   return (
-    <span className={`st ${STCLASS[shape]}`} title={hint}>
-      <Icon id={SHAPE[shape]} size={16} />
+    <span className={`st ${shape === "busy" ? "busy" : STCLASS[shape]}`} title={hint}>
+      <Icon id={shape === "busy" ? "s-start" : SHAPE[shape]} size={16} />
       {word}
     </span>
   );

@@ -232,3 +232,14 @@ ol.steps li.todo { color: var(--static); }
 }
 .sh-tab { white-space: nowrap; }
 .panel.is-warn h2.ph { color: var(--amber); }
+/* a part of the page that couldn't be drawn (components/Boundary.tsx): one plain sentence in its place */
+.broken { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px 14px; border: 1px dashed var(--static); color: var(--text); font-size: 13px; }
+.broken svg { color: var(--static); }
+/* the server stopped answering: said in the top bar until it answers again */
+.sh-lost { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--amber); color: var(--amber); font-size: 12px; font-weight: 600; white-space: nowrap; }
+/* the search field shows where the keyboard is */
+.sh-search:focus-within { outline: 2px solid var(--phosphor); outline-offset: 2px; border-color: var(--lit); }
+@container proto (max-width: 860px) { .sh-lost span { display: none; } .sh-lost { padding: 0 8px; } }
+.sh-lab { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .08em; }
+.job-as { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: 13px; } .job-as code { color: var(--phosphor); margin-right: 8px; } .job-q pre { margin-bottom: 8px; }
+.job-q pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }

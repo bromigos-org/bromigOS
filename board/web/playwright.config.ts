@@ -19,6 +19,8 @@ export default defineConfig({
     timezoneId: "America/Los_Angeles",
     locale: "en-US",
     trace: "retain-on-failure",
+    // WebGL without a graphics card (CI, and this suite everywhere): Chromium's software renderer
+    launchOptions: { args: ["--enable-unsafe-swiftshader"] },
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } },

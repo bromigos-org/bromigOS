@@ -4,6 +4,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     readonly words: string,
+    /** Seconds the server asked to wait before asking again (Retry-After), when it said. */
+    readonly retryAfter: number | null = null,
   ) {
     super(words);
   }

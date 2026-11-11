@@ -137,3 +137,4 @@ a.panel:hover { border-color: var(--lit); }
 .tile .nm a { text-decoration: none; color: inherit; }
 .tile .nm a:hover b { text-shadow: 0 0 10px var(--glow); }
 .vt-s:empty::before { content: "\00a0"; }
+.chip.part { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; } .unread { margin: 6px 0 0; max-width: none; }

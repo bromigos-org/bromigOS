@@ -36,7 +36,7 @@ export const ROUTES: { hash: string; crumb: RegExp; fixture?: string }[] = [
 ];
 
 /** The page states every route is checked in. */
-export const STATES = ["healthy", "needs-you", "setup", "lab"];
+export const STATES = ["healthy", "needs-you", "setup", "lab", "as-served", "cant-read", "watch"];
 
 export async function open(page: Page, fixture: string, hash = "") {
   const errors: string[] = [];

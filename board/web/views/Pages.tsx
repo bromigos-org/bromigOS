@@ -140,8 +140,12 @@ export function Pages() {
           <Stub place="cameras" title="Cameras" />
         </Page>
       );
-    case "signin":
-      return null;
+    case "signin": // a signed-in browser has no sign-in sheet: Home, while the address changes (pages/index.tsx)
+      return (
+        <Page label="Home">
+          <Home />
+        </Page>
+      );
     default:
       return <Placeholder place={route.place} />;
   }

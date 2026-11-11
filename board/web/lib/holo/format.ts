@@ -58,15 +58,18 @@ const meshes = new Map<string, Promise<HoloMesh>>();
 export function loadMesh(src: string): Promise<HoloMesh> {
   let p = meshes.get(src);
   if (!p) {
-    // NAME.bin.json ({format, bytes, data: base64}), because the artifact host refuses raw binary:
-    // fetched once, decoded once by the browser (a data: URL), cached for every state and view
+    // The board's two changes to the copied file: only the .bin models are read (the board serves
+    // them as files; a data: URL would be refused by its content policy), and a load that failed
+    // isn't kept, so the next view asks again.
     p = fetch(src)
       .then((r) => {
         if (!r.ok) throw new Error(`hologram ${src}: ${r.status}`);
-        return /\.json(\?|$)/.test(src) ? r.json().then((j: { data: string }) => fetch(`data:application/octet-stream;base64,${j.data}`)).then((d) => d.arrayBuffer()) : r.arrayBuffer();
+        return r.arrayBuffer();
       })
       .then(parse);
     meshes.set(src, p);
+    const asked = p;
+    asked.catch(() => meshes.get(src) === asked && meshes.delete(src));
   }
   return p;
 }

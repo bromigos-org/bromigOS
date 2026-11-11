@@ -28,7 +28,7 @@ function Search() {
     );
     if (board.state === "ok") {
       for (const m of board.doc.machines) out.push({ key: `m/${m.name}`, icon: KIND_ICON[m.kind], name: m.name, what: "machine", to: href("machine", "", m.name) });
-      for (const t of board.doc.apps)
+      for (const t of board.doc.apps ?? [])
         if (t.installed) out.push({ key: `app/${t.id}`, icon: holoIcon(t.holo).id, name: `${t.job} · ${t.app}`, what: "app", to: href("app", "", t.id) });
     }
     return out;
@@ -140,10 +140,11 @@ function You() {
 }
 
 export function TopBar({ signedIn }: { signedIn: boolean }) {
-  const { route, board, scope, clearScope, drawer, setDrawer } = useLab();
+  const { route, board, scope, clearScope, drawer, setDrawer, lost } = useLab();
   const machinePage = route.place === "machine";
   const scoped = signedIn && !!scope && !machinePage && route.place !== "home" && !!TABS[route.place];
-  const labName = board.state === "ok" ? board.doc.lab.name : "MYLAB";
+  const { door } = useLab();
+  const labName = (board.state === "ok" ? board.doc.lab.name : door.state === "ok" ? door.doc.lab.name : "").toUpperCase() || "LAB";
   const page = signedIn ? crumb(route.place, route.tab, route.id, route.sheet) : route.place === "signin" ? "Sign in" : "The door";
   return (
     <header className="sh-top">
@@ -163,6 +164,12 @@ export function TopBar({ signedIn }: { signedIn: boolean }) {
             only <b>{scope}</b>
           </span>
           <IconButton icon="i-cancel" size={16} label="Show the whole lab" hint="Show the whole lab again" onClick={clearScope} />
+        </span>
+      )}
+      {signedIn && lost && (
+        <span className="sh-lost" role="status" title={`${lost} What you see is the last reading; the page keeps asking and catches up by itself.`}>
+          <Icon id="i-offline" size={16} />
+          <span>Not answering · trying again</span>
         </span>
       )}
       {signedIn && <Search />}

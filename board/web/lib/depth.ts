@@ -33,9 +33,9 @@ const BOARD: DepthItem = {
   lines: [
     { text: "bromigos server status --json", note: "this server: updates, roll-backs, the battery backup" },
     { text: "bromigos alerts --json", note: "what needs you, worst first" },
-    { text: "bromigos lab apps list --json", note: "one tile per app", planned: true },
-    { text: "/run/bromigos-board/board.json", note: "the snapshot, every 15 s while a browser is open", planned: true },
-    { text: "systemctl status bromigos-board.service", planned: true },
+    { text: "bromigos lab apps list --json", note: "one tile per catalogue item, installed or not" },
+    { text: "/run/bromigos-board/board.json", note: "the snapshot, every 15 s while a browser is open" },
+    { text: "systemctl status bromigos-board.service" },
   ],
 };
 
@@ -43,8 +43,8 @@ const DOOR: DepthItem = {
   title: "Signing in",
   hint: "How a browser signs in without a password, and how to see and end its session",
   lines: [
-    { text: "sudo bromigos server board code", note: "a one-time code: ten minutes, one use", planned: true },
-    { text: "sudo bromigos server board sessions", note: "the signed-in browsers; sign one out", planned: true },
+    { text: "sudo bromigos server board code", note: "a one-time code: ten minutes, one use" },
+    { text: "sudo bromigos server board sessions", note: "the signed-in browsers; sign one out" },
     { text: "GET /api/door", note: "all the door shows: the server's name and the apps to open" },
   ],
 };
@@ -73,6 +73,21 @@ const BACKUPS: DepthItem = {
   ],
 };
 
+const APPS: DepthItem = {
+  title: "The apps",
+  hint: "The apps a Server runs: bromigos lab apps lists, adds and removes them (docs/lab.md, Apps on a Server)",
+  lines: [
+    { text: "bromigos lab apps list --all", note: "what runs, and what can be added" },
+    { text: "bromigos lab apps show ID", note: "one app in full: units, data, health check" },
+    { text: "sudo bromigos lab apps add ID --plan", note: "what it would add, and what it asks of the server" },
+    { text: "sudo bromigos lab apps add ID" },
+    { text: "sudo bromigos lab apps restart ID" },
+    { text: "sudo bromigos lab apps remove ID", note: "keeps its data" },
+    { text: "bromigos lab apps logs ID -f" },
+    { text: "/etc/bromigos/lab/apps.toml", note: "what this server is meant to run" },
+  ],
+};
+
 export function depthFor(route: Route, signedIn: boolean): DepthItem[] {
   if (!signedIn) return [DOOR];
   switch (route.place) {
@@ -80,6 +95,9 @@ export function depthFor(route: Route, signedIn: boolean): DepthItem[] {
       return [ACTIVITY];
     case "people":
       return [DOOR, BOARD];
+    case "supply":
+    case "app":
+      return [APPS, ACTIVITY];
     case "data":
       return route.tab === "backups" ? [BACKUPS] : [DRIVES, BACKUPS];
     default:

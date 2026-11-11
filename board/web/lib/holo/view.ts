@@ -218,7 +218,12 @@ export class HoloView {
 
   static async create(el: HTMLElement, opts: ViewOpts) {
     const v = new HoloView(el, opts);
-    await Promise.all(opts.pieces.map((p) => v.add(p)));
+    try {
+      await Promise.all(opts.pieces.map((p) => v.add(p)));
+    } catch (e) {
+      v.dispose(); // the board's change to the copied file: a view whose model didn't load is let go, not left behind
+      throw e;
+    }
     v.ready = true;
     v.kick();
     return v;
