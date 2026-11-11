@@ -12,7 +12,9 @@
 #                                                                services, for the installer
 #   /usr/share/bromigos/fieldkit/micro/driftglass.micro          the editor's colours
 #   /usr/lib/bromigos/fieldkit/fieldkit-getty                    the media's first console
-#   bromigos-fieldkit-stick.service                              the stick's settings at boot (media only)
+#   bromigos-fieldkit-stick.service                              the stick's settings at boot: not
+#                                                                enabled here; the media enable it
+#                                                                (iso/profile/airootfs)
 
 pkgname=bromigos-fieldkit-tools
 pkgver=0.0.0
@@ -74,8 +76,8 @@ open(sys.argv[2], "w").write(text)' "$fk/share/edition.json.in" "$pkgdir/usr/sha
   python -c 'import json,sys; json.load(open(sys.argv[1]))' "$pkgdir/usr/share/bromigos/fieldkit/edition.json"
   install -Dm0644 "$fk/share/micro/driftglass.micro" "$pkgdir/usr/share/bromigos/fieldkit/micro/driftglass.micro"
   install -Dm0755 "$fk/share/fieldkit-getty" "$pkgdir/usr/lib/bromigos/fieldkit/fieldkit-getty"
+  # the stick's service, not enabled: an installed system never starts it (or what it would
+  # want); the media enable it from their own overlay (fieldkit/tests/test_units.py)
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$fk"/share/systemd/*.service
-  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
-  ln -s ../bromigos-fieldkit-stick.service "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/bromigos-fieldkit-stick.service"
   install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
 }

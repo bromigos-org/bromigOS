@@ -123,7 +123,9 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
     installs it on the next update.
 - **services** enables, but doesn't start, these services. They come up at the next boot.
   - NetworkManager, unless another network manager is already enabled:
-    systemd-networkd, iwd, connman, dhcpcd, netctl or wicd.
+    systemd-networkd, iwd, connman, dhcpcd, netctl or wicd. Then nothing bromigOS ships
+    starts NetworkManager either: no unit of its packages wants or requires it
+    (`fieldkit/tests/test_units.py` checks).
   - SDDM, unless another display manager is enabled. `--force-dm` switches to SDDM
     anyway.
   - Bluetooth, when bluez is installed.

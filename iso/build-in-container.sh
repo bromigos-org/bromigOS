@@ -77,6 +77,10 @@ if [[ $edition == fieldkit ]]; then
     mkdir -p "$a/etc/systemd/system/multi-user.target.wants"
     cp /src/iso/profile/airootfs/etc/systemd/system/bromigos-iso-text-{check,install@}.service "$a/etc/systemd/system/"
     ln -sf ../bromigos-iso-text-check.service "$a/etc/systemd/system/multi-user.target.wants/bromigos-iso-text-check.service"
+    # the stick's settings at every start: the package leaves its service off (an installed
+    # system never starts it), each medium turns it on and has it wait for NetworkManager
+    cp -r /src/iso/profile/airootfs/etc/systemd/system/bromigos-fieldkit-stick.service.d "$a/etc/systemd/system/"
+    cp -P /src/iso/profile/airootfs/etc/systemd/system/multi-user.target.wants/bromigos-fieldkit-stick.service "$a/etc/systemd/system/multi-user.target.wants/"
     cp -r /src/iso/profile/airootfs/usr/local/lib/bromigos-iso "$a/usr/local/lib/"
     cp -r /src/iso/profile/airootfs/usr/local/share/bromigos-iso "$a/usr/local/share/"
     rm -f "$a/usr/local/share/bromigos-iso/live-answers.toml"

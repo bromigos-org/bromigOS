@@ -25,6 +25,21 @@ data_subvolumes() {
 LIST
 }
 
+# an installed system: NetworkManager only where no other network manager is enabled
+# (install.rs's rule), and never pulled in by the Field Kit stick's service, which is the
+# media's alone (docs/fieldkit.md, "Your settings on the stick")
+network_manager_alone() {
+    check "NetworkManager doesn't run beside another network manager" bash -c '
+        for u in systemd-networkd iwd connman dhcpcd netctl wicd; do
+            if systemctl is-enabled -q "$u.service" 2>/dev/null && systemctl is-active -q NetworkManager.service; then
+                echo "NetworkManager runs beside $u"; exit 1
+            fi
+        done'
+    check "the Field Kit stick service is off and wants no NetworkManager" bash -c '
+        ! systemctl is-enabled -q bromigos-fieldkit-stick.service 2>/dev/null &&
+        ! systemctl show -p Wants --value bromigos-fieldkit-stick.service | grep -qw NetworkManager.service'
+}
+
 # an installed system (either edition): every package's files where pacman expects them, and
 # nothing of the live medium's own left (an install copies the live system: docs/iso.md, "How
 # installing works")
@@ -37,10 +52,13 @@ installed_system() {
                  /usr/local/lib/bromigos-iso /usr/local/share/bromigos-iso /etc/bromigos-iso /var/lib/bromigos/repo \
                  /etc/mkinitcpio.conf.d/archiso.conf /etc/systemd/system/pacman-init.service \
                  /etc/systemd/system/etc-pacman.d-gnupg.mount /etc/systemd/journald.conf.d/volatile-storage.conf \
-                 /etc/ssh/sshd_config.d/10-archiso.conf /etc/systemd/system/getty@tty1.service.d/autologin.conf /version; do
+                 /etc/ssh/sshd_config.d/10-archiso.conf /etc/systemd/system/getty@tty1.service.d/autologin.conf /version \
+                 /etc/systemd/system/multi-user.target.wants/bromigos-fieldkit-stick.service \
+                 /etc/systemd/system/bromigos-fieldkit-stick.service.d; do
             sudo test -e "$f" -o -L "$f" && bad="$bad $f"
         done
         [ -z "$bad" ] || { echo "left from the live system:$bad"; exit 1; }'
+    network_manager_alone
     check "none of the live system's own packages (archiso's hooks, archinstall, the rescue tools)" bash -c '! pacman -Q mkinitcpio-archiso archinstall clonezilla 2>/dev/null | grep .'
     check "a machine ID of its own, a pacman keyring of its own" bash -c 'grep -qxE "[0-9a-f]{32}" /etc/machine-id && sudo test -s /etc/pacman.d/gnupg/pubring.gpg -o -d /etc/pacman.d/gnupg/public-keys.d'
     check "root's account as a fresh system's (bash, a password set)" bash -c 'getent passwd root | grep -q ":/usr/bin/bash$" && [ "$(sudo passwd -S root | cut -d" " -f2)" = P ]'
@@ -167,6 +185,9 @@ if [[ $mode == live ]]; then
     # which can take a minute or more after boot
     check "bromigOS's key is trusted" bash -c "for _ in \$(seq 90); do systemctl is-active -q pacman-init && break; sleep 2; done; pacman-key --list-keys 2>/dev/null | grep -qi bromigos"
     check "the installer is there" test -x /usr/local/bin/bromigos-iso-install
+    # the medium switches the stick service on (its overlay); its conditions keep it off on a
+    # start without bromigos.fieldkit, like this one (docs/fieldkit.md, "Your settings on the stick")
+    check "the Field Kit stick service: on, and off for this start" bash -c "systemctl is-enabled -q bromigos-fieldkit-stick.service && ! systemctl is-active -q bromigos-fieldkit-stick.service"
     check "archinstall is there" command -v archinstall
     check "the live user has no password and sudo" bash -c "sudo -n true"
     # nothing idles over someone trying or installing bromigOS (docs/idle.md): the live user's

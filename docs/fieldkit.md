@@ -585,6 +585,29 @@ Each startup script's output is in `/run/bromigos-fieldkit/autorun-<name>.log`, 
 summary in `autorun.log`. The menu's status line says what the stick brought and whether
 a script failed. This follows SystemRescue's `sysrescue.d` and autorun.
 
+The service runs only on a medium. `bromigos-fieldkit-tools` ships it switched off, and
+the media switch it on:
+
+| File (in `iso/profile/airootfs/etc/systemd/system/`) | What it does |
+|---|---|
+| `multi-user.target.wants/bromigos-fieldkit-stick.service` | Starts the service at every start of the medium |
+| `bromigos-fieldkit-stick.service.d/network.conf` | `Wants=` and `After=NetworkManager.service`, so NetworkManager is up before the stick's Wi-Fi goes to it |
+
+Both media have the two files. Field Kit's build copies them from the full medium's
+overlay. An install removes them with the rest of the medium's own files, so an installed
+system never starts the service. Its conditions (`/run/archiso`, and `bromigos.fieldkit` on
+the kernel's command line or `/etc/bromigos-fieldkit/medium`) also keep it off anywhere
+else.
+
+The packaged unit itself names no network manager. systemd starts what a unit wants even
+when the unit's own conditions fail. A `Wants=NetworkManager.service` in the package would
+start NetworkManager at every start of every installed system with the package. On a
+machine that runs iwd or systemd-networkd, that NetworkManager scans the Wi-Fi card with a
+random MAC address, and the router sees one IP address move between MAC addresses.
+bromigOS never enables NetworkManager beside another manager
+([install.md](install.md)). `fieldkit/tests/test_units.py` checks that no unit bromigOS
+ships wants or requires NetworkManager outside the media's overlay.
+
 ### Make your own stick
 
 ```bash
@@ -679,6 +702,8 @@ differences:
 - releng's services that Field Kit leaves off are removed: iwd and systemd-networkd
   (NetworkManager instead), cloud-init, the virtual machine guest tools, smartcards, and SSH
   (until remote help).
+- The stick service is switched on, with its wait for NetworkManager, from the full
+  medium's overlay ([Your settings on the stick](#your-settings-on-the-stick)).
 - The full medium's offline `pacman.conf`, the clock's wait and the installer are shared.
 - The image leaves out what no bromigOS system reads, as the full medium's does
   ([iso.md](iso.md#what-the-systems-leave-out)). Field Kit also leaves out the worlds'
@@ -716,12 +741,14 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
 
 - **In CI**, the ISO workflow's menu test boots the medium to its menus (UEFI and BIOS), then
   runs `iso/fieldkit/ci-test.sh ISO DIR` (`iso/ci-test.sh --suite hook`). Field Kit starts with
-  no network: its console, Home, the engine and the scripted CLI, the offline store. Then the
+  no network: its console, Home, the engine and the scripted CLI, the offline store, and the
+  stick service switched on, done, and wanting NetworkManager. Then the
   installer's own backend installs bromigOS Server onto the VM's disk with no network, and the
   installed Server boots to its console and passes its checks: firewall, update timer,
   snapshots, the boot menu's "More ways to start", a clean `pacman -Qk`, the LTS kernel,
   and nothing of the stick's own left (its live hooks, its autologin, the installer, the
-  store, archinstall). On that Server it then runs the restore drill
+  store, archinstall, the stick service's switch). Nothing there pulls NetworkManager in
+  through the stick service. On that Server it then runs the restore drill
   (`iso/fieldkit/restore-drill.sh`, [server.md](server.md#tests)): a real backup, restore
   and test restore. Then the Go Bag drill (`iso/fieldkit/backup-drive-drill.sh`): a disk
   image plugged into the running VM as a USB drive is set up as the backup drive, pulled

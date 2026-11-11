@@ -1,13 +1,18 @@
 # bromigOS Field Kit (docs/fieldkit.md): at startup on a Field Kit medium, the settings on the
 # stick (fieldkit/: SSH keys, Wi-Fi, the lab connection), its startup scripts, and remote help
 # when asked for. Not on an installed system.
+#
+# Only the media enable it, and only they make it wait for NetworkManager (their overlay:
+# multi-user.target.wants/ and bromigos-fieldkit-stick.service.d/network.conf). This file wants
+# no network manager: systemd starts a unit's Wants= even when the unit's own conditions fail,
+# so a Wants= here would start NetworkManager on every installed system that has the package,
+# beside iwd or systemd-networkd.
 [Unit]
 Description=bromigOS Field Kit: settings and startup scripts from the stick
 ConditionPathExists=/run/archiso
 ConditionKernelCommandLine=|bromigos.fieldkit
 ConditionPathExists=|/etc/bromigos-fieldkit/medium
-After=local-fs.target NetworkManager.service systemd-udev-settle.service
-Wants=NetworkManager.service
+After=local-fs.target systemd-udev-settle.service
 
 [Service]
 Type=oneshot

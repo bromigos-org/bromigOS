@@ -41,6 +41,15 @@ check "the OSD's style is rendered by theme set" test -f "$HOME/.local/state/bro
 check "SDDM enabled" systemctl is-enabled sddm
 check "SDDM's effective theme is Bromigos" sddm_theme
 check "NetworkManager or another network manager enabled" bash -c "systemctl is-enabled NetworkManager || systemctl is-enabled systemd-networkd"
+# the cloud image runs systemd-networkd, so `bromigos install` leaves NetworkManager off, and
+# nothing bromigOS ships may start it anyway (install.rs's OTHER_NETWORK; docs/install.md)
+# shellcheck disable=SC2016  # the inner bash expands them
+check "NetworkManager doesn't run beside another network manager" bash -c '
+  for u in systemd-networkd iwd connman dhcpcd netctl wicd; do
+    if systemctl is-enabled -q "$u.service" 2>/dev/null && systemctl is-active -q NetworkManager.service; then
+      echo "NetworkManager runs beside $u (wanted by: $(systemctl show -p WantedBy --value NetworkManager.service))"; exit 1
+    fi
+  done'
 check "the thin configs seeded" test -f "$HOME/.config/hypr/hyprland.lua" -a -f "$HOME/.config/waybar/config"
 check "Hyprland config verifies" Hyprland --verify-config -c "$HOME/.config/hypr/hyprland.lua"
 # the shortcut picker (bromigos keys; docs/desktop.md, "Shortcuts you set by pressing the

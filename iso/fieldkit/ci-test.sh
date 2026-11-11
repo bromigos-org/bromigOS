@@ -59,6 +59,13 @@ live() {
     run live 'set -e
         test -e /etc/bromigos-fieldkit/medium
         systemctl is-active kmsconvt@tty1.service || systemctl is-active getty@tty1.service
+        # the stick service: switched on by the medium, done (no stick here: it found none), and
+        # waiting for NetworkManager through the medium'"'"'s own drop-in, not the package
+        systemctl is-enabled bromigos-fieldkit-stick.service
+        systemctl is-active bromigos-fieldkit-stick.service
+        python3 -c "import json; d = json.load(open(\"/run/bromigos-fieldkit/stick.json\")); print(\"stick:\", d)"
+        systemctl show -p Wants --value bromigos-fieldkit-stick.service | grep -qw NetworkManager.service
+        systemctl show -p DropInPaths --value bromigos-fieldkit-stick.service | grep -q /etc/systemd/system/bromigos-fieldkit-stick.service.d/network.conf
         pgrep -fa "bromigos fieldkit" | head -2
         grep -qw bromigos.edition=server /proc/cmdline
         ls /var/lib/bromigos/repo/bromigos/x86_64/ | grep -E "^bromigos-(server|fieldkit-tools|boot)-[0-9]"
@@ -180,9 +187,18 @@ server() {
         ! id live 2>/dev/null
         for f in /etc/bromigos-fieldkit /usr/local/bin/bromigos-iso-install /usr/local/lib/bromigos-iso /var/lib/bromigos/repo \
                  /etc/mkinitcpio.conf.d/archiso.conf /etc/systemd/system/getty@tty1.service.d/autologin.conf \
-                 /etc/systemd/system/pacman-init.service /root/.zshrc /version; do
-            ! sudo test -e "$f" || { echo "left from the stick: $f"; exit 1; }
+                 /etc/systemd/system/pacman-init.service /root/.zshrc /version \
+                 /etc/systemd/system/multi-user.target.wants/bromigos-fieldkit-stick.service \
+                 /etc/systemd/system/bromigos-fieldkit-stick.service.d; do
+            ! sudo test -e "$f" -o -L "$f" || { echo "left from the stick: $f"; exit 1; }
         done
+        # the stick service is the medium'"'"'s alone: off here, and nothing pulls NetworkManager
+        # in through it (docs/fieldkit.md, "Your settings on the stick")
+        if systemctl is-enabled -q bromigos-fieldkit-stick.service; then echo "the stick service is on"; exit 1; fi
+        if systemctl show -p Wants --value bromigos-fieldkit-stick.service | grep -qw NetworkManager.service; then
+            echo "the stick service wants NetworkManager"; exit 1; fi
+        if systemctl show -p WantedBy --value NetworkManager.service | grep -qw bromigos-fieldkit-stick.service; then
+            echo "NetworkManager is wanted by the stick service"; exit 1; fi
         ! pacman -Q mkinitcpio-archiso archinstall 2>/dev/null | grep .
         pacman -Q linux-lts linux bromigos-server
         echo SERVER-OK'
