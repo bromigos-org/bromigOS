@@ -143,6 +143,8 @@ if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]]; then
     # everything the newest backup holds under a folder (restic ls lists one level unless told)
     ls_latest='ls_latest() { sudo env RESTIC_REPOSITORY=/var/tmp/isotest-backup RESTIC_PASSWORD_FILE=/etc/bromigos/server/backup.key restic ls --recursive latest "$@"; }'
     opens='import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); assert c.execute("PRAGMA quick_check").fetchone()[0] == "ok"; print(c.execute("SELECT count(*) FROM sqlite_master").fetchone()[0], "tables and indexes in", sys.argv[1])'
+    # the databases' copies are on the data disks with the apps' data: /srv/apps is their own mount
+    copies=/srv/apps/.bromigos-backup-databases
     sudo cp /etc/bromigos/server.toml /root/isotest-server.toml
     check "the nightly backup holds $app's data from the data disks$( (( ${want[passwords]:-0} )) && echo ", and the vault's database copied whole")" bash -c "
         set -e
@@ -154,10 +156,16 @@ if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]]; then
         echo \"\$(grep -c '^/srv/apps/$app/' /tmp/isotest-ls-app) files and folders of $app's in the backup\"
         grep -q '^/srv/apps/$app/' /tmp/isotest-ls-app
         if (( ${want[passwords]:-0} )); then
-            ls_latest /var/lib/bromigos/backup-databases > /tmp/isotest-ls-db
+            ls_latest $copies > /tmp/isotest-ls-db
             cat /tmp/isotest-ls-db
-            grep -x /var/lib/bromigos/backup-databases/passwords/db.sqlite3 /tmp/isotest-ls-db
-            sudo python3 -c '$opens' /var/lib/bromigos/backup-databases/passwords/db.sqlite3
+            grep -x $copies/passwords/db.sqlite3 /tmp/isotest-ls-db
+            sudo python3 -c '$opens' $copies/passwords/db.sqlite3
+            # on the data disks, beside the vault, root's alone; nothing of it on the system disk
+            # (if-tests: set -e lets a failed && or ! pass)
+            a=\$(sudo findmnt -no UUID -T $copies) d=\$(findmnt -no UUID /srv/data) mode=\$(sudo stat -c %a $copies)
+            echo \"the copies are on \${a:-nothing}; /srv/data is \${d:-not mounted}; their folder is \$mode\"
+            if [[ -z \$a || \$a != \"\$d\" || \$mode != 700 ]]; then exit 1; fi
+            if sudo test -e /var/lib/bromigos/backup-databases; then echo 'copies left on the system disk'; exit 1; fi
         fi
         sudo bromigos server backup check
         bromigos lab backups --json | python3 -c 'import json, sys; d = json.load(sys.stdin); print(d[\"health\"]); sys.exit(0 if d[\"health\"][\"state\"] == \"ok\" else 1)'"
@@ -167,9 +175,9 @@ if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]]; then
             set -e
             $ls_latest
             systemctl is-active $db
-            ls_latest /var/lib/bromigos/backup-databases/$db | tee /tmp/isotest-ls-db2
-            grep -x /var/lib/bromigos/backup-databases/$db/$(basename "$dbfile") /tmp/isotest-ls-db2
-            sudo python3 -c '$opens' /var/lib/bromigos/backup-databases/$db/$(basename "$dbfile")
+            ls_latest $copies/$db | tee /tmp/isotest-ls-db2
+            grep -x $copies/$db/$(basename "$dbfile") /tmp/isotest-ls-db2
+            sudo python3 -c '$opens' $copies/$db/$(basename "$dbfile")
             sudo python3 -c 'import json; r = json.load(open(\"/var/lib/bromigos/server/backup.json\"))[\"run\"]; print(r[\"databases\"]); print(r[\"saw\"]); assert all(d[\"ok\"] for d in r[\"databases\"]) and \"/srv/apps/$db\" in r[\"saw\"]'"
     fi
     # An app set up after the last backup ran: the weekly check and the test restore must not call
