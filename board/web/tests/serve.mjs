@@ -2,7 +2,7 @@
 // Content-Security-Policy (default-src 'self'), and /fonts/ from the system's Geist Mono, as
 // the package's symlinks do. /api/ answers 404: a fixture build must not call it.
 // Usage: node tests/serve.mjs [port]
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { existsSync, readFile, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 
@@ -25,6 +25,13 @@ createServer((req, res) => {
     res.writeHead(404, { ...HEADERS, "Content-Type": "text/plain" });
     return res.end("not found");
   }
-  res.writeHead(200, { ...HEADERS, "Content-Type": TYPES[extname(file)] ?? "application/octet-stream" });
-  createReadStream(file).pipe(res);
-}).listen(port, "127.0.0.1", () => console.log(`serving ${root} on http://127.0.0.1:${port}`));
+  // whole files, not streams: a stream that stalls under many parallel pages leaves a request open
+  readFile(file, (err, body) => {
+    if (err) {
+      res.writeHead(500, { ...HEADERS, "Content-Type": "text/plain" });
+      return res.end("could not read");
+    }
+    res.writeHead(200, { ...HEADERS, "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", "Content-Length": body.length });
+    res.end(body);
+  });
+}).listen({ port, host: "127.0.0.1", backlog: 1024 }, () => console.log(`serving ${root} on http://127.0.0.1:${port}`));

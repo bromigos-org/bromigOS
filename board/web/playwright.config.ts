@@ -7,6 +7,7 @@ const port = Number(process.env.PORT ?? 4317);
 export default defineConfig({
   testDir: "tests",
   fullyParallel: true,
+  timeout: 60_000,
   // the hologram draws on a software renderer in headless Chromium: a few workers at a time
   workers: process.env.CI ? 2 : 6,
   forbidOnly: !!process.env.CI,

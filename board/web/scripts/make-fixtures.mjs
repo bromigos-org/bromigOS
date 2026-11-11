@@ -48,6 +48,20 @@ const APPS = [
   tile("brodec-machine", "This server on BRODEC", "brodec-machine", "phone", "brodec", null, {}),
 ];
 
+// catalogue items not installed: `list --all` shows them with can ["add"] and no state
+const addable = (id, job, app, holo, group, req) => ({ ...tile(id, job, app, holo, group, null), installed: false, household: null, state: null, state_word: null, since: null,
+  version: null, open: null, update: null, measured: null, requires: req, can: ["add"], machine: undefined });
+const CATALOGUE = [
+  addable("file-sync", "File sync", "Syncthing", "file-sync", "home", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("home-automation", "Home automation", "Home Assistant", "home", "home", { cpu: 1, ram_gb: 1, disk_gb: 2 }),
+  addable("navidrome", "Music", "Navidrome", "music", "media", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("audiobookshelf", "Audiobooks and podcasts", "Audiobookshelf", "books", "media", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("minecraft", "Minecraft server", "Paper", "game-server", "games", { cpu: 2, ram_gb: 4, disk_gb: 5 }),
+  addable("ollama", "Model serving", "Ollama", "model-serving", "ai", { cpu: 4, ram_gb: 8, disk_gb: 20 }),
+  addable("monitoring", "Monitoring", "Prometheus and Grafana", "uptime", "lab-core", { cpu: 1, ram_gb: 1, disk_gb: 5 }),
+  addable("smb-shares", "Windows and Mac shares", "Samba", "shares", "storage", { cpu: 1, ram_gb: 0.25, disk_gb: 0 }),
+];
+
 const doorTiles = (apps) => apps.filter((t) => t.household && t.open).map(({ id, job, app, holo, open }) => ({ id, job, app, holo, open: { url: open.url } }));
 
 const door = (apps = APPS, extra = {}) => ({ schema: 1, lab, server, world: "wick", tiles: doorTiles(apps), signin: { code: true, phone: false, account: false }, ...extra });
@@ -83,13 +97,17 @@ const STORAGE = { schema: 1, checked_at: NOW - 12 * MIN, history: "/var/lib/brom
   drive("nvme0", "Samsung SSD 970 EVO Plus 500GB", "nvme", "healthy", "healthy", "nothing to report"),
   drive("sda", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report"),
   drive("sdb", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report")] };
-const STORAGE_WORSE = { ...STORAGE, drives: STORAGE.drives.map((d) => (d.device === "sdb" ? { ...d, verdict: "worse", words: "getting worse", summary: "reallocated sectors rose from 0 to 8 in the last 3 days" } : d)) };
+const STORAGE_WORSE = { ...STORAGE, drives: STORAGE.drives.map((d) => (d.device === "sdb" ? { ...d, verdict: "worse", words: "getting worse", summary: "reallocated sectors rose from 0 to 8 in the last 3 days",
+  advice: "Back up now, and plan to replace it.", since: NOW - 3 * D, alert: "needs_you",
+  reasons: [{ level: "needs_you", text: "8 reallocated sectors appeared in the last 3 days", counter: "reallocated", value: 8, rise: 8, days: 3, since: NOW - 3 * D }] } : d)) };
 const S = (ms) => Math.round(ms / 1000);
 const BACKUPS = { schema: 1, ok: true, server: true, configured: true, to: "s3:backups.example.org/myserver", destination: {},
   health: { state: "ok", verdict: "Backups are healthy: the last copy was made today and checks out.", problems: [] },
   last_backup: { phase: "ok", ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 }, last_success: { ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 },
   last_check: null, last_check_passed: null, last_read_back: null, last_test: { phase: "ok", ts: S(NOW - 12 * D) }, last_test_passed: { ts: S(NOW - 12 * D) },
-  snapshots: { count: 41 }, drives: [], restore: null, running: null, checked_at: "2026-11-10T22:01:40Z", now: S(NOW) };
+  snapshots: { count: 17 }, drives: [{ name: "Go Bag", uuid: "5c1e-77a0", label: "GOBAG", model: "Extreme 55AE", size: 1000204886016, fstype: "ext4",
+    added_at: "2026-10-30", plugged_in: false, running: false, last_copy: { phase: "ok", ts: S(NOW - 4 * D) }, last_good_copy: { ts: S(NOW - 4 * D) },
+    last_test: null, remind_days: 14, stale: false, stale_s: null }], restore: null, running: null, checked_at: "2026-11-10T22:01:40Z", now: S(NOW) };
 const UPDATES = { hold: null, waiting: null, phase: "ok", started: "2026-11-10 03:18", finished: "2026-11-10 03:21", finished_ts: S(Date.UTC(2026, 10, 10, 11, 21)),
   pre: 40, post: 41, packages: 12, reason: "", kernel: false, auto: true, mode: "auto", window: "03:00-05:00", channel: "stable", notify: true,
   cluster_reboots: false, timer: "active", rollbacks: [] };
@@ -102,7 +120,7 @@ const VITALS = { "myserver/24h": { schema: 1, machine: "myserver", range: "24h",
 const board = (over = {}) => ({
   schema: 1, at: NOW - 20 * SEC, max_age_s: 45, lab, server: { name: "myserver", kind: "server", roles: ["home", "media"] },
   status: { state: "ok", words: "Everything is running.", checked_at: NOW - 20 * SEC },
-  machines: [MYSERVER], needs_you: [], fixed: [], apps: APPS,
+  machines: [MYSERVER], needs_you: [], fixed: [], apps: [...APPS, ...CATALOGUE],
   storage: STORAGE, backups: BACKUPS, updates: UPDATES, ups: null,
   ...over,
 });
@@ -198,7 +216,7 @@ const F = {
     board: board({ machines: [MYSERVER, machine("vault", "storage", { apps: 3 }), machine("node3", "node", { apps: 2, state: "unknown", state_word: "not seen for 2 h", readings: null }), machine("mydesk", "desktop", { updates: { count: 1, security: true } })] }),
     activity: [backupDone] },
   setup: { about: "Signed in to a server with nothing installed yet (first run).", door: door([]), session: signedIn(1),
-    board: board({ status: { state: "setup", words: "Nothing installed yet.", checked_at: NOW - MIN }, apps: [], machines: [{ ...MYSERVER, apps: 0, updates: { count: 0, security: false } }] }),
+    board: board({ status: { state: "setup", words: "Nothing installed yet.", checked_at: NOW - MIN }, apps: CATALOGUE, machines: [{ ...MYSERVER, apps: 0, updates: { count: 0, security: false } }] }),
     activity: [] },
   stale: { about: "Signed in, but the snapshot is 20 minutes old: readings go static grey with their age.", door: door(), session: signedIn(),
     board: board({ at: NOW - 20 * MIN, status: { state: "unknown", words: "Last read 20 min ago.", checked_at: NOW - 20 * MIN },

@@ -658,6 +658,222 @@
     ],
     "needed_by": [],
     "machine": "myserver"
+   },
+   {
+    "id": "file-sync",
+    "job": "File sync",
+    "app": "Syncthing",
+    "holo": "file-sync",
+    "group": "home",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 1,
+     "ram_gb": 0.5,
+     "disk_gb": 1
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "home-automation",
+    "job": "Home automation",
+    "app": "Home Assistant",
+    "holo": "home",
+    "group": "home",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 1,
+     "ram_gb": 1,
+     "disk_gb": 2
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "navidrome",
+    "job": "Music",
+    "app": "Navidrome",
+    "holo": "music",
+    "group": "media",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 1,
+     "ram_gb": 0.5,
+     "disk_gb": 1
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "audiobookshelf",
+    "job": "Audiobooks and podcasts",
+    "app": "Audiobookshelf",
+    "holo": "books",
+    "group": "media",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 1,
+     "ram_gb": 0.5,
+     "disk_gb": 1
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "minecraft",
+    "job": "Minecraft server",
+    "app": "Paper",
+    "holo": "game-server",
+    "group": "games",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 2,
+     "ram_gb": 4,
+     "disk_gb": 5
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "ollama",
+    "job": "Model serving",
+    "app": "Ollama",
+    "holo": "model-serving",
+    "group": "ai",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 4,
+     "ram_gb": 8,
+     "disk_gb": 20
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "monitoring",
+    "job": "Monitoring",
+    "app": "Prometheus and Grafana",
+    "holo": "uptime",
+    "group": "lab-core",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 1,
+     "ram_gb": 1,
+     "disk_gb": 5
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
+   },
+   {
+    "id": "smb-shares",
+    "job": "Windows and Mac shares",
+    "app": "Samba",
+    "holo": "shares",
+    "group": "storage",
+    "installed": false,
+    "version": null,
+    "recipe": 12,
+    "household": null,
+    "state": null,
+    "state_word": null,
+    "since": null,
+    "reading": null,
+    "open": null,
+    "update": null,
+    "measured": null,
+    "requires": {
+     "cpu": 1,
+     "ram_gb": 0.25,
+     "disk_gb": 0
+    },
+    "can": [
+     "add"
+    ],
+    "needed_by": []
    }
   ],
   "storage": {
@@ -694,7 +910,21 @@
      "present": true,
      "verdict": "worse",
      "words": "getting worse",
-     "summary": "reallocated sectors rose from 0 to 8 in the last 3 days"
+     "summary": "reallocated sectors rose from 0 to 8 in the last 3 days",
+     "advice": "Back up now, and plan to replace it.",
+     "since": 1794088920000,
+     "alert": "needs_you",
+     "reasons": [
+      {
+       "level": "needs_you",
+       "text": "8 reallocated sectors appeared in the last 3 days",
+       "counter": "reallocated",
+       "value": 8,
+       "rise": 8,
+       "days": 3,
+       "since": 1794088920000
+      }
+     ]
     }
    ]
   },
@@ -730,9 +960,32 @@
     "ts": 1793311320
    },
    "snapshots": {
-    "count": 41
+    "count": 17
    },
-   "drives": [],
+   "drives": [
+    {
+     "name": "Go Bag",
+     "uuid": "5c1e-77a0",
+     "label": "GOBAG",
+     "model": "Extreme 55AE",
+     "size": 1000204886016,
+     "fstype": "ext4",
+     "added_at": "2026-10-30",
+     "plugged_in": false,
+     "running": false,
+     "last_copy": {
+      "phase": "ok",
+      "ts": 1794002520
+     },
+     "last_good_copy": {
+      "ts": 1794002520
+     },
+     "last_test": null,
+     "remind_days": 14,
+     "stale": false,
+     "stale_s": null
+    }
+   ],
    "restore": null,
    "running": null,
    "checked_at": "2026-11-10T22:01:40Z",

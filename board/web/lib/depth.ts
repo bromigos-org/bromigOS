@@ -49,6 +49,30 @@ const DOOR: DepthItem = {
   ],
 };
 
+const DRIVES: DepthItem = {
+  title: "The drives",
+  hint: "Drive health: each drive judged by its own health records over time (docs/storage.md)",
+  lines: [
+    { text: "bromigos storage health", note: "one line per drive" },
+    { text: "bromigos storage health sdb", note: "one drive: verdict, what to do, readings over time" },
+    { text: "bromigos storage health --json", note: "what this page reads" },
+    { text: "sudo bromigos alerts check --system --only disk.smart", note: "read the drives now" },
+    { text: "/var/lib/bromigos/drives/history.json", note: "each drive's kept readings" },
+  ],
+};
+
+const BACKUPS: DepthItem = {
+  title: "The backups",
+  hint: "The server's backups: status, the kept snapshots, getting files back, and the monthly test restore (docs/server.md)",
+  lines: [
+    { text: "bromigos lab backups status --json", note: "what this page reads" },
+    { text: "bromigos lab backups list", note: "the kept snapshots" },
+    { text: "sudo bromigos lab backups restore latest PATH", note: "get files back, beside the originals" },
+    { text: "sudo bromigos lab backups test", note: "a test restore: a sample, compared, nothing of yours changed" },
+    { text: "sudo bromigos lab backups run", note: "back up now" },
+  ],
+};
+
 export function depthFor(route: Route, signedIn: boolean): DepthItem[] {
   if (!signedIn) return [DOOR];
   switch (route.place) {
@@ -56,6 +80,8 @@ export function depthFor(route: Route, signedIn: boolean): DepthItem[] {
       return [ACTIVITY];
     case "people":
       return [DOOR, BOARD];
+    case "data":
+      return route.tab === "backups" ? [BACKUPS] : [DRIVES, BACKUPS];
     default:
       return [BOARD, ACTIVITY];
   }
