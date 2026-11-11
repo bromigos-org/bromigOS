@@ -226,11 +226,12 @@ its decks show. It is never the Wick itself, which is BLACKFLAME's own post. Eve
 it comes from the board's document.
 
 - **Each machine is a compartment on a deck.** Servers ride the rack room (D2), storage
-  the hold (D1), a desktop the docking ring. A server and a desktop stand as their
-  holograms. A kind with no cleared model (storage, a small server) stands as its icon on
-  the deck tray. The list beside the station names every compartment with its state and
-  one reading, and the deck plan under it shows the same boxes in side elevation. Press
-  a machine anywhere to open its page.
+  the hold (D1), a desktop the docking ring. Each stands as its kind's hologram: the rack,
+  the storage server, the small node, the workstation, the router and the battery backup.
+  A machine of a kind the board doesn't know stands as its icon on the deck tray. The
+  list beside the station names every compartment with its state and one reading, and
+  the deck plan under it shows the same boxes in side elevation. Press a machine
+  anywhere to open its page.
 - **The line is the page's own.** The station says the same status line as the rest of the
   page (`lib/words.ts`), with when the server read itself. Three lit readouts count the
   machines that answer, what needs you, and the time of the reading.

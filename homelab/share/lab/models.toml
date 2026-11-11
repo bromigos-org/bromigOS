@@ -7080,6 +7080,41 @@ cite = ["https://github.com/stepfun-ai/Step1X-3D"]
   notes = "none documented; AMD: no: Hunyuan-derived custom rasterizer, kaolin, pytorch3d; Apple: no"
 
 [[model]]
+id = "trellis-image-large"
+name = "TRELLIS image-large (v1)"
+aliases = ["trellis-v1"]
+capabilities = ["3d", "mesh"]
+repo = "microsoft/TRELLIS-image-large"
+url = "https://github.com/microsoft/TRELLIS"
+released = "2024-12"
+licence = "mit"
+quality = { 3d = 70, mesh = 74 }
+quality_note = "mesh: 3D Arena TRELLIS mesh 1303 (5784 votes), above Pixal3D 1263 and Hunyuan3D 2.1 1272 (textured voting). Shape only here: its texture path renders with nvdiffrast (non-commercial), so bromigOS's meshes take the FlexiCubes shape alone. | 3d: the shape path has no texture"
+in_use = [
+  { where = "board/web/public/holo/provenance.jsonl", what = "the Lab board's storage server, phone and STATIC's OWL (shape only, 2026-11-11)" },
+]
+cite = ["https://huggingface.co/microsoft/TRELLIS-image-large", "https://github.com/microsoft/TRELLIS/blob/main/LICENSE", "https://huggingface.co/spaces/3d-arena/3d-arena"]
+built_on = [
+  { name = "DINOv2 ViT-L/14 with registers", part = "image encoder", licence = "apache-2", cite = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE" },
+  { name = "FlexiCubes", part = "mesh extraction", licence = "apache-2", cite = "https://github.com/MaxtirError/FlexiCubes" },
+]
+
+  [[model.variant]]
+  id = "shape-fp16"
+  runtime = "dedicated"
+  quant = "FP16"
+  weights = "microsoft/TRELLIS-image-large (sparse structure flow, structured latent flow, mesh decoder) + DINOv2 ViT-L/14-reg"
+  vram_gib = 14.0
+  vram_note = "measured on an RTX 5090 (2026-11-10), shape only at 12+12 steps: the card lost 10.3-13.3 GiB over a 1024 px cut-out"
+  ram_gib = 16.0
+  vendors = ["nvidia"]
+  speed = 25
+  speed_ref = "RTX 5090"
+  speed_note = "22-25 s for a shape at 12+12 steps (2026-11-10)"
+  stack = "needs support: a custom node pack (not one of bromigOS's ComfyUI workflows)"
+  notes = "the mesh decoder (FlexiCubes) only; never the Gaussian or radiance-field renders or the GLB texture bake (nvdiffrast); AMD: no (spconv, CUDA kernels); Apple: no"
+
+[[model]]
 id = "sf3d"
 name = "Stable Fast 3D"
 capabilities = ["3d", "mesh"]
@@ -11137,7 +11172,7 @@ licence = "tencent-cloud-hy3d"
 licence_name = "Tencent Cloud HY 3D Global API Online Terms of Service (2026-03-10) + Tencent Cloud AI Service Terms (2026-06-17)"
 tier = "conditional"
 tier_reason = "Published Output must be labelled as AI-generated (HY 3D ToS s.6.4(f); AI Service Terms s.4.2) and may not be presented as human-made (s.5.4(g)); no competing-model training (s.5.4(c)); Tencent keeps a perpetual right to use Content (s.6.3(c))."
-in_use = "nolgia (credits): the rack (bromigOS homelab/holo), workstation and Wick (vector assets/holo), 2026-10-04"
+in_use = "nolgia (credits): the workstation and Wick (vector assets/holo), 2026-10-04; the rack made with it (bromigOS homelab/holo) was remade in Blender on 2026-11-11"
 found = "2026-11-10"
 state = "pending review"
 [[pending]]
@@ -11155,7 +11190,9 @@ tier = "clean"
 tier_reason = "MIT weights on DINOv2 (Apache-2.0); clean as long as the shape-only export avoids nvdiffrast (NVIDIA Source Code License, non-commercial), as Hi3DGen's fork did."
 memory_gb = 16.0
 found = "2026-11-10"
-state = "pending review"
+state = "accepted"
+accepted = "2026-11-11"
+note = "added as [[model]] trellis-image-large: the Lab board's remade holograms use its shape path"
 
 [[pending.built_on]]
 name = "DINOv2 ViT-L/14-reg (pipeline.json image_cond_model dinov2_vitl14_reg)"

@@ -1,0 +1,38 @@
+{
+ "name": "phone",
+ "title": "PHONE",
+ "height": 1.0,
+ "radius": 0.343,
+ "parts": [
+  {
+   "id": "stand",
+   "label": "STAND",
+   "hint": "Its desk stand",
+   "explode": [
+    0.0,
+    -0.15,
+    0.0
+   ],
+   "anchor": [
+    0.1174,
+    0.1023,
+    0.0954
+   ]
+  },
+  {
+   "id": "phone",
+   "label": "PHONE",
+   "hint": "Your phone: BRODEC reaches the lab from it, end to end encrypted",
+   "explode": [
+    0.0,
+    0.0392,
+    0.1961
+   ],
+   "anchor": [
+    0.0915,
+    0.3146,
+    0.1267
+   ]
+  }
+ ]
+}

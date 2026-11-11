@@ -1,0 +1,38 @@
+{
+ "name": "dish",
+ "title": "THE INTERNET",
+ "height": 1.0,
+ "radius": 0.4493,
+ "parts": [
+  {
+   "id": "mount",
+   "label": "MOUNT",
+   "hint": "The tripod mount",
+   "explode": [
+    0.0,
+    -0.15,
+    0.0
+   ],
+   "anchor": [
+    0.1534,
+    0.1003,
+    -0.1659
+   ]
+  },
+  {
+   "id": "dish",
+   "label": "DISH",
+   "hint": "The dish: the internet, as the lab reaches it through the router",
+   "explode": [
+    0.0,
+    0.1414,
+    0.1414
+   ],
+   "anchor": [
+    0.0019,
+    0.7603,
+    0.215
+   ]
+  }
+ ]
+}

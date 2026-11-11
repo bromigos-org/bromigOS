@@ -1030,4 +1030,5 @@ class RealLineageTest(unittest.TestCase):
         self.assertIsNotNone(root)
         r = A.check(self.c, root)
         self.assertEqual(r["problems"], [])
-        self.assertTrue(any("Hunyuan3D v3" in n for n in r["notes"]))
+        # the rack was remade in Blender (homelab/holo/README.md): no Hunyuan3D v3 mesh is left here
+        self.assertFalse(any("Hunyuan3D v3" in n for n in r["notes"]))

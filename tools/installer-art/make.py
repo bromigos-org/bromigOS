@@ -18,7 +18,7 @@ made from bromigOS's own renders, never stock art:
 
 RACK_FRAMES_DIR holds rack-00.png … rack-23.png: the vector gallery's rack, `tools/offscreen.py
 gallery rack-NN.png rack 0 - 3` with OFF_DEMO=1 OFF_BG=black.jpg and the stage's yaw set to
--pi + 2pi * NN / 24 (no idle spin), one frame each.
+-pi + 2pi * NN / 24 (no idle spin), one frame each: render-rack.py frames makes them.
 
 VECTOR_RENDERS_DIR holds vector-STATE.png from `OFF_BG=black.jpg OFF_DEMO=1 OFF_CHAT=0
 OFF_W=1280 OFF_H=800 tools/offscreen.py vector vector-STATE.png STATE` (demo readings).
