@@ -38,7 +38,7 @@ def settings(table=None):
     """[lab.upgrade], defaults filled in."""
     if table is None:
         table = dict(C.read_settings().get("upgrade") or {})
-    pol = {C.canon(k): str(v) for k, v in (table.get("policy") or {}).items()}
+    pol = {C.canon(k): str(v) for k, v in (table.get("policy") or {}).items()}   # any declared capability
     for k, v in pol.items():
         if v not in POLICIES:
             raise C.CatalogError(f"[lab.upgrade] policy {k} = {v!r}: off, safe or any")
@@ -118,7 +118,7 @@ def evaluate(cat=None, hw=None, have=None, policy=None, goal="balanced", licence
         if d.vendor == "cpu":
             continue
         here = [h for h in have if C._held_on(h, d)]
-        caps = sorted({c for h in here for c in h["caps"]}, key=lambda c: C.CAPABILITIES.index(c))
+        caps = sorted({c for h in here for c in h["caps"]}, key=lambda c: cat.cap_ids.index(c) if c in cat.cap_ids else 999)
         for cap in caps:
             p = "any" if nudge else pol["policy"].get(cap, "off")
             if p == "off":

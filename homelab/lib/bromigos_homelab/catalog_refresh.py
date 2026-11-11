@@ -39,7 +39,8 @@ KEYRING = ("/usr/share/pacman/keyrings/bromigos.gpg" if os.path.isfile("/usr/sha
 PACMAN_CONF = "/etc/pacman.conf"
 UA = "bromigos-lab-catalog/1 (+https://github.com/bromigos-org/bromigOS)"
 
-# what each capability looks like on the Hub
+# what each built-in capability looks like on the Hub; a [capability] table's `hub` and
+# `hub_name` say it for the rest (and override these)
 PIPELINES = {
     "llm": ("text-generation", "image-text-to-text"), "code": ("text-generation",),
     "embed": ("feature-extraction", "sentence-similarity"), "image": ("text-to-image",),
@@ -367,7 +368,7 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
                 xp = getattr(x, "pipeline_tag", None)
                 if pipes.get(m.id) and xp != pipes.get(m.id):
                     continue                                  # the same kind of model (a robot policy isn't an image model)
-                if xp and xp not in KIN_PIPELINES:
+                if xp and xp not in KIN_PIPELINES | {t for c in cat.caps.values() for t in c.hub}:
                     continue                                  # FLUX.3 action is a robot policy, not FLUX.2's successor
                 age = _days_ago(getattr(x, "created_at", None))
                 rel = m.released or ""
@@ -383,25 +384,26 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
                                    params_b=_params_b(x)))
     # 4. new and trending models per capability
     if trending:
-        for cap, tags in PIPELINES.items():
+        listed = {}
+        for cap, tags, hint in watches(cat):
             for tag in tags:
-                try:
-                    xs = list(api.list_models(pipeline_tag=tag, sort="trending_score", limit=per_tag,
-                                              expand=["createdAt", "likes", "tags", "downloads", "safetensors"]))
-                except Exception as e:                        # noqa: BLE001
-                    out.append(Finding(f"error:trending:{tag}", "error", cap, f"trending {tag} didn't list",
-                                       str(e)[:160], review=False))
-                    continue
-                for x in xs:
+                if tag not in listed:
+                    try:
+                        listed[tag] = list(api.list_models(pipeline_tag=tag, sort="trending_score", limit=per_tag,
+                                                           expand=["createdAt", "likes", "tags", "downloads",
+                                                                   "safetensors"]))
+                    except Exception as e:                    # noqa: BLE001
+                        listed[tag] = []
+                        out.append(Finding(f"error:trending:{tag}", "error", cap, f"trending {tag} didn't list",
+                                           str(e)[:160], review=False))
+                for x in listed[tag]:
                     if x.id.lower() in known or (x.likes or 0) < min_likes or NOISE.search(x.id):
                         continue
                     if (x.downloads or 0) < 300:
                         continue                              # liked but not used yet
                     if _quant_of(x.id, x.tags) or any(t.startswith("base_model:") for t in (x.tags or ())):
                         continue                              # a quant, fine-tune or adapter of something else
-                    if NAME_HINT.get(cap) and not re.search(NAME_HINT[cap], x.id, re.I):
-                        continue
-                    if cap in ("upscale", "cutout") and not NAME_HINT.get(cap):
+                    if hint and not re.search(hint, x.id, re.I):
                         continue
                     age = _days_ago(getattr(x, "created_at", None))
                     if age is None or age > since_days:
@@ -413,6 +415,20 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
                                        _support(api, cap, x.id, comfy=comfy), licence=_licence_id(x) or "",
                                        likes=x.likes, downloads=x.downloads, params_b=_params_b(x)))
     return out
+
+
+def watches(cat):
+    """[(capability, Hub pipelines, name regex or "")] the trending scan looks at: each capability's
+    [capability] hub/hub_name, else the built-in PIPELINES/NAME_HINT. The ones with a name regex
+    come first, so a shared pipeline (image-to-image: edits, upscalers, interpolation) goes to the
+    narrowest capability that claims it."""
+    out = []
+    for cid in cat.cap_ids:
+        c = cat.caps[cid]
+        tags = tuple(c.hub) or PIPELINES.get(cid, ())
+        if tags:
+            out.append((cid, tags, c.hub_name or NAME_HINT.get(cid, "")))
+    return sorted(out, key=lambda w: (not w[2], cat.cap_ids.index(w[0])))
 
 
 # ------------------------------------------------------------------ the CI proposal

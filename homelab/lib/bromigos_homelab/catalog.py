@@ -33,8 +33,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SHARE = os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos"
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "bromigos", "lab")
 
+# The capabilities the code itself knows (the planner's defaults, Settings › Lab › Models, the
+# service names). models.toml adds more with a [capability.<id>] table alone, no code change:
+# the art pipeline's finer jobs (matting, depth, mesh, …) and whatever a survey imports. A
+# catalog's own list, in order, is Catalog.cap_ids.
 CAPABILITIES = ("llm", "code", "embed", "image", "image-edit", "cutout", "upscale", "video", "3d", "tts", "stt",
                 "ocr", "vision")
+CAP_ID = re.compile(r"^[a-z0-9][a-z0-9.-]{0,40}$")
+_KNOWN = set(CAPABILITIES)       # every capability a loaded catalog declared (canon() without a catalog)
 # the services' names (targets.toml, create.toml) for the same capabilities
 ALIASES = {"image.generate": "image", "image.edit": "image-edit", "image.cutout": "cutout", "video.loop": "video",
            "image.upscale": "upscale", "video.upscale": "upscale",
@@ -136,6 +142,10 @@ class Cap:
     span: tuple = ()                 # (lo, hi) for the speed score; default by unit
     weight: float = 1.0              # how much it counts in a plan against the others
     floor: float = 0.0               # the slowest that is still usable (a live voice, an agent's brain)
+    hub: tuple = ()                  # the Hugging Face pipelines the weekly refresh watches for it
+    hub_name: str = ""               # a regex a trending repository's name must match (narrows a shared pipeline)
+    parent: str = ""                 # the service-level capability it refines (video-flf -> video)
+    quality_basis: str = ""
 
 
 @dataclasses.dataclass
@@ -178,6 +188,7 @@ class Variant:
     match: tuple = ()                # globs that recognise it installed (file names, served names)
     notes: str = ""
     caps: tuple = ()                 # only these of its model's capabilities (default: all)
+    parts: bool = None               # mesh: separate parts (None: the model's)
 
     @property
     def key(self):
@@ -189,6 +200,10 @@ class Variant:
 
     def serves(self, cap):
         return cap in (self.caps or self.model.caps)
+
+    @property
+    def has_parts(self):
+        return self.model.parts if self.parts is None else bool(self.parts)
 
     def quality(self, cap):
         q = self.model.quality.get(cap, self.model.quality.get("*"))
@@ -235,6 +250,8 @@ class Model:
     cite: tuple = ()
     notes: str = ""
     variants: list = dataclasses.field(default_factory=list)
+    parts: bool = False              # mesh: makes separate, named parts (part-aware 3D)
+    in_use: tuple = ()               # where bromigOS's own work uses it: ({where, what}, …)
 
 
 class Catalog:
@@ -252,13 +269,23 @@ class Catalog:
                                          t.get("conditions", ""), tuple(t.get("territory", ())), t.get("outputs", ""),
                                          bool(t.get("permissive", False)), tuple(t.get("hub", ())))
         self.caps = {}
-        for i, cid in enumerate(CAPABILITIES):
-            t = (doc.get("capability") or {}).get(cid) or {}
+        self.notes = []
+        tables = doc.get("capability") or {}
+        extra = sorted((c for c in tables if c not in CAPABILITIES), key=lambda c: (int(tables[c].get("order", 999)), c))
+        for i, cid in enumerate(list(CAPABILITIES) + extra):
+            if not CAP_ID.match(cid):
+                self.notes.append(f"capability {cid!r}: not a capability id (lower-case letters, digits, '.', '-')")
+                continue
+            t = tables.get(cid) or {}
             self.caps[cid] = Cap(cid, t.get("title", cid), t.get("service", ""), t.get("residency", "demand"),
                                  t.get("unit", ""), t.get("better", "higher"), t.get("scale", "bandwidth"),
                                  int(t.get("order", (i + 1) * 10)), t.get("notes", ""),
-                                 tuple(t.get("speed_span", ())), float(t.get("weight", WEIGHT.get(cid, 1.0))),
-                                 float(t.get("floor", FLOOR.get(cid, 0.0))))
+                                 tuple(t.get("speed_span", ())),
+                                 float(t.get("weight", WEIGHT.get(cid, 1.0 if cid in CAPABILITIES else 0.4))),
+                                 float(t.get("floor", FLOOR.get(cid, 0.0))), tuple(t.get("hub", ())),
+                                 t.get("hub_name", ""), t.get("parent", ""), t.get("quality_basis", ""))
+        self.cap_ids = tuple(self.caps)
+        _KNOWN.update(self.cap_ids)
         self.gpus = {}
         for name, t in (doc.get("gpu") or {}).items():
             self.gpus[name] = GpuSpec(name, t.get("vendor", "nvidia"), float(t.get("vram_gib", 0)), t.get("arch", ""),
@@ -271,9 +298,13 @@ class Catalog:
             if lic is None:
                 raise CatalogError(f"{path}: model {m.get('id')}: unknown licence {m.get('licence')!r}")
             caps = tuple(ALIASES.get(c, c) for c in m.get("capabilities", ()))
-            bad = [c for c in caps if c not in CAPABILITIES]
+            bad = [c for c in caps if c not in self.caps]
             if bad:
-                raise CatalogError(f"{path}: model {m.get('id')}: unknown capabilities {bad}")
+                # a capability this catalog doesn't declare: left out, so a newer catalog still reads
+                self.notes.append(f"model {m.get('id')}: {', '.join(bad)} has no [capability] table; left out")
+                caps = tuple(c for c in caps if c in self.caps)
+                if not caps:
+                    continue
             q = m.get("quality", {})
             if not isinstance(q, dict):
                 q = {"*": q}
@@ -287,7 +318,8 @@ class Catalog:
                         kv_kib_per_token=float(m.get("kv_kib_per_token", 0)),
                         state_mib_per_seq=float(m.get("state_mib_per_seq", 0)),
                         max_context=int(m.get("max_context", 0)), serving=tuple(m.get("serving", ())),
-                        features=tuple(m.get("features", ())), cite=tuple(m.get("cite", ())), notes=m.get("notes", ""))
+                        features=tuple(m.get("features", ())), cite=tuple(m.get("cite", ())), notes=m.get("notes", ""),
+                        parts=bool(m.get("parts", False)), in_use=tuple(dict(x) for x in m.get("in_use", ())))
             if mod.id in self.models:
                 raise CatalogError(f"{path}: model {mod.id} twice")
             for v in m.get("variant") or []:
@@ -300,7 +332,8 @@ class Catalog:
                     v.get("stack", "ready"), bool(v.get("offload", False)), bool(v.get("fast", False)),
                     v.get("workflow", ""), v.get("quality_delta"), float(v.get("weights_gib", 0)),
                     tuple(v.get("match", ())), v.get("notes", ""),
-                    tuple(ALIASES.get(c, c) for c in v.get("capabilities", ()))))
+                    tuple(c for c in (ALIASES.get(c, c) for c in v.get("capabilities", ())) if c in self.caps),
+                    v.get("parts")))
             self.models[mod.id] = mod
         self.pending = list(doc.get("pending") or [])
         self.archived = list(doc.get("archived") or [])    # pending entries that waited too long, or were added
@@ -309,7 +342,7 @@ class Catalog:
 
     # ---- lookups
     def variants(self, cap):
-        cap = canon(cap)
+        cap = canon(cap, self)
         return [v for m in self.models.values() if cap in m.caps for v in m.variants if v.serves(cap)]
 
     def variant(self, key):
@@ -353,10 +386,14 @@ class Catalog:
         return None
 
 
-def canon(cap):
+def canon(cap, cat=None):
+    """The capability id a name means (a service name such as image.generate is an alias). With a
+    catalog, any capability it declares; without, any a loaded catalog declared."""
     c = ALIASES.get(cap, cap)
-    if c not in CAPABILITIES:
-        raise CatalogError(f"unknown capability {cap!r} ({', '.join(CAPABILITIES)})")
+    known = cat.caps if cat is not None else _KNOWN
+    if c not in known:
+        names = cat.cap_ids if cat is not None else sorted(_KNOWN, key=lambda x: (x not in CAPABILITIES, x))
+        raise CatalogError(f"unknown capability {cap!r} ({', '.join(names)})")
     return c
 
 
@@ -738,7 +775,7 @@ def options(cat, cap, hw, licence="any", region=None, unsupported=False, why=Non
     devices it may be split across), within each device's budget alone. load: for LLMs, the
     clients and context they must serve (catalog_serving.Load; one client at 32k by default)."""
     from . import catalog_serving as sv
-    cap = canon(cap)
+    cap = canon(cap, cat)
     load = load or sv.Load()
     measured = _measured()
     out = []
@@ -842,7 +879,8 @@ def fmt_speed(cat, cap, s):
 
 # ------------------------------------------------------------------ pick: one capability, one card
 def pick(capability, vram_gib=None, ram_gib=64.0, vendor="nvidia", licence="any", goal="quality", region=None,
-         arch=None, gpus=1, unified=False, gpu=None, cat=None, unsupported=False, alternatives=4, serving=None):
+         arch=None, gpus=1, unified=False, gpu=None, cat=None, unsupported=False, alternatives=4, serving=None,
+         parts=False):
     """The best fit for one capability on one card (or `gpus` linked ones), with alternatives
     and the reason, in plain words:
 
@@ -852,9 +890,9 @@ def pick(capability, vram_gib=None, ram_gib=64.0, vendor="nvidia", licence="any"
          "skipped": {"licence": [...], "needs support": [...], "too big": [...]}, "reason"}
 
     vram_gib None or 0 means the CPU only. gpu: a card's name ("RTX 4070") instead of
-    vram/vendor/arch."""
+    vram/vendor/arch. parts: only models that make separate parts (mesh)."""
     cat = cat or load()
-    cap = canon(capability)
+    cap = canon(capability, cat)
     if gpu:
         hw = Hardware.parse([f"{gpus}x {gpu}" if gpus > 1 else gpu], ram_gib=ram_gib, cat=cat)
     elif vram_gib:
@@ -875,6 +913,9 @@ def pick(capability, vram_gib=None, ram_gib=64.0, vendor="nvidia", licence="any"
                                  group="cpu"))
     skipped = {}
     opts = options(cat, cap, hw, licence, region, unsupported, skipped, serving)
+    if parts:
+        skipped["no parts"] = sorted({o.variant.key for o in opts if not o.variant.has_parts})
+        opts = [o for o in opts if o.variant.has_parts]
     ranked = sorted(opts, key=lambda o: (-utility(o, goal), -o.quality, o.per_gpu))
     seen, uniq = set(), []
     for o in ranked:
@@ -891,7 +932,7 @@ def pick(capability, vram_gib=None, ram_gib=64.0, vendor="nvidia", licence="any"
         have = max((d.give() for d in hw.gpus()), default=0)
         better = []
         for v in cat.variants(cap):
-            if not v.ready or not v.model.licence.allows(licence, region)[0]:
+            if not v.ready or not v.model.licence.allows(licence, region)[0] or (parts and not v.has_parts):
                 continue
             if v.vram_gib / max(v.gpus, 1) > have and v.quality(cap) > (uniq[0].quality if uniq else 0) + 2:
                 better.append((v.vram_gib, v))
@@ -925,7 +966,8 @@ def _odoc(cat, o, hw=None):
             "speed_score": round(o.speed_score, 1), "licence": v.model.licence.name,
             "licence_plain": v.model.licence.plain(), "licence_conditions": v.model.licence.conditions,
             "offload": v.offload, "fast": v.fast, "stack": v.stack, "vram_note": v.vram_note,
-            "notes": v.notes or v.model.notes, "released": v.model.released,
+            "notes": v.notes or v.model.notes, "released": v.model.released, "parts": v.has_parts,
+            "in_use": [dict(x) for x in v.model.in_use],
             "serving": o.serving, "published": [dict(x) for x in v.model.serving][:3]}
 
 
@@ -933,6 +975,10 @@ def _reason(cat, cap, doc, goal):
     b = doc["best"]
     if not b:
         sk = doc["skipped"]
+        if "no parts" in sk:
+            return (f"nothing bromigOS runs makes separate parts for {cap} yet"
+                    + (f" ({len(sk['no parts'])} other options fit)" if sk["no parts"] else "")
+                    + "; --unsupported shows part-aware models that need support")
         if sk.get("too big"):
             return f"nothing in the catalog fits: the smallest {cap} option needs more than this has"
         return f"nothing in the catalog runs {cap} here" + (" within the licence filter" if sk.get("licence") else "")
@@ -1018,9 +1064,9 @@ def plan(hw, wants=None, always=None, goals=None, priority="balanced", licence="
     cat = cat or load()
     hw.apply_budgets(budgets)
     _CAT_WEIGHT.clear()
-    _CAT_WEIGHT.update({c: cat.caps[c].weight for c in CAPABILITIES})
-    wants = [canon(c) for c in (wants or DEFAULT_WANTS)]
-    always = {canon(c) for c in (always if always is not None else [c for c in wants
+    _CAT_WEIGHT.update({c: cat.caps[c].weight for c in cat.cap_ids})
+    wants = [canon(c, cat) for c in (wants or DEFAULT_WANTS)]
+    always = {canon(c, cat) for c in (always if always is not None else [c for c in wants
                                                                      if cat.caps[c].residency == "always"])}
     goals = dict(goals or {})
     g_all = goals.get("*", "balanced")
@@ -1388,7 +1434,7 @@ def recommend(cat=None, hw=None, inv=None, goal="balanced", licence="any", regio
         inv["served"] = served_models()
     hw = hw or detect(cat, inv)
     have = installed(cat, inv)
-    wants = [canon(c) for c in (wants or [c for c in CAPABILITIES if c != "code"])]
+    wants = [canon(c, cat) for c in (wants or [c for c in cat.cap_ids if c != "code"])]
     devices, upgrades, warnings = [], [], []
     running = set()
     for unit in _units(hw):
@@ -1452,8 +1498,8 @@ def recommend(cat=None, hw=None, inv=None, goal="balanced", licence="any", regio
         big = gpus[0]
         sub = Hardware([big] + [x for x in hw.devices if x.vendor == "cpu" and x.host == big.host], hw.ram_gib)
         for cap in wants:
-            if cap in running:
-                continue
+            if cap in running or (cap not in CAPABILITIES and not every):
+                continue                                    # the finer art jobs: only when asked (--all)
             os_ = sorted((o for o in options(cat, cap, sub, licence, region) if o.devices == (big.id,)),
                          key=lambda o: -utility(o, goal))
             if os_:
@@ -1638,7 +1684,7 @@ def markdown_tables(cat, licence="any", tiers=DOC_TIERS, region="US"):
     """The docs' tables: per capability and tier, the best-quality pick, the balanced pick and
     the best one whose licence allows commercial use."""
     lines = []
-    for cap in CAPABILITIES:
+    for cap in cat.cap_ids:
         c = cat.caps[cap]
         lines.append(f"### {c.title} (`{cap}`)\n")
         if c.notes:
@@ -1675,7 +1721,7 @@ USAGE = """bromigos lab models recommend|plan|pick|tiers|upgrades|refresh|review
   review [--json] [--all]                           what the weekly refresh found, each with adopt, watch or ignore
   review accept|ignore ID [--reason TEXT]           decide one (edits models.toml in a bromigOS checkout)
   check                                             the catalog's data is consistent
-Capabilities: """ + " ".join(CAPABILITIES)
+Capabilities: """ + " ".join(CAPABILITIES) + """, and those models.toml adds (bromigos lab models pick lists them)"""
 
 
 def _arg(argv, name, default=None, many=False):
@@ -1733,7 +1779,7 @@ def _goals(s, default):
     for part in _list(s):
         if "=" in part:
             k, v = part.split("=", 1)
-            goals[canon(k.strip())] = v.strip()
+            goals[canon(k.strip())] = v.strip()                # any capability a loaded catalog declares
         else:
             goals["*"] = part
     for k, v in goals.items():
@@ -1816,11 +1862,14 @@ def _print_pick(doc):
         print("  " + doc["reason"])
         return
     print(f"  {b['name']} {b['quant']} · {b['runtime']} · {b['vram_gib']:.1f} GiB · {b['speed_text']} · "
-          f"quality {b['quality']:.0f} · {b['licence']} ({b['licence_plain']})")
+          f"quality {b['quality']:.0f} · {b['licence']} ({b['licence_plain']})" + (" · separate parts" if b.get("parts")
+                                                                                 else ""))
     for a in doc["alternatives"]:
         print(f"  or {a['name']} {a['quant']} · {a['runtime']} · {a['vram_gib']:.1f} GiB · {a['speed_text']} · "
-              f"quality {a['quality']:.0f} · {a['licence_plain']}")
+              f"quality {a['quality']:.0f} · {a['licence_plain']}" + (" · separate parts" if a.get("parts") else ""))
     print("  " + doc["reason"])
+    for u in b.get("in_use") or []:
+        print(f"  bromigOS uses it: {u.get('what', '')} ({u.get('where', '')})")
 
 
 def main(argv):
@@ -1860,11 +1909,12 @@ def main(argv):
         if cmd == "pick":
             pos = _positional(rest)
             if not pos:
-                raise CatalogError("pick which capability? " + " ".join(CAPABILITIES))
+                raise CatalogError("pick which capability? " + " ".join(cat.cap_ids))
             vram = float(pos[1]) if len(pos) > 1 else None
             doc = pick(pos[0], vram, vendor=_arg(rest, "--vendor", "nvidia"), licence=licence, region=region,
                        goal=_arg(rest, "--goal", "quality"), gpu=_arg(rest, "--gpu"),
-                       gpus=int(_arg(rest, "--gpus", 1)), ram_gib=float(_arg(rest, "--ram", 64)), cat=cat)
+                       gpus=int(_arg(rest, "--gpus", 1)), ram_gib=float(_arg(rest, "--ram", 64)), cat=cat,
+                       parts="--parts" in rest, unsupported="--unsupported" in rest)
             print(json.dumps(doc, indent=1)) if js else _print_pick(doc)
             return 0 if doc["best"] else 1
         if cmd == "tiers":
@@ -1874,7 +1924,7 @@ def main(argv):
                     print(markdown_tables(cat, licence, region=region or "US"))
                     return 0
                 raise CatalogError("tiers for which capability?")
-            t = tier_table(cat, canon(pos[0]), goal=_arg(rest, "--goal", "quality"), licence=licence)
+            t = tier_table(cat, canon(pos[0], cat), goal=_arg(rest, "--goal", "quality"), licence=licence)
             if js:
                 print(json.dumps(t, indent=1))
             else:
@@ -1942,9 +1992,15 @@ def validate(cat):
             bad = [x for x in v.vendors if x not in ("nvidia", "amd", "apple", "intel", "cpu")]
             if bad:
                 out.append(f"{v.key}: unknown vendors {bad}")
-    for c in CAPABILITIES:
+    for c in cat.cap_ids:
         if not cat.variants(c):
             out.append(f"{c}: no models")
+        t = cat.caps[c]
+        if c not in CAPABILITIES and not (t.unit and t.title != c and t.quality_basis):
+            out.append(f"{c}: a [capability] table needs a title, a unit and a quality_basis")
+        if t.parent and t.parent not in cat.caps:
+            out.append(f"{c}: parent {t.parent!r} isn't a capability")
+    out += [n for n in cat.notes]
     return out
 
 

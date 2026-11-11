@@ -38,7 +38,7 @@ bromigos lab models check              # check the data is consistent
 |---|---|
 | `recommend` | `--all` shows every capability on every GPU. |
 | `plan` | `--budget`, `--always`, `--want`, `--goal`, `--priority`, `--clients`, `--context`, `--prompt`, `--output`, `--hw`, `--ram`, `--unsupported` ([below](#planning-the-whole-lab-plan)) |
-| `pick CAPABILITY [VRAM]` | `--gpu NAME`, `--gpus N`, `--vendor amd` or `apple`, `--goal G`, `--ram GiB` |
+| `pick CAPABILITY [VRAM]` | `--gpu NAME`, `--gpus N`, `--vendor amd` or `apple`, `--goal G`, `--ram GiB`, `--parts` (only models that make separate parts), `--unsupported` |
 | `tiers CAPABILITY` | `--markdown` prints the tables at the end of this page. |
 | `upgrades` | `--apply` isn't built yet. It says so, changes nothing, and shows what the policy would do. |
 | `refresh` | `--hf` asks Hugging Face now. `--submit-bench` sends your bench results. |
@@ -78,6 +78,26 @@ A *capability* is one kind of AI work. Some have a second name: the *service* na
 | `vision` | screen understanding, as in "look at my screen" | |
 
 VECTOR is the desktop's AI assistant.
+
+The art and hologram pipeline ([art.md](art.md)) has finer jobs too. Each refines a
+capability above, its *parent*, or stands alone, and has its own ranking:
+
+| Capability | What it does | Parent |
+|---|---|---|
+| `matting` | a cutout whose edges keep partial transparency: hair, fur, glass | `cutout` |
+| `depth` | depth maps, normals and point maps from one image | |
+| `mesh` | image or text to a 3D mesh; `pick mesh --parts` keeps the models that make separate parts | `3d` |
+| `video-i2v` | a clip that starts from a still | `video` |
+| `video-flf` | a clip between a first and a last frame: loops and transformations | `video` |
+| `upscale-image` | larger, sharper stills | `upscale` |
+| `upscale-video` | larger, sharper clips, steady from frame to frame | `upscale` |
+| `interpolate` | more frames between a clip's frames | |
+
+These are declared in `models.toml` alone, by a `[capability.<id>]` table. A new kind of
+model needs only such a table and its models, not a code change
+([How the data is laid out](#how-the-data-is-laid-out)). `plan` and Settings plan the
+capabilities in the first table. `pick`, `tiers`, `upgrades` and `recommend --all` cover
+every capability.
 
 ### Setups
 
@@ -142,6 +162,9 @@ the score comes from it:
 | `video` | seamless loops from a still first, then the Artificial Analysis video arena |
 | `tts` | the Artificial Analysis speech arena for open weights, else vendor evaluations |
 | `3d`, `cutout`, `upscale` | Comfy Org's and community comparisons, relative; no neutral benchmark exists |
+| `matting` | hair and soft-edge error in Lucida's benchmark, BiRefNet's matting models, relative |
+| `depth`, `interpolate` | each model's published comparisons, relative; no neutral benchmark exists |
+| `mesh`, `video-i2v`, `video-flf`, `upscale-image`, `upscale-video` | the parent's score, until a comparison of the finer job exists; each model's `quality_note` says so |
 
 For `video`, a model with a native first-and-last-frame input ranks first, because that's
 what makes a seamless loop. For `tts`, voice design, cloning and streaming count too.
@@ -539,9 +562,9 @@ catalog pull request, or else to the Lab catalog review issue.
 | Table | What it holds |
 |---|---|
 | `[licence.<id>]` | a licence: its name, URL, whether it allows commercial use, its conditions, whether it's permissive |
-| `[capability.<id>]` | a capability: its title, service name, whether it stays loaded, its speed unit, its quality basis and notes |
+| `[capability.<id>]` | a capability: its title, service name, whether it stays loaded, its speed unit, its quality basis and notes. A table for an id the code doesn't know declares a new capability; it also gives `parent`, and `hub` and `hub_name`: the Hugging Face pipelines the weekly refresh watches for it, and a pattern a repository's name must match |
 | `[gpu."<name>"]` | a GPU model: its VRAM, architecture, bandwidth and compute |
-| `[[model]]` | a model: its capabilities, family, repository, licence, quality scores and `cite` |
+| `[[model]]` | a model: its capabilities, family, repository, licence, quality scores and `cite`; `parts = true` when it makes separate parts; `in_use`, where bromigOS's own work uses it (`where`, `what`) |
 | `[[model.variant]]` | one way to run it: runtime, quantisation, weights, VRAM, RAM, vendors and `stack` |
 | `[[model.serving]]` | published serving figures on a given GPU, runtime and concurrency |
 | `[[pending]]` | a candidate the weekly refresh found, waiting for review (or accepted, or dismissed) |
@@ -955,6 +978,238 @@ Pages to Markdown: small specialists beat big VLMs on page-to-Markdown; a big VL
 | mac-128 | Qwen3.8-27B MLX 8-bit (31 GiB, ~16 tok/s) | Qwen3.8-Flash-Next GGUF UD-IQ4_XS (89 GiB, ~64 tok/s) | same |
 | mac-192 | Qwen3.8-27B MLX 8-bit (31 GiB, ~24 tok/s) | Qwen3.8-Flash-Next GGUF UD-IQ4_XS (89 GiB, ~88 tok/s) | same |
 | mac-512 | Qwen3.8-Flash-Next GGUF Q8_0 (181 GiB, ~66 tok/s) | Qwen3.8-Flash-Next GGUF UD-IQ4_XS (89 GiB, ~90 tok/s) | same |
+
+### Matting (soft alpha: hair, glass, smoke) (`matting`)
+
+A cutout whose edges keep partial transparency: hair, fur, glass. Light on VRAM.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | BRIA RMBG-2.0 FP16 ‡ (5 GiB, ~1.4 s/image) | same | Lucida FP16 (5 GiB, ~1.4 s/image) |
+| 12 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~1.5 s/image) | same | same |
+| 16 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.97 s/image) | same | same |
+| 24 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.57 s/image) | same | same |
+| 32 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.45 s/image) | same | same |
+| 48 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.52 s/image) | same | same |
+| 80 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.24 s/image) | same | same |
+| 96 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.39 s/image) | same | same |
+| 2x24 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.57 s/image) | same | same |
+| 2x32 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.45 s/image) | same | same |
+| 4x32 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.45 s/image) | same | same |
+| 2x80 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.24 s/image) | same | same |
+| 4x80 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.24 s/image) | same | same |
+| 8x80 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.24 s/image) | same | same |
+| 8xb200 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~0.12 s/image) | same | same |
+| spark | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~1.5 s/image) | same | same |
+| 2xspark | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~1.5 s/image) | same | same |
+| mac-64 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~2.8 s/image) | BRIA RMBG-2.0 FP16 ‡ (5 GiB, ~1.2 s/image) | same |
+| mac-128 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~2.8 s/image) | BRIA RMBG-2.0 FP16 ‡ (5 GiB, ~1.2 s/image) | same |
+| mac-192 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~3.5 s/image) | BRIA RMBG-2.0 FP16 ‡ (5 GiB, ~1.5 s/image) | same |
+| mac-512 | BiRefNet_HR / HR-matting / dynamic FP16 (10 GiB, ~1.7 s/image) | same | same |
+
+### Depth and geometry from one image (`depth`)
+
+Depth maps, normals and point maps from a still: splitting a painting into layers, and the geometry step inside Pixal3D.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~2.2 s/image) | Depth Anything V2 Large FP16 ‡ (2 GiB, ~1.1 s/image) | same |
+| 12 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~1.1 s/image) | same | same |
+| 16 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.68 s/image) | same | same |
+| 24 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.40 s/image) | same | same |
+| 32 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.32 s/image) | same | same |
+| 48 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.36 s/image) | same | same |
+| 80 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.17 s/image) | same | same |
+| 96 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.28 s/image) | same | same |
+| 2x24 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.40 s/image) | same | same |
+| 2x32 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.32 s/image) | same | same |
+| 4x32 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.32 s/image) | same | same |
+| 2x80 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.17 s/image) | same | same |
+| 4x80 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.17 s/image) | same | same |
+| 8x80 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.17 s/image) | same | same |
+| 8xb200 | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~0.08 s/image) | same | same |
+| spark | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~1.1 s/image) | same | same |
+| 2xspark | MoGe-2 ViT-L (normal) FP16 (2 GiB, ~1.1 s/image) | same | same |
+| mac-64 | none fits | none fits | none fits |
+| mac-128 | none fits | none fits | none fits |
+| mac-192 | none fits | none fits | none fits |
+| mac-512 | none fits | none fits | none fits |
+
+### 3D meshes (image or text to 3D) (`mesh`)
+
+Image or text to a mesh. `pick mesh --parts` keeps only models that make separate, named parts (part-aware 3D), for rigid-part rigs.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | Hunyuan3D 2.0 / 2mini / 2mv FP16 † (6 GiB, ~139 s/mesh) | same | same |
+| 12 | Hunyuan3D 2.1 FP16 † (10 GiB, ~84 s/mesh) | same | same |
+| 16 | TRELLIS.2-4B INT8 convrot (14 GiB, ~259 s/mesh) | same | same |
+| 24 | Pixal3D INT8 convrot DiT, BF16 VAEs, FP32 DINOv3 (16 GiB, ~304 s/mesh) | TRELLIS.2-4B INT8 convrot (14 GiB, ~152 s/mesh) | same |
+| 32 | Pixal3D BF16 (24 GiB, ~180 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~110 s/mesh) | same |
+| 48 | Pixal3D BF16 (24 GiB, ~207 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~126 s/mesh) | same |
+| 80 | Pixal3D BF16 (24 GiB, ~94 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~57 s/mesh) | same |
+| 96 | Pixal3D BF16 (24 GiB, ~157 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~96 s/mesh) | same |
+| 2x24 | Pixal3D INT8 convrot DiT, BF16 VAEs, FP32 DINOv3 (16 GiB, ~304 s/mesh) | TRELLIS.2-4B INT8 convrot (14 GiB, ~152 s/mesh) | same |
+| 2x32 | Pixal3D BF16 (24 GiB, ~180 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~110 s/mesh) | same |
+| 4x32 | Pixal3D BF16 (24 GiB, ~180 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~110 s/mesh) | same |
+| 2x80 | Pixal3D BF16 (24 GiB, ~94 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~57 s/mesh) | same |
+| 4x80 | Pixal3D BF16 (24 GiB, ~94 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~57 s/mesh) | same |
+| 8x80 | Pixal3D BF16 (24 GiB, ~94 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~57 s/mesh) | same |
+| 8xb200 | Pixal3D BF16 (24 GiB, ~47 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~29 s/mesh) | same |
+| spark | Pixal3D BF16 (24 GiB, ~607 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~371 s/mesh) | same |
+| 2xspark | Pixal3D BF16 (24 GiB, ~607 s/mesh) | TRELLIS.2-4B BF16 (24 GiB, ~371 s/mesh) | same |
+| mac-64 | none fits | none fits | none fits |
+| mac-128 | none fits | none fits | none fits |
+| mac-192 | none fits | none fits | none fits |
+| mac-512 | none fits | none fits | none fits |
+
+### Image to video (`video-i2v`)
+
+A clip that starts from a still.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | Wan 2.2 Fun 5B InP BF16 (8 GiB, ~21 min/clip) | same | same |
+| 12 | Wan 2.2 I2V A14B GGUF Q3_K_M (10 GiB + RAM, ~4.5 min/clip) | same | same |
+| 16 | Wan 2.2 I2V A14B FP8 with block swap (WanVideoWrapper) (12 GiB + RAM, ~4.5 min/clip) | same | same |
+| 24 | Wan 2.2 I2V A14B FP8 e4m3 scaled (21 GiB, ~3.2 min/clip) | LTX-2.3 22B GGUF Q4_K_M (16 GiB, ~0.51 min/clip) | same |
+| 32 | Wan 2.2 I2V A14B FP8 e4m3 scaled (21 GiB, ~2.5 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~0.42 min/clip) | same |
+| 48 | Wan 2.2 I2V A14B FP16 (32 GiB, ~4.0 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~0.48 min/clip) | same |
+| 80 | Wan 2.2 I2V A14B FP16 (32 GiB, ~1.8 min/clip) | Wan 2.2 I2V A14B FP8 scaled, 4-step distilled full checkpoints (21 GiB, ~0.52 min/clip) | same |
+| 96 | Wan 2.2 I2V A14B FP16 (32 GiB, ~3.0 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~0.36 min/clip) | same |
+| 2x24 | Wan 2.2 I2V A14B FP8 e4m3 scaled (21 GiB, ~3.2 min/clip) | LTX-2.3 22B GGUF Q4_K_M (16 GiB, ~0.51 min/clip) | same |
+| 2x32 | Wan 2.2 I2V A14B split across GPUs (raylight) (49 GiB, ~1.2 min/clip) | LTX-2.5 22B split across GPUs (raylight) (49 GiB, ~0.62 min/clip) | same |
+| 4x32 | Wan 2.2 I2V A14B split across GPUs (raylight) (50 GiB, ~0.77 min/clip) | LTX-2.5 22B split across GPUs (raylight) (50 GiB, ~0.38 min/clip) | same |
+| 2x80 | Wan 2.2 I2V A14B split across GPUs (raylight) (49 GiB, ~0.65 min/clip) | LTX-2.5 22B split across GPUs (raylight) (49 GiB, ~0.33 min/clip) | same |
+| 4x80 | Wan 2.2 I2V A14B split across GPUs (raylight) (50 GiB, ~0.40 min/clip) | LTX-2.5 22B split across GPUs (raylight) (50 GiB, ~0.20 min/clip) | same |
+| 8x80 | Wan 2.2 I2V A14B split across GPUs (raylight) (53 GiB, ~0.24 min/clip) | same | same |
+| 8xb200 | Wan 2.2 I2V A14B split across GPUs (raylight) (50 GiB, ~0.20 min/clip) | same | same |
+| spark | Wan 2.2 I2V A14B FP16 (32 GiB, ~12 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~1.4 min/clip) | same |
+| 2xspark | Wan 2.2 I2V A14B FP16 (32 GiB, ~12 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~1.4 min/clip) | same |
+| mac-64 | none fits | none fits | none fits |
+| mac-128 | none fits | none fits | none fits |
+| mac-192 | none fits | none fits | none fits |
+| mac-512 | none fits | none fits | none fits |
+
+### First and last frame to video (`video-flf`)
+
+A clip between a start frame and an end frame: seamless loops (the same frame at both ends) and transformations.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | Wan 2.2 Fun 5B InP BF16 (8 GiB, ~21 min/clip) | same | same |
+| 12 | Wan 2.2 I2V A14B GGUF Q3_K_M (10 GiB + RAM, ~4.5 min/clip) | same | same |
+| 16 | Wan 2.2 I2V A14B FP8 with block swap (WanVideoWrapper) (12 GiB + RAM, ~4.5 min/clip) | same | same |
+| 24 | Wan 2.2 I2V A14B FP8 e4m3 scaled (21 GiB, ~3.2 min/clip) | LTX-2.3 22B GGUF Q4_K_M (16 GiB, ~0.51 min/clip) | same |
+| 32 | Wan 2.2 I2V A14B FP8 e4m3 scaled (21 GiB, ~2.5 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~0.42 min/clip) | same |
+| 48 | Wan 2.2 I2V A14B FP16 (32 GiB, ~4.0 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~0.48 min/clip) | same |
+| 80 | Wan 2.2 I2V A14B FP16 (32 GiB, ~1.8 min/clip) | Wan 2.2 I2V A14B FP8 scaled, 4-step distilled full checkpoints (21 GiB, ~0.52 min/clip) | same |
+| 96 | Wan 2.2 I2V A14B FP16 (32 GiB, ~3.0 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~0.36 min/clip) | same |
+| 2x24 | Wan 2.2 I2V A14B FP8 e4m3 scaled (21 GiB, ~3.2 min/clip) | LTX-2.3 22B GGUF Q4_K_M (16 GiB, ~0.51 min/clip) | same |
+| 2x32 | Wan 2.2 I2V A14B split across GPUs (raylight) (49 GiB, ~1.2 min/clip) | LTX-2.5 22B split across GPUs (raylight) (49 GiB, ~0.62 min/clip) | same |
+| 4x32 | Wan 2.2 I2V A14B split across GPUs (raylight) (50 GiB, ~0.77 min/clip) | LTX-2.5 22B split across GPUs (raylight) (50 GiB, ~0.38 min/clip) | same |
+| 2x80 | Wan 2.2 I2V A14B split across GPUs (raylight) (49 GiB, ~0.65 min/clip) | LTX-2.5 22B split across GPUs (raylight) (49 GiB, ~0.33 min/clip) | same |
+| 4x80 | Wan 2.2 I2V A14B split across GPUs (raylight) (50 GiB, ~0.40 min/clip) | LTX-2.5 22B split across GPUs (raylight) (50 GiB, ~0.20 min/clip) | same |
+| 8x80 | Wan 2.2 I2V A14B split across GPUs (raylight) (53 GiB, ~0.24 min/clip) | same | same |
+| 8xb200 | Wan 2.2 I2V A14B split across GPUs (raylight) (50 GiB, ~0.20 min/clip) | same | same |
+| spark | Wan 2.2 I2V A14B FP16 (32 GiB, ~12 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~1.4 min/clip) | same |
+| 2xspark | Wan 2.2 I2V A14B FP16 (32 GiB, ~12 min/clip) | LTX-2.3 22B FP8 (24 GiB, ~1.4 min/clip) | same |
+| mac-64 | none fits | none fits | none fits |
+| mac-128 | none fits | none fits | none fits |
+| mac-192 | none fits | none fits | none fits |
+| mac-512 | none fits | none fits | none fits |
+
+### Image upscaling and restoration (`upscale-image`)
+
+Larger, sharper stills.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | SeedVR2 3B GGUF Q4_K_M (6 GiB, ~209 s/image) | Real-ESRGAN x4plus FP16 (3 GiB, ~7.0 s/image) | same |
+| 12 | SeedVR2 7B NVFP4 (9 GiB, ~40 s/image) | same | same |
+| 16 | SeedVR2 7B INT8 convrot (13 GiB, ~43 s/image) | same | same |
+| 24 | SeedVR2 7B FP16 (20 GiB, ~25 s/image) | same | same |
+| 32 | SeedVR2 7B FP16 (20 GiB, ~20 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~12 s/image) | same |
+| 48 | SeedVR2 7B FP16 (20 GiB, ~23 s/image) | same | same |
+| 80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 96 | SeedVR2 7B FP16 (20 GiB, ~17 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~10 s/image) | same |
+| 2x24 | SeedVR2 7B FP16 (20 GiB, ~25 s/image) | same | same |
+| 2x32 | SeedVR2 7B FP16 (20 GiB, ~20 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~12 s/image) | same |
+| 4x32 | SeedVR2 7B FP16 (20 GiB, ~20 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~12 s/image) | same |
+| 2x80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 4x80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 8x80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 8xb200 | SeedVR2 7B FP16 (20 GiB, ~5.2 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~3.1 s/image) | same |
+| spark | SeedVR2 7B FP16 (20 GiB, ~67 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~40 s/image) | same |
+| 2xspark | SeedVR2 7B FP16 (20 GiB, ~67 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~40 s/image) | same |
+| mac-64 | SeedVR2 7B FP16 (20 GiB, ~123 s/image) | same | same |
+| mac-128 | SeedVR2 7B FP16 (20 GiB, ~123 s/image) | same | same |
+| mac-192 | SeedVR2 7B FP16 (20 GiB, ~155 s/image) | same | same |
+| mac-512 | SeedVR2 7B FP16 (20 GiB, ~73 s/image) | same | same |
+
+### Video upscaling and restoration (`upscale-video`)
+
+Larger, sharper clips, steady from frame to frame. Speeds are per frame of about one megapixel.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | SeedVR2 3B GGUF Q4_K_M (6 GiB, ~209 s/image) | same | same |
+| 12 | SeedVR2 7B NVFP4 (9 GiB, ~40 s/image) | same | same |
+| 16 | SeedVR2 7B INT8 convrot (13 GiB, ~43 s/image) | same | same |
+| 24 | SeedVR2 7B FP16 (20 GiB, ~25 s/image) | same | same |
+| 32 | SeedVR2 7B FP16 (20 GiB, ~20 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~12 s/image) | same |
+| 48 | SeedVR2 7B FP16 (20 GiB, ~23 s/image) | same | same |
+| 80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 96 | SeedVR2 7B FP16 (20 GiB, ~17 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~10 s/image) | same |
+| 2x24 | SeedVR2 7B FP16 (20 GiB, ~25 s/image) | same | same |
+| 2x32 | SeedVR2 7B FP16 (20 GiB, ~20 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~12 s/image) | same |
+| 4x32 | SeedVR2 7B FP16 (20 GiB, ~20 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~12 s/image) | same |
+| 2x80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 4x80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 8x80 | SeedVR2 7B FP16 (20 GiB, ~10 s/image) | same | same |
+| 8xb200 | SeedVR2 7B FP16 (20 GiB, ~5.2 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~3.1 s/image) | same |
+| spark | SeedVR2 7B FP16 (20 GiB, ~67 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~40 s/image) | same |
+| 2xspark | SeedVR2 7B FP16 (20 GiB, ~67 s/image) | SeedVR2 7B NVFP4 (9 GiB, ~40 s/image) | same |
+| mac-64 | SeedVR2 7B FP16 (20 GiB, ~123 s/image) | same | same |
+| mac-128 | SeedVR2 7B FP16 (20 GiB, ~123 s/image) | same | same |
+| mac-192 | SeedVR2 7B FP16 (20 GiB, ~155 s/image) | same | same |
+| mac-512 | SeedVR2 7B FP16 (20 GiB, ~73 s/image) | same | same |
+
+### Frame interpolation (`interpolate`)
+
+More frames between the ones a clip has: smoother motion, double the frame rate.
+
+| Setup | Best quality | Balanced | Commercial use allowed |
+|---|---|---|---|
+| cpu | none fits | none fits | none fits |
+| 8 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~66 ms/frame) | same | same |
+| 12 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~32 ms/frame) | same | same |
+| 16 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~20 ms/frame) | same | same |
+| 24 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~12 ms/frame) | same | same |
+| 32 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~9.5 ms/frame) | same | same |
+| 48 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~11 ms/frame) | same | same |
+| 80 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~5.0 ms/frame) | same | same |
+| 96 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~8.2 ms/frame) | same | same |
+| 2x24 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~12 ms/frame) | same | same |
+| 2x32 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~9.5 ms/frame) | same | same |
+| 4x32 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~9.5 ms/frame) | same | same |
+| 2x80 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~5.0 ms/frame) | same | same |
+| 4x80 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~5.0 ms/frame) | same | same |
+| 8x80 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~5.0 ms/frame) | same | same |
+| 8xb200 | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~2.5 ms/frame) | same | same |
+| spark | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~32 ms/frame) | same | same |
+| 2xspark | RIFE 4.9 (Practical-RIFE) FP32 (2 GiB, ~32 ms/frame) | same | same |
+| mac-64 | none fits | none fits | none fits |
+| mac-128 | none fits | none fits | none fits |
+| mac-192 | none fits | none fits | none fits |
+| mac-512 | none fits | none fits | none fits |
 
 ## Sources
 
