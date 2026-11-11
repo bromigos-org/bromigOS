@@ -488,10 +488,49 @@ with 403, so a mistake in one doesn't open the other:
   connected, never a header.
 - The API checks again (`bromigos_board/net.py`).
 
-The addresses let in are private ones (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`),
-the lab's private network and Tailscale (`100.64.0.0/10`), link-local (`169.254.0.0/16`,
-`fe80::/10`), IPv6's unique-local range (`fc00::/7`) and loopback. That holds even when the
-firewall's public `web` rule set is open for something else.
+The addresses always let in are private ones (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`), link-local (`169.254.0.0/16`, `fe80::/10`), IPv6's unique-local range
+(`fc00::/7`) and loopback. That holds even when the firewall's public `web` rule set is open
+for something else.
+
+The lab's private network ([lab-network.md](lab-network.md)) hands out addresses from
+`100.64.0.0/10`. Some internet providers give their customers addresses from the same range.
+So that range is let in only while this server is on the lab's network, which is while the
+network's interface, `tailscale0`, is there. Caddy asks the API each time
+(`GET /api/local`), and the firewall follows the same rule
+([server.md](server.md#the-firewall)).
+
+The roles that set the board up open the web ports to the local network only (the
+`web-lan` rule set). The page answers one more name, `home-<server>.local`, the old start
+page's. That name tells browsers to use HTTPS only from then on (HSTS). `<server>.local`
+doesn't: apps without a name of their own answer at `http://<server>.local:<port>`, and
+that header would turn their links into `https`.
+
+### Root and the board's user
+
+Two users work for the board, and each stays out of the other's folder.
+
+| Who | Does what | Writes where |
+|---|---|---|
+| `bromigos-board` | Runs the API | `/var/lib/bromigos-board`, its own (0700): sessions and codes |
+| root | Runs the reader, and `bromigos server board code` and `sessions` | `/run/bromigos-board`, root's (0750, group `bromigos-board`): `board.json` |
+
+- **Root never writes where the board's user can.** The board's user can read
+  `/run/bromigos-board` and can't put a file, a link or anything else in it. The two files it
+  marks there, `wanted` and `door`, are made by tmpfiles, as root's.
+- **Root becomes the board's user before it touches the board's folder.**
+  `sudo bromigos server board code` and `sessions` drop root for good first: no extra
+  groups, then the board's group, then its user. A link planted where `codes` or `sessions`
+  should be is refused, and nothing is deleted.
+- **Where root writes, it trusts nothing in the folder.** A file gets a random temporary
+  name, made exclusively and without following a link. Its mode and group are set on the
+  open file, never by path. Then it's renamed into place (`paths.write_at`).
+- **Each unit has only what it needs.** The API can write its own folder and mark the two
+  files, in 256 MB of memory at most. The reader has `/usr`, `/boot` and `/etc` read-only.
+
+The tests' stand-in switches (`BROMIGOS_ROOT`, `BROMIGOS_BOARD_HOSTNAME`,
+`BROMIGOS_BOARD_NOW_MS`, `BROMIGOS_BOARD_CLI`) aren't honoured by a process that is root.
+On a server, root's reader runs `/usr/bin/bromigos` by its whole path.
 
 ### Signing in
 
@@ -526,21 +565,31 @@ Each command takes `--json`. `sessions` exits 1 when `--end` names no session.
 
 - A code is 8 letters from a 32-letter alphabet with no I, O, 0 or 1. It's shown as
   `ABCD-EFGH`. Case, spaces and dashes don't matter when you type it.
-- Root writes each code as the SHA-256 of the code, in
-  `/var/lib/bromigos-board/codes/`, with when it runs out. Signing in deletes the file, so
-  a code works once even when two browsers send it at the same moment.
-- Wrong codes are counted. Five in a minute from one address wait a minute. Twenty in ten
-  minutes from anywhere cancel every code waiting.
+- Each code is kept as the SHA-256 of the code, in `/var/lib/bromigos-board/codes/`, with
+  when it runs out. Signing in deletes the file, so a code works once even when two browsers
+  send it at the same moment.
+- Wrong codes are slowed, and nobody is locked out by someone else's:
+  - one address may send five wrong codes a minute. Its sixth try waits a minute (429),
+    right or wrong;
+  - wrong codes are answered at most one every 200 ms, whoever sends them. A wrong answer
+    waits its turn, a second at most;
+  - a right code is never refused or held up because of another device's wrong ones.
+
+  A code is 40 bits and lives ten minutes. At five guesses a second for all ten minutes, the
+  chance of hitting one is about 3 in a billion.
 - A session is a random 256-bit token. The browser keeps it in the cookie
   `__Host-bromigos-board`, which is `HttpOnly`, `Secure`, `SameSite=Strict` and lasts 30
   days. The server keeps only its SHA-256, in `/var/lib/bromigos-board/sessions/<id>.json`,
-  with the browser's name ("Firefox on Linux") and when it was made and last used.
-  Deleting that file ends the session at once.
+  with the browser's name ("Firefox on Linux") and when it was made. The file's own time is
+  when the session was last used. Deleting that file ends the session at once, and an ended
+  session never comes back.
 - Every request that changes something passes a check against cross-site request forgery
   (CSRF), where another site makes your browser send a request:
   - it must carry the header `X-Bromigos-Board: 1`. A page on another site can't add a header
     without the API's permission, which the API never gives;
-  - its `Origin`, when the browser sends one, must be the board's own address;
+  - it must be sent to one of the board's two names, `<server>.local` or
+    `home-<server>.local`, and its `Origin`, when the browser sends one, must be that same
+    name;
   - its `Sec-Fetch-Site`, when sent, must be `same-origin`;
   - its body must be JSON, which a plain HTML form can't send.
 
@@ -574,11 +623,15 @@ door = false
 
 The board runs no command and reads no app itself. One reader does, as root:
 
-1. While a browser has the page open, the API touches `/run/bromigos-board/wanted`.
+1. While a signed-in browser has the page open, the API marks `/run/bromigos-board/wanted`.
 2. `bromigos-board-snapshot.path` sees that and starts `bromigos-board-snapshot.service`.
 3. The reader runs the commands below, all at once, and writes what they said to
    `/run/bromigos-board/board.json`. Only the board's group can read that file.
 4. It reads again every 15 seconds. When nobody has looked for 45 seconds, it stops.
+
+The door asks through a file of its own, `/run/bromigos-board/door`, for one reading, and
+only when the last is more than two minutes old. So a device that isn't signed in can't
+keep the reader running, and the door's tiles can be two minutes behind.
 
 | Part | Command |
 |---|---|
@@ -598,10 +651,21 @@ why. The page then says it can't check, rather than guessing.
 lists the catalogue's web apps that `bromigos lab provision --local` set up, as the start page
 did.
 
-The reader never writes a secret. Any value whose name says it's a password, a secret, a
-token, a key, a recovery code or a join code is dropped, and a `user:password@` part of an
-address is cut. Yes-or-no values stay: `"passwords": false` says SSH takes no passwords, and
-holds none.
+**The filter is the second line, and best effort.** The first line is that these commands
+don't print secrets, and that only a signed-in browser sees `board.json`. The reader still
+filters what it writes, a failed command's error line included:
+
+- a value is dropped when its name says it's a secret: a password, a passphrase, a secret, a
+  token, a key, a PIN, a seed, a cookie, a recovery or join code. Only `true`, `false` and
+  `null` stay under such a name: `"passwords": false` says SSH takes no passwords, and holds
+  none. A drive's `key` in the drive reports stays: it's the drive's id;
+- `{"name": "admin_token", "value": "…"}` loses its value;
+- in text, a `user:password@` part of an address is cut, and `NAME=value`, a secret in a
+  link's query, an option such as `--password` with the word after it, and tokens with a
+  known shape are masked. The activity records' own filter does most of this
+  (`bromigos_activity.redact`).
+
+It can't recognise a secret written out in a sentence, or under a name that says nothing.
 
 ### The API
 
@@ -611,12 +675,17 @@ opens (`bromigos-board.socket`) and only Caddy's group can use. It runs as its o
 (`bromigos-board.service`). Caddy serves the page's files from
 `/usr/share/bromigos-board/web` and passes `/api/` to the socket.
 
+No request to the board is big. Caddy refuses a body over 8 KB, and the API one over 4096
+bytes: by its `Content-Length` without reading it, and after 4096 bytes when it gave none.
+The API takes 64 connections at once (more get 503) and 256 MB of memory.
+
 Every answer is JSON with `Cache-Control: no-store`. An error is
 `{"error": {"code": "…", "words": "…"}}`, where `words` is a sentence for a person.
 
 | Request | Who | Answer |
 |---|---|---|
 | `GET /api/door` | anyone it lets in | The door |
+| `GET /api/local` | anyone it lets in | 204, and nothing else. Caddy asks it for the lab network's addresses |
 | `GET /api/session` | anyone it lets in | Whether this browser is signed in, and the browsers that are |
 | `POST /api/session` `{"code": "K7QM-3XPD"}` | anyone it lets in | Signs in, sets the cookie |
 | `DELETE /api/session` | signed in | Signs this browser out |
@@ -634,8 +703,9 @@ The status codes:
 | 401 | `bad-code` | The code is wrong, or was used already |
 | 401 | `expired` | The code is older than 10 minutes |
 | 404 | `no-session` | No browser is signed in with that id |
+| 413 | `too-big` | The body is over 4096 bytes |
 | 415 | `not-json` | The body isn't JSON |
-| 429 | `too-many` | Too many wrong codes. `Retry-After` says when to try again |
+| 429 | `too-many` | Too many wrong codes from this address. `Retry-After` says when to try again |
 | 503 | `gathering` | The first reading isn't there yet. `Retry-After: 5` |
 
 `GET /api/door`:
@@ -724,6 +794,7 @@ A comment line, `: keep-alive`, comes every 20 seconds.
 | `/usr/share/bromigos-board/web/` | The page's files (`bromigos-board-web`) |
 | `/usr/share/bromigos-board/placeholder/` | The placeholder Caddy serves until the page is installed |
 | `/run/bromigos-board/board.json` | The reader's last reading |
+| `/run/bromigos-board/wanted`, `door` | The two files the API marks to ask for readings |
 | `/var/lib/bromigos-board/` | Sessions and codes, the board's user's only |
 
 ### The service's tests
@@ -734,8 +805,16 @@ PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests
 ```
 
 They need `python-starlette`, `uvicorn` and `python-httpx`. With `caddy` installed, they
-also check that Caddy reads the site and puts its 403 first. The `board-tests` workflow
-runs them on every pull request that touches `board/`.
+also check that Caddy reads the site and puts its 403 first. With `systemd-analyze`, they
+have systemd check the units' text. The `board-tests` workflow runs them on every pull
+request that touches `board/`.
+
+The same workflow runs `board/tests/board-integration.sh` on a throwaway machine, as real
+root under its real systemd. It installs the board where the package puts it, then checks
+what a stand-in root can't show: who owns each folder once tmpfiles made them, that the
+board's user can put nothing in root's folder, that root's files in the board's folder are
+the board's user's, that a link planted there is refused, and that each unit works inside
+its sandbox. Never run it on a computer you use.
 
 ### Not built yet, on the server's side
 

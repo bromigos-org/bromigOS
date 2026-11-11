@@ -40,6 +40,12 @@ class Root(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         for d in ("run/bromigos-board", "var/lib/bromigos-board/sessions", "var/lib/bromigos-board/codes", "etc/bromigos"):
             (self.root / d).mkdir(parents=True, exist_ok=True)
+        # as tmpfiles leaves them (bromigos-board.tmpfiles): the two files the API marks, made
+        # already and long ago
+        for f in ("wanted", "door"):
+            p = self.root / "run/bromigos-board" / f
+            p.touch()
+            os.utime(p, (1, 1))
 
     def path(self, rel):
         return self.root / rel.lstrip("/")

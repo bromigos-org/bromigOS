@@ -164,6 +164,7 @@ The desktop runs these for you. You don't need them day to day.
 | [`bromigos bar`](#bromigos-bar) | The bar: start, restart or stop it (a user service that comes back by itself) |
 | [`bromigos mascot`](#bromigos-mascot) | STATIC, the mascot: on, quiet (his face but no thought bubbles) or off everywhere |
 | [`bromigos qr`](#bromigos-qr) | Themed QR codes: a world's colours, its emblem, an art mode for BRODEC; checked by decoding |
+| [`bromigos server`](#bromigos-server) | bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 | [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
 | [`bromigos welcome console`](#bromigos-welcome-console) | The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here |
@@ -2222,6 +2223,28 @@ Options:
       --json         status: print the JSON document
   -h, --help         Print help
 ```
+
+### bromigos server
+
+bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates.
+
+```text
+bromigos server status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|test|key] | ups [status|detect] | app-data [status|move [--dry-run]|remove-old] | board code|sessions [--end ID] | secrets … | setup
+```
+
+For example:
+
+```text
+bromigos server
+bromigos server status --json
+bromigos server roles
+sudo bromigos server role add storage
+sudo bromigos server update --now
+sudo bromigos server firewall allow lab-cluster
+sudo bromigos server board code
+```
+
+From the `bromigos-server` package.
 
 ### bromigos session
 

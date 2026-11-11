@@ -161,10 +161,17 @@ NEWS_FEED = os.environ.get("BROMIGOS_SERVER_NEWS_FEED", "https://archlinux.org/f
 PACMAN_LOG = "/var/log/pacman.log"
 SSHD_PASSWORD = "/etc/ssh/sshd_config.d/05-bromigos-server-password.conf"
 NFT_EXTRA = "/etc/bromigos/server/nftables.d"
-# the local network, the firewall's @lan and @lan6: private addresses (RFC 1918), carrier-grade
-# NAT (RFC 6598), and IPv6's unique-local and link-local ranges. Written as numbers: the medium's
-# privacy guard can't tell these well-known ranges from a real network's addresses
-LAN4 = [str(ipaddress.IPv4Network((base << 16, bits))) for base, bits in ((0x0A00, 8), (0xAC10, 12), (0xC0A8, 16), (0x6440, 10))]
+# the local network, the firewall's @lan and @lan6: private addresses (RFC 1918), and IPv6's
+# unique-local and link-local ranges. Written as numbers: the medium's privacy guard can't tell
+# these well-known ranges from a real network's addresses
+LAN4 = [str(ipaddress.IPv4Network((base << 16, bits))) for base, bits in ((0x0A00, 8), (0xAC10, 12), (0xC0A8, 16))]
+# carrier-grade NAT (RFC 6598): the lab's private network hands out its addresses from it, and so
+# do some internet providers to their customers. It is the local network only while this server
+# is on the lab's network (lab_network_up; tailscaled's drop-in loads the firewall again when it
+# starts and stops)
+LAB4 = [str(ipaddress.IPv4Network((0x6440 << 16, 10)))]
+LAB_INTERFACE = "tailscale0"
+LAB_UNIT = "tailscaled.service"
 LAN6 = ["fc00::/7", "fe80::/10"]
 # the units every healthy Server runs; sshd only when it's enabled
 MUST_RUN = ("NetworkManager.service", "bromigos-server-firewall.service")
@@ -572,12 +579,19 @@ def ports(values):
     return [int(p) for p in values if str(p).isdigit() and 0 < int(p) < 65536]
 
 
+def lab_network_up():
+    """Whether this server is on the lab's private network now (docs/lab-network.md): its
+    interface is there, or its service is running or starting."""
+    return os.path.isdir(at(f"/sys/class/net/{LAB_INTERFACE}")) or unit_state(LAB_UNIT) in ("active", "activating")
+
+
 def ruleset(c):
     """The nftables ruleset: the base (share/nftables.nft), the chosen rule sets and the roles',
     ports from the settings, and anything in /etc/bromigos/server/nftables.d/*.nft."""
     with open(os.path.join(SHARE, "nftables.nft")) as f:
         text = f.read()
-    extra = [f"add element inet bromigos-server lan {{ {', '.join(LAN4)} }}\n"
+    lan4 = LAN4 + (LAB4 if lab_network_up() else [])
+    extra = [f"add element inet bromigos-server lan {{ {', '.join(lan4)} }}\n"
              f"add element inet bromigos-server lan6 {{ {', '.join(LAN6)} }}\n"]
     known = rulesets()
     for name in chosen_rulesets(c):
@@ -2229,7 +2243,8 @@ BOARD_VERBS = ("code", "sessions")
 
 
 def board_cli():
-    return os.environ.get("BROMIGOS_BOARD_CLI") or "/usr/lib/bromigos/board/bromigos-board"
+    """The board's own command. BROMIGOS_BOARD_CLI names another for the tests, never for root."""
+    return (os.geteuid() != 0 and os.environ.get("BROMIGOS_BOARD_CLI")) or "/usr/lib/bromigos/board/bromigos-board"
 
 
 def cmd_board(a, argv):

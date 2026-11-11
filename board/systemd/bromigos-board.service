@@ -15,13 +15,23 @@ Group=bromigos-board
 Restart=on-failure
 RestartSec=5
 UMask=0077
-# nothing but its own folders, read-only everything else
+# what it may use of the machine: a household's page needs little
+MemoryMax=256M
+TasksMax=128
+# read-only everything, but what it writes: its own sessions and codes, and the two files it
+# marks to ask root's reader for a reading (tmpfiles made them; the folder they're in is root's)
 ProtectSystem=strict
-ReadWritePaths=/var/lib/bromigos-board /run/bromigos-board
+# /run too, said outright: on some systemd versions (seen on 255) ProtectSystem=strict leaves
+# /run writable once ProtectProc= or ProtectKernelTunables= is set
+ReadOnlyPaths=/run
+ReadWritePaths=/var/lib/bromigos-board /run/bromigos-board/wanted /run/bromigos-board/door
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
 NoNewPrivileges=yes
+# other users' processes, root's reader among them, aren't there for it to look at.
+# (ProcSubset=pid is left out: the activity records it lists read /proc/sys for the boot's id)
+ProtectProc=invisible
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
@@ -31,9 +41,13 @@ ProtectHostname=yes
 RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
+RemoveIPC=yes
 LockPersonality=yes
+MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
 # the socket comes from systemd; it opens none of its own
 RestrictAddressFamilies=AF_UNIX

@@ -1,6 +1,7 @@
 """The board's API against the fixtures' snapshot: the contract of each endpoint (DESIGN §1 and
 the page's, board-contracts.md), the door's allow-list key by key, sign-in with a console code,
 sessions, CSRF, and the private-address rule."""
+import asyncio
 import json
 import os
 import threading
@@ -11,7 +12,7 @@ from common import FIXTURES, LAN, NOW, Root
 
 from starlette.testclient import TestClient
 
-from bromigos_board import api, auth, door, paths, snapshot
+from bromigos_board import api, auth, door, net, paths, snapshot
 
 ORIGIN = "https://myserver.local"
 PAGE = {"x-bromigos-board": "1", "origin": ORIGIN}       # what the board's own page sends
@@ -23,11 +24,32 @@ def client(app, xff=LAN, **headers):
     return TestClient(app, base_url=ORIGIN, headers=h)
 
 
+class Clock:
+    """A clock the tests move by hand (auth.Tries's)."""
+
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+def marked(path):
+    """Whether one of the reader's two files was marked since the fixture made it (long ago)."""
+    return path.stat().st_mtime > 1
+
+
 class Base(Root):
     def setUp(self):
         super().setUp()
-        self.app = api.make_app(tries=auth.Tries(), poll=0.05, stream_s=0.6)
+        self.clock, self.waits = Clock(), []
+        self.tries = auth.Tries(clock=self.clock)
+        self.app = api.make_app(tries=self.tries, poll=0.05, stream_s=0.6, sleep=self.sleep)
         self.c = client(self.app)
+
+    async def sleep(self, seconds):
+        """How long each wrong code's answer waited: noted, not slept."""
+        self.waits.append(round(seconds, 3))
 
     def snapshot(self, missing=""):
         os.environ["BOARD_MISSING"] = missing
@@ -70,7 +92,6 @@ class DoorTests(Base):
         for leak in ("v3.3.5", "Running", "ram_bytes", "reading", "Last photo", "update", "should-never", "192.0.2",
                      "2283", "state", "version", "measured", "admin_token", "evil", "drives", "alerts", "activity", "port"):
             self.assertNotIn(leak, text)
-        self.assertTrue(self.path(paths.WANTED).exists(), "the door asks for a reading")
 
     def test_every_allowed_key_is_checked(self):
         """A key added to the apps list never reaches the door by itself."""
@@ -99,6 +120,38 @@ class DoorTests(Base):
         self.snapshot()
         d = self.c.get("/api/door").json()
         self.assertEqual((d["door"], d["tiles"], d["world"]), (False, [], "tidewell"))
+
+    def test_signed_out_the_door_cant_keep_roots_reader_running(self):
+        """`wanted` is what keeps the reader reading every 15 seconds: the door never marks it.
+        It asks through `door`, for one reading, and only when the last is a few minutes old."""
+        wanted, asked = self.path(paths.WANTED), self.path(paths.DOOR)
+        for _ in range(5):
+            self.assertEqual(self.c.get("/api/door").status_code, 200)
+        self.assertFalse(marked(wanted))
+        self.assertTrue(marked(asked))                      # once: there was no reading at all
+        os.utime(asked, (1, 1))
+        self.c.get("/api/door")
+        self.assertFalse(marked(asked), "asked again within two minutes")
+        # a fresh reading: nothing to ask for, however long ago the door last asked
+        self.app.app.state.door_asked = None
+        self.snapshot()
+        self.c.get("/api/door")
+        self.assertFalse(marked(asked))
+        # the reading is old now, and the door last asked long ago: one more
+        old = time.time() - api.DOOR_EVERY_S - 5
+        os.utime(self.path(paths.SNAPSHOT), (old, old))
+        self.c.get("/api/door")
+        self.assertTrue(marked(asked))
+        self.assertFalse(marked(wanted))
+
+    def test_the_api_cant_make_the_files_it_marks(self):
+        """The folder is root's: when tmpfiles hasn't made a file, the API doesn't either."""
+        self.path(paths.WANTED).unlink()
+        self.assertFalse(api.touch_wanted())
+        self.assertFalse(self.path(paths.WANTED).exists())
+        os.symlink(self.root / "elsewhere", self.path(paths.WANTED))
+        self.assertFalse(api.touch_wanted())
+        self.assertFalse((self.root / "elsewhere").exists())
 
     def test_before_the_first_reading_the_door_has_its_name_and_no_tiles(self):
         d = self.c.get("/api/door").json()
@@ -175,7 +228,7 @@ class BoardContractTests(Base):
         self.assertEqual(r.status_code, 503)
         self.assertEqual(r.json()["error"]["code"], "gathering")
         self.assertEqual(r.headers["retry-after"], "5")
-        self.assertTrue(self.path(paths.WANTED).exists())
+        self.assertTrue(marked(self.path(paths.WANTED)), "signed in, the board asks for readings")
 
     def test_a_part_that_couldnt_be_read_is_null_and_says_why(self):
         os.environ["BOARD_MISSING"] = "lab apps storage"
@@ -266,19 +319,59 @@ class SignInTests(Base):
         typed = " " + code.lower().replace("-", " ") + " "
         self.assertEqual(self.c.post("/api/session", json={"code": typed}, headers=PAGE).status_code, 200)
 
-    def test_too_many_wrong_codes_wait_and_end_the_codes_waiting(self):
+    def test_too_many_wrong_codes_from_one_address_make_that_address_wait(self):
         for _ in range(5):
             self.assertEqual(self.c.post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE).status_code, 401)
         code, _ = auth.new_code()
         r = self.c.post("/api/session", json={"code": code}, headers=PAGE)
-        self.assertEqual(r.status_code, 429)        # even the right one, from here, for a minute
+        self.assertEqual(r.status_code, 429)        # even a right one, from here, for a minute
         self.assertEqual(r.json()["error"]["code"], "too-many")
         self.assertEqual(r.headers["retry-after"], "60")
-        # 20 wrong in all, from anywhere: every code waiting is cancelled
-        for i in range(15):
-            client(self.app, xff=f"10.0.0.{i + 1}").post("/api/session", json={"code": "BBBB-BBBB"}, headers=PAGE)
-        self.assertEqual(auth.codes_waiting(), [])
-        self.assertFalse(auth.use_code(code))
+        # ... and nobody else: the code still waits, and another device signs in with it
+        self.assertEqual(len(auth.codes_waiting()), 1)
+        other = client(self.app, xff="192.168.1.21")
+        self.assertEqual(other.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
+        self.clock.t += 61
+        code, _ = auth.new_code()
+        self.assertEqual(self.c.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
+
+    def test_wrong_codes_from_everywhere_never_refuse_or_slow_a_right_one(self):
+        """One device with many addresses sends a wrong code a second for ten minutes. The owner
+        asks for a code each minute and types it 15 seconds later: every one signs in, at once."""
+        owner = client(self.app, xff="192.168.1.20")
+        attackers = [client(self.app, xff=f"fd00::{i:x}") for i in range(1, 9)]
+        results, code = [], None
+        for second in range(600):
+            self.clock.t += 1
+            attackers[second % 8].post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE)
+            if second % 60 == 0:
+                code, _ = auth.new_code()
+            if second % 60 == 15:
+                before = len(self.waits)
+                results.append(owner.post("/api/session", json={"code": code}, headers=PAGE).status_code)
+                self.assertEqual(len(self.waits), before, "a right code's answer never waits")
+        self.assertEqual(results, [200] * 10)
+        # 200 wrong codes at the same moment, from 200 addresses: the code waiting is still good
+        for i in range(200):
+            client(self.app, xff=f"10.0.{i}.1").post("/api/session", json={"code": "BBBB-BBBB"}, headers=PAGE)
+        code, _ = auth.new_code()
+        self.assertEqual(owner.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
+
+    def test_wrong_codes_are_answered_one_every_200_ms_and_never_held_more_than_a_second(self):
+        for i in range(12):                              # all at the same moment
+            client(self.app, xff=f"10.1.{i}.1").post("/api/session", json={"code": "CCCC-CCCC"}, headers=PAGE)
+        self.assertEqual(self.waits, [0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        self.clock.t += 5                                # the queue is long gone
+        client(self.app, xff="10.2.0.1").post("/api/session", json={"code": "CCCC-CCCC"}, headers=PAGE)
+        self.assertEqual(self.waits[-1], 0)
+
+    def test_an_address_is_forgotten_once_its_tries_are_old(self):
+        for i in range(300):
+            client(self.app, xff=f"fd00::{i:x}").post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE)
+        self.assertEqual(len(self.tries.by_source), 300)
+        self.clock.t += 120
+        self.assertIsNone(self.tries.blocked("192.168.1.20"))
+        self.assertEqual(self.tries.by_source, {})
 
     def test_a_session_lasts_thirty_days(self):
         os.environ["BROMIGOS_BOARD_NOW_MS"] = str(NOW)
@@ -317,6 +410,36 @@ class SignInTests(Base):
         self.assertEqual(self.c.get("/api/board").status_code, 401)
         self.assertFalse(auth.end_session(sid))
         self.assertFalse(auth.end_session("../codes"))
+        self.assertFalse(auth.end_session(sid + "\n"))          # an id is 16 hex digits, and nothing after them
+
+    def test_an_ended_session_never_comes_back(self):
+        """Noting a session's last use never makes its file: an end that lands between the read
+        and the note stays an end."""
+        value, rec = auth.new_session()
+        real = auth._last_seen
+
+        def ended_meanwhile(dfd, name, r):
+            auth.end_session(rec["id"])                  # sessions --end, at the worst moment
+            return real(dfd, name, r)
+
+        auth._last_seen = ended_meanwhile
+        try:
+            later = paths.now_ms() + auth.SEEN_EVERY_MS + 1
+            self.assertIsNone(auth.session_for(value, later))
+        finally:
+            auth._last_seen = real
+        self.assertIsNone(auth.session_for(value))
+        self.assertEqual(os.listdir(self.path(paths.SESSIONS)), [])
+
+    def test_a_sessions_last_use_is_its_files_own_time(self):
+        os.environ["BROMIGOS_BOARD_NOW_MS"] = str(NOW)
+        value, rec = auth.new_session()
+        f = self.path(f"{paths.SESSIONS}/{rec['id']}.json")
+        before = f.read_bytes()
+        os.environ["BROMIGOS_BOARD_NOW_MS"] = str(NOW + auth.SEEN_EVERY_MS + 1000)
+        self.assertEqual(auth.session_for(value)["last_seen_at"], NOW + auth.SEEN_EVERY_MS + 1000)
+        self.assertEqual(auth.sessions()[0]["last_seen_at"], NOW + auth.SEEN_EVERY_MS + 1000)
+        self.assertEqual(f.read_bytes(), before, "the record itself is never written again")
 
 
 class CsrfTests(Base):
@@ -333,6 +456,20 @@ class CsrfTests(Base):
             self.assertEqual(r.status_code, 403, value)
         r, _ = self.post_code(**PAGE)
         self.assertEqual(r.status_code, 200)
+
+    def test_the_boards_own_names_and_no_other(self):
+        """Origin is compared with the board's names, not with whatever Host was sent."""
+        code, _ = auth.new_code()
+        evil = TestClient(self.app, base_url="https://evil.example.org", headers={"x-forwarded-for": LAN})
+        r = evil.post("/api/session", json={"code": code}, headers={"x-bromigos-board": "1", "origin": "https://evil.example.org"})
+        self.assertEqual((r.status_code, r.json()["error"]["code"]), (403, "csrf"))
+        r = evil.post("/api/session", json={"code": code}, headers={"x-bromigos-board": "1"})      # no Origin at all
+        self.assertEqual(r.status_code, 403)
+        self.assertTrue(auth.codes_waiting())
+        home = TestClient(self.app, base_url="https://home-myserver.local", headers={"x-forwarded-for": LAN})
+        r = home.post("/api/session", json={"code": code}, headers={"x-bromigos-board": "1", "origin": "https://home-myserver.local"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(paths.names(), ("myserver.local", "home-myserver.local"))
 
     def test_another_site_cant_ask(self):
         for h in ({"origin": "https://evil.example.org"}, {"origin": "http://myserver.local"},
@@ -365,6 +502,58 @@ class CsrfTests(Base):
         self.assertEqual(self.c.get("/api/board").status_code, 200)
 
 
+class BodyTests(Base):
+    """A request's body is refused by its own Content-Length, unread; and read no further than
+    the limit when it lied or gave none."""
+
+    def post(self, headers, chunks):
+        """POST /api/session straight to the app. Returns (status, the chunks it took)."""
+        taken, sent = [], []
+        left = list(chunks)
+        scope = {"type": "http", "method": "POST", "path": "/api/session", "raw_path": b"/api/session", "query_string": b"",
+                 "http_version": "1.1", "scheme": "https", "server": ("myserver.local", 443), "client": ("192.168.1.20", 1),
+                 "headers": [(b"host", b"myserver.local"), (b"x-forwarded-for", b"192.168.1.20"), (b"x-bromigos-board", b"1"),
+                             (b"content-type", b"application/json")] + headers}
+
+        async def receive():
+            if not left:
+                return {"type": "http.disconnect"}
+            chunk = left.pop(0)
+            taken.append(len(chunk))
+            return {"type": "http.request", "body": chunk, "more_body": bool(left)}
+
+        async def send(m):
+            sent.append(m)
+        asyncio.run(self.app(scope, receive, send))
+        return sent[0]["status"], taken
+
+    def test_a_body_that_says_it_is_big_is_refused_unread(self):
+        status, taken = self.post([(b"content-length", str(64 * 1024 * 1024).encode())], [b" " * 65536] * 1024)
+        self.assertEqual((status, taken), (413, []))
+        self.assertEqual(self.post([(b"content-length", b"4097")], [b" " * 4097]), (413, []))
+        self.assertEqual(self.post([(b"content-length", b"-1")], [b"{}"]), (413, []))
+        self.assertEqual(self.post([(b"content-length", b"lots")], [b"{}"]), (413, []))
+
+    def test_a_body_with_no_length_is_read_no_further_than_the_limit(self):
+        status, taken = self.post([], [b" " * 1024] * 4096)                 # 4 MB, a piece at a time
+        self.assertEqual(status, 413)
+        self.assertEqual(sum(taken), api.BODY_MAX + 1024, "it stopped at the first piece past the limit")
+        status, taken = self.post([(b"content-length", b"10")], [b" " * 1024] * 4096)       # it lied
+        self.assertEqual((status, sum(taken)), (413, api.BODY_MAX + 1024))
+
+    def test_a_body_within_the_limit_is_read(self):
+        code, _ = auth.new_code()
+        body = json.dumps({"code": code}).encode()
+        self.assertEqual(self.post([(b"content-length", str(len(body)).encode())], [body])[0], 200)
+        pad = json.dumps({"code": "AAAA-AAAA", "pad": "x" * 4000}).encode()
+        self.assertLessEqual(len(pad), api.BODY_MAX)
+        self.assertEqual(self.post([], [pad[:2000], pad[2000:]])[0], 401)
+
+    def test_the_client_too(self):
+        r = self.c.post("/api/session", content=b" " * (1024 * 1024), headers={**PAGE, "content-type": "application/json"})
+        self.assertEqual((r.status_code, r.json()["error"]["code"]), (413, "too-big"))
+
+
 class SourceTests(Base):
     def test_a_public_address_gets_403_whatever_it_asks(self):
         self.snapshot()
@@ -380,8 +569,61 @@ class SourceTests(Base):
                 self.assertEqual(r.json()["error"]["code"], "not-local")
                 self.assertEqual(r.headers["cache-control"], "no-store")
 
-    def test_the_home_network_and_the_labs_private_network_get_in(self):
-        for xff in ("192.168.1.20", "10.1.2.3", "172.16.5.4", "100.64.0.7", "169.254.1.1", "127.0.0.1", "fd7a:115c:a1e0::1",
+    def test_the_labs_private_network_gets_in_only_while_this_server_is_on_it(self):
+        """The carrier-grade NAT range is the lab's private network's, and some internet
+        providers': it is local only while the lab network's interface is here."""
+        for xff in ("100.64.0.7", "100.127.255.254", "::ffff:100.64.0.7"):
+            self.assertEqual(client(self.app, xff=xff).get("/api/door").status_code, 403, xff)
+            self.assertEqual(client(self.app, xff=xff).get("/api/local").status_code, 403, xff)
+        (self.root / "sys/class/net/tailscale0").mkdir(parents=True)
+        for xff in ("100.64.0.7", "100.127.255.254", "::ffff:100.64.0.7"):
+            self.assertEqual(client(self.app, xff=xff).get("/api/door").status_code, 200, xff)
+            self.assertEqual(client(self.app, xff=xff).get("/api/local").status_code, 204, xff)
+        self.assertEqual(client(self.app, xff="100.128.0.1").get("/api/local").status_code, 403)
+        self.assertEqual(client(self.app, xff="8.8.8.8").get("/api/local").status_code, 403)
+
+    def test_the_address_is_read_once_and_the_same_everywhere(self):
+        """Two X-Forwarded-For lines: the check and the wrong-code count both use the last."""
+        from starlette.datastructures import Headers
+        lines = [(b"x-forwarded-for", b"8.8.8.8"), (b"x-forwarded-for", b"192.168.1.20")]
+        self.assertEqual(net.source(lines, None), "192.168.1.20")
+        self.assertEqual(net.source([("X-Forwarded-For", "8.8.8.8"), ("X-FORWARDED-FOR", "10.0.0.1, 192.168.1.20")], None),
+                         "192.168.1.20")
+        self.assertEqual(net.source(Headers(raw=lines), None), "192.168.1.20")
+        self.assertEqual(net.source(list(reversed(lines)), None), "8.8.8.8")
+        seen = {}
+
+        async def inner(scope, receive, send):
+            seen["source"] = scope[api.SOURCE]
+            await api.error(418, ("x", "x"))(scope, receive, send)
+
+        async def go(headers):
+            sent = []
+
+            async def send(m):
+                sent.append(m)
+            await api.LocalOnly(inner)({"type": "http", "method": "GET", "path": "/", "headers": headers,
+                                        "client": ("testclient", 1)}, None, send)
+            return sent[0]["status"]
+        self.assertEqual(asyncio.run(go(lines)), 418)
+        self.assertEqual(seen, {"source": "192.168.1.20"})
+        self.assertEqual(asyncio.run(go(list(reversed(lines)))), 403)
+
+    def test_only_http_is_answered(self):
+        reached, sent = [], []
+
+        async def inner(scope, receive, send):
+            reached.append(scope["type"])
+
+        async def send(m):
+            sent.append(m)
+        asyncio.run(api.LocalOnly(inner)({"type": "websocket", "headers": [(b"x-forwarded-for", b"192.168.1.20")],
+                                          "client": ("192.168.1.20", 1)}, None, send))
+        self.assertEqual(reached, [])
+        self.assertEqual(sent, [{"type": "websocket.close", "code": 1008}])
+
+    def test_the_home_network_gets_in(self):
+        for xff in ("192.168.1.20", "10.1.2.3", "172.16.5.4", "169.254.1.1", "127.0.0.1", "fd7a:115c:a1e0::1",
                     "fe80::1%eth0", "::1", "::ffff:192.168.1.2", "[fd00::5]", "203.0.113.5, 192.168.1.20"):
             r = client(self.app, xff=xff).get("/api/door")
             self.assertEqual(r.status_code, 200, xff)
@@ -429,7 +671,7 @@ class ActivityStreamTests(Base):
         changed = [(e, d["id"], d["updated_at"]) for e, d in ev[1:]]
         self.assertIn(("job", "20261110-1012-backup.run-a3f0", NOW + 1000), changed)
         self.assertIn(("job", "20261110-1013-app.update-photos-b4c1", NOW + 2000), changed)
-        self.assertTrue(self.path(paths.WANTED).exists())
+        self.assertTrue(marked(self.path(paths.WANTED)))
 
     def test_signed_out_no_stream(self):
         self.job()

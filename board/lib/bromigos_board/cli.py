@@ -4,6 +4,7 @@ import argparse
 import datetime
 import json
 import os
+import pwd
 import sys
 
 from . import SCHEMA, auth, paths
@@ -31,16 +32,62 @@ def when(ms):
 
 
 def needs_root():
-    if paths.root() == "/" and os.geteuid() != 0:
+    if not paths.stand_in() and not paths.really_root():
         print("bromigos-board: this needs root: sudo bromigos server board …", file=sys.stderr)
         return True
     return False
 
 
-def cmd_code(a):
+def become_board_user():
+    """Root, about to work in the board's own folder: become the board's user for good first
+    (no extra groups, its group, its user), so nothing here is done as root on a path that user
+    controls. In a stand-in root, and when already that user, there's nothing to do."""
+    if not paths.really_root():
+        return
+    pw = pwd.getpwnam(paths.USER)
+    os.setgroups([])
+    os.setgid(pw.pw_gid)
+    os.setuid(pw.pw_uid)
+    os.umask(0o077)
+    os.environ["HOME"] = pw.pw_dir
+
+
+def as_board_user():
+    """needs_root, then become_board_user. An exit status when it can't, else None."""
     if needs_root():
         return EXIT_CANT
-    code, exp = auth.new_code()
+    try:
+        become_board_user()
+    except KeyError:
+        print(f"bromigos-board: there's no user {paths.USER} here: the bromigos-board package makes it "
+              "(systemd-sysusers)", file=sys.stderr)
+        return EXIT_CANT
+    return None
+
+
+def own_folders():
+    """Both of the board's folders are folders of their own (made when missing); OSError when one
+    is a link or something else."""
+    for d in (paths.SESSIONS, paths.CODES):
+        with auth.folder(d):
+            pass
+
+
+def folder_trouble(e):
+    print(f"bromigos-board: {e}. The board keeps its sign-in codes and sessions in {paths.STATE}, in folders of "
+          "its own; something else is in their place. Nothing was changed.", file=sys.stderr)
+    return EXIT_CANT
+
+
+def cmd_code(a):
+    stop = as_board_user()
+    if stop is not None:
+        return stop
+    try:
+        own_folders()
+        code, exp = auth.new_code()
+    except OSError as e:
+        return folder_trouble(e)
     if a.json:
         print(json.dumps({"schema": SCHEMA, "code": code, "expires_at": exp}, indent=1))
         return EXIT_OK
@@ -51,8 +98,13 @@ def cmd_code(a):
 
 
 def cmd_sessions(a):
-    if needs_root():
-        return EXIT_CANT
+    stop = as_board_user()
+    if stop is not None:
+        return stop
+    try:
+        own_folders()
+    except OSError as e:
+        return folder_trouble(e)
     if a.end_all:
         n = auth.end_all()
         print(json.dumps({"schema": SCHEMA, "ended": n}) if a.json else
@@ -97,8 +149,10 @@ def cmd_serve(a):
     if os.environ.get("LISTEN_FDS") != "1":
         print("bromigos-board: serve runs from bromigos-board.socket (systemd hands it the socket)", file=sys.stderr)
         return EXIT_CANT
+    # limit_concurrency: more connections than this at once get 503 (the board is one household's page)
     uvicorn.run(api.make_app(), fd=fd, proxy_headers=False, server_header=False, date_header=False,
-                access_log=False, log_level="warning", lifespan="off")
+                access_log=False, log_level="warning", lifespan="off", limit_concurrency=api.CONNECTIONS_MAX,
+                timeout_keep_alive=15)
     return EXIT_OK
 
 

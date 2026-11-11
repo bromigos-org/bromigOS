@@ -11,6 +11,7 @@ on:
       - "packaging/bromigos-board/**"
       # what the board reads: the activity records, and the catalogue its door falls back to
       - "lib/bromigos_activity.py"
+      - "bin/bromigos-activity"
       - "homelab/lib/bromigos_homelab/provcatalog.py"
       - "homelab/share/provision-catalogue.toml"
       # `bromigos server board` runs the board's own commands
@@ -44,3 +45,33 @@ jobs:
           useradd -m builder
           chown -R builder "$GITHUB_WORKSPACE"
           su builder -c "cd '$GITHUB_WORKSPACE/board' && BOARD_NEED_CADDY=1 PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v"
+
+  integration:
+    name: Board on a Server (systemd)
+    # The board for real: installed where the package puts it on a throwaway machine, under its
+    # real systemd and as real root. Who owns which folder once tmpfiles made them, what the
+    # board's user can't do in root's, root stepping down before it works in the board's, and
+    # the units inside their sandboxes (board/tests/board-integration.sh). GitHub's runner,
+    # never the lab's: this repo is public
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: starlette and uvicorn
+        run: |
+          # (--ignore-installed: the runner's own python3-typing-extensions can't be replaced in place)
+          sudo python3 -m pip install --quiet --break-system-packages --ignore-installed starlette uvicorn
+          python3 -c "import starlette, uvicorn, sys; print(sys.version.split()[0], starlette.__version__, uvicorn.__version__)"
+          systemctl --version | head -1
+      - name: the folders, the sandboxes, sign-in, readings
+        run: sudo CI=true bash board/tests/board-integration.sh
+      - name: what happened
+        if: failure()
+        run: |
+          for u in bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path bromigos-board-snapshot.service; do
+            echo "== $u"; systemctl status "$u" --no-pager -n 0 || true
+          done
+          sudo journalctl -u 'bromigos-board*' --no-pager -n 200 || true
+          sudo ls -la /run/bromigos-board /var/lib/bromigos-board || true
+          sudo cat /tmp/body /tmp/headers || true
+

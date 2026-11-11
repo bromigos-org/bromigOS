@@ -12,8 +12,8 @@
 #   the commands          bromigos server board code|sessions (bromigos-server runs these)
 #   the site              /usr/share/bromigos-board/caddy/site.caddy, which the lab's Caddy
 #                         step imports for <server>.local and home-<server>.local
-#   the page              /usr/share/bromigos-board/web is bromigos-board-web's (the pages); until
-#                         that is installed Caddy serves /usr/share/bromigos-board/placeholder
+#   the page              /usr/share/bromigos-board/web is bromigos-board-web's (the pages). Should
+#                         its files be missing, Caddy serves /usr/share/bromigos-board/placeholder
 #   the library           /usr/lib/bromigos/lib/bromigos_board/
 
 pkgname=bromigos-board
@@ -24,14 +24,16 @@ arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 # bromigos-core: bromigos_activity (the activity stream) and the commands the reader runs
-depends=('python' 'python-starlette' 'uvicorn' 'caddy' 'bromigos-core' 'bromigos-lab')
-optdepends=('bromigos-board-web: the Lab board'"'"'s pages (until it'"'"'s installed, a placeholder lists the apps)')
+# bromigos-board-web: the page itself (board/web/, its own package: it needs Node to build)
+depends=('python' 'python-starlette' 'uvicorn' 'caddy' 'bromigos-core' 'bromigos-lab' 'bromigos-board-web')
 checkdepends=('python-httpx' 'caddy')
 install=$pkgname.install
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
-_paths=(board docs/board.md packaging/bromigos-board LICENSE-MIT LICENSE-APACHE)
+# (board/web is bromigos-board-web's: a change to the page alone doesn't make a new service package)
+_paths=(board/bin board/lib board/systemd board/caddy board/placeholder board/tests board/bromigos-board.sysusers
+        board/bromigos-board.tmpfiles docs/board.md packaging/bromigos-board LICENSE-MIT LICENSE-APACHE)
 _archived=0
 
 pkgver() {

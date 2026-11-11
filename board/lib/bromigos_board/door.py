@@ -16,9 +16,10 @@ OPEN_KEYS = ("url",)
 # the ways in this server offers now: the console code. Approving on the phone and signing in
 # with a Bromigos account come later (docs/board.md, "Not built yet")
 SIGNIN = {"code": True, "phone": False, "account": False}
-ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
-HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,62}$")
-LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+# (\Z, not $: $ also matches before a newline at the end)
+ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}\Z")
+HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,62}\Z")
+LABEL = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?\Z")
 TEXT_MAX = 40
 
 

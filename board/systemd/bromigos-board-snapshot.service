@@ -12,3 +12,17 @@ ExecStart=/usr/lib/bromigos/board/bromigos-board snapshot
 Nice=10
 IOSchedulingClass=idle
 UMask=0027
+# it is root, to read what those commands read, and no more than they need: /usr, /boot and /etc
+# read-only, the home folders read-only, a /tmp of its own, no new privileges. Its commands
+# write under /run and /var/lib (the apps' measured sizes, podman's own state), so those stay.
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native

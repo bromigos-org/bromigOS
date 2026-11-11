@@ -197,6 +197,38 @@ class Server(Rig):
         self.assertNotIn("80, 443", r.stdout)
         self.assertIn("no rule set 'nope'", r.stderr)
 
+    def test_the_labs_private_network_is_local_only_while_this_server_is_on_it(self):
+        """The carrier-grade NAT range is the lab network's, and some internet providers': it is
+        in the firewall's local network while tailscaled runs or its interface is there."""
+        lab = "100.64.0.0/10"
+        lan = lambda: next(x for x in self.run_server("firewall", "apply", "--print").stdout.splitlines()     # noqa: E731
+                           if x.startswith("add element inet bromigos-server lan {"))
+        (self.fake / "down").write_text("tailscaled.service\n")
+        self.assertEqual(lan(), "add element inet bromigos-server lan { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }")
+        (self.root / "sys/class/net/tailscale0").mkdir(parents=True)          # its interface is there
+        self.assertIn(lab, lan())
+        (self.root / "sys/class/net/tailscale0").rmdir()
+        self.assertNotIn(lab, lan())
+        (self.fake / "down").write_text("")                                    # its service runs
+        self.assertIn(lab, lan())
+        # the firewall is loaded again when that service starts and stops, and only if it's on
+        conf = (HERE / "systemd" / "tailscaled-bromigos.conf").read_text()
+        for line in ("ExecStartPost=-/usr/bin/systemctl reload --no-block bromigos-server-firewall.service",
+                     "ExecStopPost=-/usr/bin/systemctl reload --no-block bromigos-server-firewall.service"):
+            self.assertIn(line, conf)
+        self.assertIn("ExecReload=/usr/lib/bromigos/server/bromigos-server firewall apply",
+                      (HERE / "systemd" / "bromigos-server-firewall.service").read_text())
+        pkg = (HERE.parent / "packaging" / "bromigos-server" / "PKGBUILD").read_text()
+        self.assertRegex(pkg, r"for unit in [^\n]*\btailscaled\.service\b")
+
+    def test_the_roles_that_get_the_servers_own_page_open_the_web_ports_to_the_local_network(self):
+        import tomllib
+        for role in ("home-services", "media", "storage", "game-server"):
+            doc = tomllib.loads((HERE / "roles" / f"{role}.toml").read_text())
+            self.assertIn("web-lan", doc["firewall"], role)
+            self.assertNotIn("web", doc["firewall"], role)                    # never the set that is open to everyone
+        self.assertIn("ip saddr @lan tcp dport { 80, 443 }", (HERE / "allow-web-lan.nft").read_text())
+
     def test_allow_and_deny_rewrite_only_the_list(self):
         self.config("# mine\n[ssh]\npassword = false\n\n[firewall]\ntcp = [8080]\n")
         self.assertEqual(self.run_server("firewall", "allow", "web").returncode, 0)

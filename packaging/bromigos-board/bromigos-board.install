@@ -12,7 +12,16 @@ post_upgrade() {
   systemctl try-restart bromigos-board.service >/dev/null 2>&1 || true
 }
 
+# Removing it: its units stop, and its site comes out of Caddy first. The site imports a file of
+# this package's (/usr/share/bromigos-board/caddy/site.caddy): left behind, Caddy would refuse
+# its whole configuration at its next start, and every app's page with it. The sessions end too:
+# they'd be good for 30 days if the package came back.
 pre_remove() {
   systemctl disable --now bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path \
     bromigos-board-snapshot.service >/dev/null 2>&1 || true
+  if [ -e etc/caddy/conf.d/bromigos-board.caddy ]; then
+    rm -f etc/caddy/conf.d/bromigos-board.caddy
+    systemctl reload caddy.service >/dev/null 2>&1 || true
+  fi
+  rm -f var/lib/bromigos-board/sessions/*.json var/lib/bromigos-board/codes/*.json 2>/dev/null || true
 }

@@ -49,7 +49,7 @@ TARGETS = {
 REFERENCE = REPO / "tools/docs/manual-reference.toml"
 
 # The directories whose bromigos-* executables the packages install as commands.
-COMMAND_DIRS = ["bin", "desktop/bin", "desktop/settings", "homelab/bin", "live/bin", "apps/bin", "widgets"]
+COMMAND_DIRS = ["bin", "desktop/bin", "desktop/settings", "homelab/bin", "live/bin", "apps/bin", "widgets", "server"]
 
 # Packages built in another repository that the meta-package pulls in.
 ELSEWHERE = {
@@ -187,14 +187,16 @@ def _anchor(heading):
 def _sentence(text):
     """The code's summary as a sentence of Markdown (its <placeholders> as text, not HTML)."""
     text = html.escape(text.strip(), quote=False)
-    return text[:1].upper() + text[1:] + ("" if text.endswith((".", "!", "?")) else ".") if text else ""
+    # (bromigOS keeps its small b, even first in a sentence: docs/WRITING.md)
+    first = text[:1] if text.startswith("bromigOS") else text[:1].upper()
+    return first + text[1:] + ("" if text.endswith((".", "!", "?")) else ".") if text else ""
 
 
 def _package_of(command):
     for d, pkg in (("bin", "bromigos-core"), ("desktop/bin", "bromigos-desktop"),
                    ("desktop/settings", "bromigos-desktop"),
                    ("homelab/bin", "bromigos-homelab"), ("live/bin", "bromigos-live"),
-                   ("apps/bin", "bromigos-apps"), ("widgets", "bromigos-widgets")):
+                   ("apps/bin", "bromigos-apps"), ("widgets", "bromigos-widgets"), ("server", "bromigos-server")):
         if (REPO / d / command).exists():
             return pkg
     return "?"

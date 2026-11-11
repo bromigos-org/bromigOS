@@ -1,10 +1,11 @@
 """The board's one reader (docs/board.md, "Where the readings come from").
 
 Root runs it (bromigos-board-snapshot.service, started by bromigos-board-snapshot.path when the
-service touches /run/bromigos-board/wanted). It runs the commands that already say these things
-with --json, every 15 seconds while a browser is connected, and writes what they said to
-/run/bromigos-board/board.json, readable by the service's group only. When nobody has looked for
-45 seconds it stops. The service never runs a command itself.
+API marks /run/bromigos-board/wanted or /run/bromigos-board/door). It runs the commands that
+already say these things with --json and writes what they said to /run/bromigos-board/board.json,
+readable by the board's group only: every 15 seconds while a signed-in browser is connected
+(`wanted` is fresh), once when only the door asked. When nobody has looked for 45 seconds it
+stops. The API never runs a command itself, and can't write in that folder: it is root's.
 
 A command that isn't there, fails or doesn't print JSON is noted in `sources` with why, and its
 part of the board is null: the page says "can't check" rather than guessing.
@@ -36,27 +37,77 @@ IDLE_S = 45                     # nobody looked for this long: stop
 TIMEOUT_S = 60
 NOT_ON_DOOR = ("board", "start-page")     # the page itself, and the one it replaces
 
-# a value under one of these names is never written, whatever command printed it: the board
-# shows no secret (DESIGN §1, "What it must never expose"). true/false and numbers stay
-# ("passwords": false says whether SSH takes passwords; it holds none).
-SECRET_NAME = re.compile(r"(pass(word|wd|phrase)?s?|secret|token|api[-_]?key|apikey|private[-_]?key|access[-_]?key"
-                         r"|recovery|join[-_]?code|bundle|unseal|credential)", re.I)
+# The filter. The board is the second line here, not the first: the commands it runs don't
+# print secrets, and only signed-in browsers see what it writes. This catches what a command
+# printed anyway, as well as it can (docs/board.md, "Where the readings come from"):
+#
+# - a value under a name that says it's a secret is dropped, unless it's true, false or null
+#   ("passwords": false says whether SSH takes passwords; it holds none);
+# - {"name": "<a secret's name>", "value": …} loses its value;
+# - every piece of text, a command's error line included, loses a user:password@ in an address
+#   and goes through the activity records' own filter (bromigos_activity.redact: NAME=value, a
+#   secret in a link's query, tokens by their shape); an option that names a secret takes the
+#   next word with it.
+SECRET_WORDS = frozenset("""pass password passwords passwd passphrase passphrases pwd secret secrets token tokens key keys
+    apikey authkey psk pin otp totp seed cookie cookies credential credentials recovery unseal bundle bearer
+    authorization""".split())
+# "code" is a secret after one of these (join_code), and not otherwise (exit_code, an error's code)
+CODE_OF = frozenset("join recovery pairing pair auth device user unseal backup otp invite access signin sign".split())
 USERINFO = re.compile(r"\b([a-z][a-z0-9+.-]*://)[^/@\s]+@", re.I)
+OPTION = re.compile(r"(?<![\w-])(--?[\w-]*)(\s+)(?!-)(\S+)")
+WORD = re.compile(r"[A-Za-z][a-z]*|[A-Z]+(?![a-z])|[0-9]+")
+DRIVE_KEY = re.compile(r"[a-z0-9][a-z0-9._:-]{0,95}\Z")
 
 
-def scrub(doc):
-    """doc without any value whose name says it's a secret, and with no user:password@ in a URL."""
+def secret_name(name):
+    """Whether a field's name says its value is a secret."""
+    words = [w.lower() for w in WORD.findall(str(name))]
+    if any(w in SECRET_WORDS for w in words) or "".join(words) in SECRET_WORDS:
+        return True
+    return any(w in ("code", "codes") and i and words[i - 1] in CODE_OF for i, w in enumerate(words))
+
+
+def _redact():
+    try:
+        import bromigos_activity
+        return bromigos_activity.redact
+    except Exception:          # no bromigos-core beside it: the rules here only
+        return lambda text: text
+
+
+def scrub_text(text, redact=None):
+    text = USERINFO.sub(r"\1", text)
+    text = OPTION.sub(lambda m: f"{m.group(1)}{m.group(2)}***" if secret_name(m.group(1)) else m.group(0), text)
+    return (redact or _redact())(text)
+
+
+def scrub(doc, parent=None, redact=None):
+    """doc without what looks like a secret (the rules above). `parent`: the name doc is under."""
+    redact = redact or _redact()
     if isinstance(doc, dict):
+        named = doc.get("name") if isinstance(doc.get("name"), str) and secret_name(doc["name"]) else None
         out = {}
         for k, v in doc.items():
-            if SECRET_NAME.search(str(k)) and not isinstance(v, (bool, int, float)) and v is not None:
+            if parent == "drives" and k == "key" and isinstance(v, str) and DRIVE_KEY.match(v):
+                out[k] = v                    # a drive's own id in the drive reports, not a key that opens anything
                 continue
-            out[k] = scrub(v)
+            if (secret_name(k) or (named and k == "value")) and v is not None and not isinstance(v, bool):
+                continue
+            out[k] = scrub(v, k, redact)
         return out
     if isinstance(doc, list):
-        return [scrub(v) for v in doc]
+        out, hide = [], False
+        for v in doc:
+            if isinstance(v, str):
+                # ["--password", "x"]: an option that names a secret takes the next word with it
+                out.append("***" if hide and not v.startswith("-") else scrub_text(v, redact))
+                hide = v.startswith("-") and "=" not in v and secret_name(v)
+            else:
+                out.append(scrub(v, parent, redact))
+                hide = False
+        return out
     if isinstance(doc, str):
-        return USERINFO.sub(r"\1", doc)
+        return scrub_text(doc, redact)
     return doc
 
 
@@ -64,7 +115,10 @@ def run_source(argv, timeout=TIMEOUT_S, env=None):
     """(document or None, {ok, rc, at, command, why})."""
     started = paths.now_ms()
     note = {"command": argv, "at": started}
-    exe = shutil.which(argv[0], path=(env or os.environ).get("PATH"))
+    # on a server the command's whole path, never a name looked up in PATH (paths.tool)
+    exe = paths.tool(argv[0])
+    exe = exe if os.path.isabs(exe) and os.access(exe, os.X_OK) else \
+        shutil.which(exe, path=(env or os.environ).get("PATH")) if not os.path.isabs(exe) else None
     if not exe:
         return None, dict(note, ok=False, rc=127, why=f"{argv[0]} isn't installed")
     try:
@@ -73,14 +127,16 @@ def run_source(argv, timeout=TIMEOUT_S, env=None):
     except subprocess.TimeoutExpired:
         return None, dict(note, ok=False, rc=124, why=f"no answer in {timeout} seconds")
     except OSError as e:
-        return None, dict(note, ok=False, rc=126, why=str(e)[:200])
+        return None, dict(note, ok=False, rc=126, why=scrub_text(str(e))[:200])
     try:
         doc = json.loads(r.stdout)
     except ValueError:
         doc = None
     if doc is None:
         last = next((x.strip() for x in reversed((r.stderr or r.stdout or "").splitlines()) if x.strip()), "")
-        return None, dict(note, ok=False, rc=r.returncode, why=(last or f"it ended with {r.returncode} and printed no JSON")[:200])
+        # the command's own last line, through the filter like everything else it said
+        return None, dict(note, ok=False, rc=r.returncode,
+                          why=scrub_text(last or f"it ended with {r.returncode} and printed no JSON")[:200])
     # a command that found a problem still answered: exit 1 with its JSON is a reading
     return doc, dict(note, ok=True, rc=r.returncode)
 
@@ -119,7 +175,7 @@ def gather(env=None):
         futures = {name: pool.submit(run_source, argv, TIMEOUT_S, env) for name, argv in SOURCES}
         for name, _ in SOURCES:
             part, note = futures[name].result()
-            doc[name] = scrub(part)
+            doc[name] = scrub(part, name)
             doc["sources"][name] = note
     if doc["apps"] is None:
         doc["door_fallback"] = door_fallback(host)
@@ -128,7 +184,7 @@ def gather(env=None):
 
 
 def board_gid():
-    if paths.root() != "/":
+    if paths.stand_in():
         return None
     try:
         return grp.getgrnam(paths.USER).gr_gid
@@ -137,6 +193,9 @@ def board_gid():
 
 
 def write(doc):
+    """board.json, for the board's group to read. The folder is root's (tmpfiles:
+    /run/bromigos-board, root:bromigos-board 0750), so nobody else can put anything in root's
+    way there; paths.write_json wouldn't follow it if someone had."""
     paths.write_json(paths.at(paths.SNAPSHOT), doc, mode=0o640, group=board_gid())
 
 

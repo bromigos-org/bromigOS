@@ -1,7 +1,14 @@
-# The Lab board (docs/board.md). /run/bromigos-board: the snapshot root writes for the service
-# (board.json, group bromigos-board, 0640) and the file the service touches while a browser is
-# connected. /var/lib/bromigos-board: the service's own sessions and console codes.
-d /run/bromigos-board 0750 bromigos-board bromigos-board -
+# The Lab board (docs/board.md). Two users work here, and root never writes where the board's
+# user can:
+#
+# /run/bromigos-board is root's; the board's user (the API) only reads it. Root's reader writes
+# board.json there (group bromigos-board, 0640). `wanted` and `door` are made here, by root: the
+# API marks them (it can't make a file in this folder) to ask the reader for readings.
+d /run/bromigos-board 0750 root bromigos-board -
+f /run/bromigos-board/wanted 0660 root bromigos-board -
+f /run/bromigos-board/door 0660 root bromigos-board -
+# /var/lib/bromigos-board is the board's user's own: sessions and sign-in codes. Root works in
+# it only after it has become that user (bromigos server board code, sessions).
 d /var/lib/bromigos-board 0700 bromigos-board bromigos-board -
 d /var/lib/bromigos-board/sessions 0700 bromigos-board bromigos-board -
 d /var/lib/bromigos-board/codes 0700 bromigos-board bromigos-board -

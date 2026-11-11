@@ -1,12 +1,14 @@
-# The Lab board's reader (docs/board.md): the API touches /run/bromigos-board/wanted while a
-# browser is connected; this starts the snapshot, which reads every 15 seconds until nobody has
-# looked for 45.
+# The Lab board's reader (docs/board.md). The API marks one of two files that tmpfiles made in
+# root's folder, and this starts the reader: `wanted` while a signed-in browser is connected (it
+# then reads every 15 seconds until nobody has looked for 45), `door` when the door's tiles are
+# a few minutes old (one reading).
 [Unit]
-Description=bromigOS Lab board: read the server while a browser is connected
+Description=bromigOS Lab board: read the server when the page asks
 Documentation=file:///usr/share/doc/bromigos-board/board.md
 
 [Path]
 PathModified=/run/bromigos-board/wanted
+PathModified=/run/bromigos-board/door
 Unit=bromigos-board-snapshot.service
 
 [Install]
