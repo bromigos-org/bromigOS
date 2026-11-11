@@ -51,6 +51,8 @@ export interface Browser {
   name: string;
   signed_in_at: number | null;
   last_seen_at: number | null;
+  /** When its sign-in ends by itself. */
+  expires_at: number | null;
   current: boolean;
 }
 

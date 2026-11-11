@@ -46,6 +46,9 @@ export class Service {
   activity: Live | string | Other | (() => Live | string | Other) = live("activity_healthy");
   vitals: unknown = NOT_FOUND;
   actions: unknown = NOT_FOUND;
+  /** The signed-in browsers, when a test needs more than the real answer's one. The service's
+   *  own rules are kept: ending one answers the new list, an unknown id its real 404. */
+  browsers: { id: string; current: boolean }[] | null = null;
   /** Milliseconds /api/session waits before answering. */
   sessionDelay = 0;
   seen: Seen[] = [];
@@ -91,6 +94,7 @@ export class Service {
     if (path === "/api/session" || path.startsWith("/api/session/")) {
       if (method === "GET") {
         if (this.sessionDelay) await new Promise((r) => setTimeout(r, this.sessionDelay));
+        if (this.signedIn && this.browsers) return this.send(route, { ...copy(real.http.session_signed_in.body), browsers: this.browsers });
         return this.real(route, this.signedIn ? "session_signed_in" : "session_signed_out");
       }
       // as the service: every request that changes something carries the header and a JSON body
@@ -100,6 +104,14 @@ export class Service {
         if (JSON.parse(q.postData() ?? "{}").code !== CODE) return this.real(route, "signin_wrong_code");
         this.signedIn = true;
         return this.real(route, "signin");
+      }
+      // DELETE /api/session/ID: another browser's id ends that one and answers the new list; an
+      // id nobody has is the service's 404; this browser's own id signs it out, as below
+      const id = path.startsWith("/api/session/") ? path.slice("/api/session/".length) : null;
+      if (id && this.browsers && !this.browsers.some((b) => b.id === id && b.current)) {
+        if (!this.browsers.some((b) => b.id === id)) return this.real(route, "signout_other_unknown");
+        this.browsers = this.browsers.filter((b) => b.id !== id);
+        return this.send(route, { ...copy(real.http.session_signed_in.body), browsers: this.browsers });
       }
       this.signedIn = false;
       return this.real(route, "signout");

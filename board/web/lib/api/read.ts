@@ -53,7 +53,7 @@ export function readDoor(doc: unknown): Door {
 function browser(o: Obj): Browser | null {
   const id = str(o.id);
   if (!id) return null;
-  return { id, name: str(o.name, "A browser"), signed_in_at: num(o.signed_in_at), last_seen_at: num(o.last_seen_at), current: bool(o.current) };
+  return { id, name: str(o.name, "A browser"), signed_in_at: num(o.signed_in_at), last_seen_at: num(o.last_seen_at), expires_at: num(o.expires_at), current: bool(o.current) };
 }
 
 export function readSession(doc: unknown): Session {
