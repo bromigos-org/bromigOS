@@ -71,9 +71,9 @@ export const TABS: Partial<Record<Place, Tab[]>> = {
     { id: "reports", label: "Reports", hint: "Reports: the weekly lab report, sent to BRODEC. Planned.", planned: true },
   ],
   settings: [
-    { id: "lab", label: "Lab", hint: "Lab: its name, its home and its address. Planned.", planned: true },
+    { id: "lab", label: "Lab", hint: "Lab: its name and address, the door, the world, and what this page may do" },
     { id: "", label: "Notifications", hint: "Notifications: where alerts go, quiet hours, and what raises them" },
-    { id: "mascot", label: "Mascot", hint: "Mascot: when STATIC shows up, and quieting him" },
+    { id: "mascot", label: "Mascot", hint: "Mascot: STATIC on, quiet or off, and the command that sets him" },
     { id: "power", label: "Power", hint: "Power: the battery backup and the shutdown order, price per kWh, sleep and quiet hours. Planned.", planned: true },
     { id: "recovery", label: "Recovery", hint: "Recovery: the rebuild kit and the recovery sheet. Planned.", planned: true },
     { id: "about", label: "About", hint: "About: versions, licences, what stays free. Planned.", planned: true },
