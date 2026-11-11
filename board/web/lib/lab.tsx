@@ -228,6 +228,14 @@ export function LabProvider({ children }: { children: ReactNode }) {
   }, [route]);
 
   const doc = board.state === "ok" ? board.doc : null;
+  // every job the page knows: the stream's, and the ones the board's own list has that the stream
+  // doesn't (or has older); a record with the later change wins
+  const listed = doc?.jobs ?? null;
+  const everyJob = useMemo(() => {
+    const by = new Map((listed ?? []).map((j) => [j.id, j]));
+    for (const j of jobs) if (!by.has(j.id) || j.updated_at >= by.get(j.id)!.updated_at) by.set(j.id, j);
+    return [...by.values()].sort(byNewest);
+  }, [jobs, listed]);
   const stale = !!doc && (doc.stale || (now() - doc.at) / 1000 > doc.max_age_s);
 
   const lab: Lab = {
@@ -237,8 +245,8 @@ export function LabProvider({ children }: { children: ReactNode }) {
     lost,
     stale,
     settling,
-    jobs,
-    jobsKnown,
+    jobs: everyJob,
+    jobsKnown: jobsKnown || listed !== null,
     live,
     route,
     scope,

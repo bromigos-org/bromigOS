@@ -101,7 +101,8 @@ const moved = (over, steps) => ({ ...run, ...over, steps: run.steps.map((s) => (
 // the example server also carries a backup drive away (a real answer's backups, with the Go Bag)
 const healthy = { ...board("healthy"), backups: real.boards.backups_gobag.backups };
 const needs = board("needs_you");
-const alertOnly = { ...needs, needs_you: needs.needs_you.filter((n) => !n.job), status: { ...needs.status, words: "1 thing needs you." } };
+// no job asks here: the board's own list of jobs is the healthy one's, as its stream's is
+const alertOnly = { ...needs, needs_you: needs.needs_you.filter((n) => !n.job), status: { ...needs.status, words: "1 thing needs you." }, activity: board("healthy").activity };
 const cantRead = { ...board("healthy", { measured: false }), apps: null, storage: null, backups: null, updates: null, ups: null, system: null,
   sources: { ...real.boards.healthy.sources, ...Object.fromEntries(["apps", "storage", "backups", "system"].map((k) => [k, real.boards[`${k}_missing`].sources[k]])) } };
 cantRead.machines = cantRead.machines.map((m) => ({ ...m, apps: null }));

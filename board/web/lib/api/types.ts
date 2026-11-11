@@ -234,6 +234,9 @@ export interface Board {
   machines: Machine[];
   needs_you: NeedsYou[];
   fixed: Fixed[];
+  /** The jobs as `bromigos activity list` printed them when the board was read (the stream has
+   *  them live); null when that list couldn't be read. */
+  jobs: JobRecord[] | null;
   /** Every catalogue item, installed or not; null when the apps list couldn't be read. */
   apps: Tile[] | null;
   storage: DriveHealth | null;
@@ -299,6 +302,16 @@ export interface JobRecord {
   error: { step: string | null; words: string; fix: string | null } | null;
   parent: string | null;
   children: string[];
+  /** What the job said along the way, oldest first. */
+  notes: { words: string; at: number | null }[];
+  /** What the record says may be done to it now: answer, cancel, retry. */
+  can: string[];
+  /** Why stopping it now isn't safe, when it says. */
+  cancel_note: string | null;
+  /** For looking closer at the server: the command it runs, its unit and its log file. */
+  command: string[];
+  unit: string | null;
+  log: string | null;
 }
 
 export const FINAL_STATES: JobState[] = ["succeeded", "failed", "rolled-back", "cancelled", "interrupted"];

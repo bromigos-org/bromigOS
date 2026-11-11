@@ -1,0 +1,10 @@
+/* Activity: the readings over the list, the groups of jobs, and a job's closer look */
+.ac-rd { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ac-group .job + .job { margin-top: 8px; }
+.ac-group > .small { margin: 0; }
+.job-closer { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule); display: grid; gap: 8px; }
+.job-closer p { margin: 0; max-width: none; }
+.job-closer pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }
+.job-closer details.depth { margin-top: 0; border-top: 0; padding-top: 0; }
+.job-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; color: var(--text); }
+@container view (max-width: 860px) { .ac-rd { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
