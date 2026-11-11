@@ -332,7 +332,7 @@ From the `bromigos-core` package.
 What on this computer needs you: failing drives, full disks, updates, backups, failed services, the UPS; the checks behind your phone's alerts.
 
 ```text
-bromigos alerts [--json] | check [--system|--user] [--boot] [--only CHECK] [--json] | notify | checks [--json]
+bromigos alerts [--json] | check [--system|--user] [--boot] [--only CHECK] [--json] | notify | checks [--json] | channels [list] [--json] | channels add discord|webhook [NAME] [--detail minimal|full] [--severity LIST] [--sources LIST] [--quiet HH:MM-HH:MM] [--critical-in-quiet] [--resolved] [--per-hour N] [--off] | channels remove NAME | channels test NAME [--json] | channels send [--json]
 ```
 
 For example:
@@ -342,6 +342,9 @@ bromigos alerts
 bromigos alerts --json
 sudo bromigos alerts check --system
 bromigos alerts checks
+bromigos alerts channels
+sudo bromigos alerts channels add discord
+sudo bromigos alerts channels test discord
 ```
 
 From the `bromigos-core` package.

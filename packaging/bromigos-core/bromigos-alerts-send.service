@@ -1,0 +1,18 @@
+# Alerts to the channels you set up (docs/alerts.md, "Channels"): Discord, a signed webhook.
+# Started without waiting by bromigos-alerts.service and bromigos-alerts-boot.service after each
+# pass, and by an activity job that ends or asks when a channel takes job results, so a slow
+# or unreachable channel never holds up the checks. With no channel set up it sends nothing.
+[Unit]
+Description=bromigOS alerts: send to the channels you set up
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-alerts channels send
+TimeoutStartSec=5min
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes

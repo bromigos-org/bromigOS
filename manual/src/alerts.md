@@ -59,6 +59,36 @@ Nothing runs until you approve it with your fingerprint.
 
 When the problem goes away, the alert clears by itself.
 
+## On Discord, or anywhere else
+
+bromigOS can post alerts to a Discord channel. In Discord, open the channel's **Edit Channel
+› Integrations › Webhooks**, make a webhook and **Copy Webhook URL**. Then:
+
+```bash
+sudo bromigos alerts channels add discord
+```
+
+Paste the address when it asks. It doesn't show, and it's kept where only root can read it.
+Then `sudo bromigos alerts channels test discord` posts a message marked TEST.
+
+- **Short by default.** A Discord message says only "1 alert needs you on your lab", because
+  other people can often read a Discord server. Add `--detail full` for the machine's name,
+  the drive and the command that fixes it. Passwords, keys and home network addresses are
+  never sent.
+- **Read only.** You can't act on an alert from Discord. Use BRODEC on your phone, or the Lab
+  board.
+- **Choose what it gets.** `--severity critical` for critical alerts only, `--sources
+  drives,backups` for some kinds, `--quiet 22:00-07:00` to keep the night quiet,
+  `--resolved` to hear when a problem clears. `--sources alerts,job-results` adds each long
+  job that finishes, fails or asks you something.
+
+A webhook does the same for your own tools, such as Home Assistant:
+`sudo bromigos alerts channels add webhook home`. Each one is signed, so your tool can tell it
+came from your computer. `bromigos alerts channels` lists every channel, and `sudo bromigos
+alerts channels remove discord` stops one. The
+[alerts docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md#channels-discord-and-webhooks)
+have every setting and the webhook's format.
+
 ## Turn them off
 
 - Your own checks and the notifications:

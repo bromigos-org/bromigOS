@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=What on this computer needs you: failing drives, full disks, updates, backups, failed services, the UPS; the checks behind your phone's alerts
-# bromigos:args=[--json] | check [--system|--user] [--boot] [--only CHECK] [--json] | notify | checks [--json]
-# bromigos:examples=bromigos alerts; bromigos alerts --json; sudo bromigos alerts check --system; bromigos alerts checks
+# bromigos:args=[--json] | check [--system|--user] [--boot] [--only CHECK] [--json] | notify | checks [--json] | channels [list] [--json] | channels add discord|webhook [NAME] [--detail minimal|full] [--severity LIST] [--sources LIST] [--quiet HH:MM-HH:MM] [--critical-in-quiet] [--resolved] [--per-hour N] [--off] | channels remove NAME | channels test NAME [--json] | channels send [--json]
+# bromigos:examples=bromigos alerts; bromigos alerts --json; sudo bromigos alerts check --system; bromigos alerts checks; bromigos alerts channels; sudo bromigos alerts channels add discord; sudo bromigos alerts channels test discord
 """bromigos-alerts (`bromigos alerts`): what on this computer needs you (docs/alerts.md).
 
   bromigos alerts [--json]          the alerts now, worst first (the system checks and yours)
@@ -16,13 +16,35 @@
       --json                        print the document it wrote
   bromigos alerts notify            show what needs you as desktop notifications, once each
   bromigos alerts checks [--json]   each check: when it ran, and why one couldn't
+  bromigos alerts channels [list]   where alerts go besides this desktop: Discord, a webhook,
+                                    BRODEC's paired phone; addresses only as "set" or "not set"
+  sudo bromigos alerts channels add discord|webhook [NAME]
+                                    a channel; its address (and a webhook's signing key) is
+                                    read from standard input, never typed as an argument
+      --detail minimal|full         minimal: "1 alert needs you on your lab" (Discord's
+                                    default: a server can be shared); full: the machine,
+                                    the device and the fix command (a webhook's default)
+      --severity LIST               critical,needs_you (default) or with info
+      --sources LIST                alerts (every alert, the default), or some of: drives,
+                                    disk-space, updates, backups, go-bag, power, services,
+                                    game-servers, app-data, field-kit, steam, failed-jobs,
+                                    custom, other; and opt-in job-results, catalogue
+      --quiet HH:MM-HH:MM           hold messages in these hours (local time)
+      --critical-in-quiet           critical alerts still go in quiet hours
+      --resolved                    a message when an alert clears too
+      --per-hour N                  at most N messages an hour (default 10)
+      --off                         set up, but sending nothing
+  sudo bromigos alerts channels remove NAME
+  sudo bromigos alerts channels test NAME     a message marked TEST
+  sudo bromigos alerts channels send          send what is due now (bromigos-alerts-send.service)
 
 Timers run it for you: bromigos-alerts.timer (system, every 15 minutes, and after each boot)
 and bromigos-alerts-user.timer (yours, every 30 minutes). BRODEC's machine agent reads the
 same files and sends the alerts, end-to-end encrypted, to your phone.
 
 Exit status: 0, or 1 when something needs you (`bromigos alerts` with a needs-you or critical
-alert), 2 for a wrong command.
+alert) or a channel didn't take a message (`channels test`, `channels send`), 2 for a wrong
+command, 3 when it couldn't try (not root, no such channel, its address isn't set).
 """
 import json
 import os
@@ -34,6 +56,7 @@ for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), "/usr/lib
         sys.path.insert(0, candidate)
 
 import bromigos_alerts as A  # noqa: E402
+import bromigos_notify as N  # noqa: E402
 
 USAGE = __doc__.split("\n\n", 1)[1]
 
@@ -52,6 +75,8 @@ def main(argv):
         if rest:
             return usage()
         doc = A.read_merged(env)
+        if js:
+            doc["channels"] = N.document(env)
         print(json.dumps(doc, indent=1) if js else A.plain(doc, env.now_ms()))
         return 1 if any(a["severity"] != "info" for a in doc["alerts"]) else 0
     if verb == "check":
@@ -103,6 +128,161 @@ def main(argv):
             note = f": {c['error']}" if c.get("error") else ""
             print(f"  {c['check']:<18} {c['scope']:<6} {c['state']:<8} {when}{note}")
         return 0
+    if verb == "channels":
+        return channels(env, rest, js)
+    return usage()
+
+
+# ------------------------------------------------------------------ channels
+
+def need_root(env, what):
+    if env.is_root() or env.stand_in:
+        return False
+    print(f"bromigos alerts channels: {what} reads or writes the channels' addresses, which only root may: "
+          f"sudo bromigos alerts channels {what}", file=sys.stderr)
+    return True
+
+
+def when(env, ms):
+    return A.ago(env.now_ms() - int(ms)) if ms else "never"
+
+
+def read_hidden(prompt):
+    """One line from standard input, not echoed when it's a terminal: an address never reaches
+    the shell's history or another process's argv."""
+    if sys.stdin.isatty():
+        import getpass
+        return getpass.getpass(prompt)
+    return sys.stdin.readline().strip()
+
+
+def channels(env, rest, js):
+    sub = rest.pop(0) if rest else "list"
+    if sub == "list":
+        if rest:
+            return usage()
+        doc = N.document(env)
+        if js:
+            print(json.dumps(doc, indent=1))
+            return 0
+        own = [r for r in doc["channels"] if not r["read_only"]]
+        print("Where alerts go, besides this computer's own notification:")
+        for r in doc["channels"]:
+            if r["read_only"]:
+                print(f"  {'brodec':<10} {r['label']:<22} " + ("on: its own rules, set on the phone" if r["on"]
+                                                               else "not on this computer (pair a phone in BRODEC)"))
+                continue
+            sev = ", ".join(A.WORDS[s].lower() for s in r["severities"]) or "nothing"
+            src = "all alerts" if r["sources"] == ["alerts"] else ", ".join(r["sources"]) or "nothing"
+            print(f"  {r['name']:<10} {r['label']:<22} {'on' if r['on'] else 'off'}, {r['detail']}: {sev}; {src}")
+            extra = [f"address {r['address'] if r['address'] != 'unknown' else 'set? (sudo shows)'}"]
+            if r["key"] is not None:
+                extra.append(f"signing key {r['key'] if r['key'] != 'unknown' else 'set? (sudo shows)'}")
+            if r["quiet"]:
+                extra.append(f"quiet {r['quiet']}" + (" (critical still goes)" if r["critical_in_quiet"] else ""))
+            extra.append(f"last sent {when(env, r['last_ok'])}")
+            print(f"  {'':<33} " + "; ".join(extra))
+            if r["last_error"]:
+                print(f"  {'':<33} last problem {when(env, r['last_error']['at'])}: {r['last_error']['why']}")
+            for p in r["problems"]:
+                print(f"  {'':<33} setting not used: {p}")
+        if not own:
+            print("No channel yet. Add Discord: sudo bromigos alerts channels add discord")
+        if not doc["board"]:
+            print("The Lab board's address isn't set ([notify] board in /etc/bromigos/alerts.toml).")
+        return 0
+    if sub == "add":
+        if not rest or rest[0] not in N.TYPES:
+            return usage()
+        kind = rest.pop(0)
+        name = rest.pop(0) if rest and not rest[0].startswith("-") else kind
+        opts = {}
+        flags = {"--critical-in-quiet": ("critical_in_quiet", True), "--resolved": ("resolved", True),
+                 "--off": ("on", False)}
+        while rest:
+            a = rest.pop(0)
+            if a in flags:
+                opts[flags[a][0]] = flags[a][1]
+            elif a in ("--detail", "--severity", "--sources", "--quiet", "--per-hour") and rest:
+                v = rest.pop(0)
+                if a == "--detail":
+                    opts["detail"] = v
+                elif a == "--quiet":
+                    opts["quiet"] = v
+                elif a == "--per-hour":
+                    if not v.isdigit():
+                        return usage()
+                    opts["per_hour"] = int(v)
+                else:
+                    opts["severities" if a == "--severity" else "sources"] = [
+                        x.strip().replace("needs-you", "needs_you") for x in v.split(",") if x.strip()]
+            else:
+                return usage()
+        if need_root(env, f"add {kind}"):
+            return 3
+        what = "Discord webhook address" if kind == "discord" else "webhook address"
+        url = read_hidden(f"Paste the {what} (it won't show): ")
+        key = None
+        if kind == "webhook":
+            key = read_hidden("The key to sign with (Enter: make one): ") or None
+        try:
+            conf, made = N.add(env, kind, name, url, key, **opts)
+        except N.NotifyError as e:
+            print(f"bromigos alerts channels: {e}", file=sys.stderr)
+            return 2
+        if js:
+            print(json.dumps(next(r for r in N.rows(env) if r["name"] == conf["name"]), indent=1))
+            return 0
+        print(f"Added {conf['name']}: {conf['detail']} detail. Its address is kept for root only.")
+        if made:
+            print(f"A signing key was made for it. Your receiver needs it: "
+                  f"sudo cat {N.SECRET_DIR}/{conf['name']}.key")
+        print(f"Send a test: sudo bromigos alerts channels test {conf['name']}")
+        return 0
+    if sub == "remove":
+        if len(rest) != 1:
+            return usage()
+        if need_root(env, f"remove {rest[0]}"):
+            return 3
+        try:
+            N.remove(env, rest[0])
+        except N.NotifyError as e:
+            print(f"bromigos alerts channels: {e}", file=sys.stderr)
+            return 3
+        print(f"Removed {rest[0]}, with its address.")
+        return 0
+    if sub == "test":
+        if len(rest) != 1:
+            return usage()
+        if need_root(env, f"test {rest[0]}"):
+            return 3
+        try:
+            ok, why = N.test(env, rest[0])
+        except N.NotifyError as e:
+            print(f"bromigos alerts channels: {e}", file=sys.stderr)
+            return 3
+        if js:
+            print(json.dumps({"channel": rest[0], "ok": ok, "error": why}))
+        else:
+            print(f"Sent a test message to {rest[0]}." if ok else f"The test message didn't go: {why}.")
+        return 0 if ok else 1
+    if sub == "send":
+        if rest:
+            return usage()
+        if need_root(env, "send"):
+            return 3
+        report = N.deliver(env)
+        if js:
+            print(json.dumps(report, indent=1))
+        else:
+            for r in report:
+                line = f"{r['channel']}: {r['messages']} message(s), {r['events']} event(s)"
+                if r["held"]:
+                    line += f", {r['held']} held ({r['why_held'] or 'not sent'})"
+                if r["error"]:
+                    line += f"; problem: {r['error']}"
+                print(line)
+        return 1 if any(r["error"] for r in report) else 0
     return usage()
 
 

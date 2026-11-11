@@ -14,3 +14,5 @@ TimeoutStartSec=15min
 ProtectSystem=full
 ProtectHome=read-only
 PrivateTmp=yes
+# then the channels (Discord, a webhook), without waiting for them
+ExecStartPost=-/usr/bin/systemctl --no-block start bromigos-alerts-send.service

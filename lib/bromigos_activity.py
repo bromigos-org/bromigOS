@@ -521,6 +521,16 @@ def retry_spec(argv, cwd, cancel_safe=False):
     return {"argv": [exe, *argv[1:]], "cwd": cwd, "cancel_safe": bool(cancel_safe)}
 
 
+def _kick_notify(env, ended=False):
+    """A job that asks, or that ended (after raise_alert): the channels hear now, not at the
+    next alerts pass (bromigos_notify.kick; it does nothing when no channel takes it)."""
+    try:
+        import bromigos_notify
+    except ImportError:
+        return
+    bromigos_notify.kick(env.root, env.environ, ended=ended)
+
+
 class Job(Lines):
     """A job's record, and its only writer. Lines go in through feed(); every change is
     written whole and atomically. What another command wants of the job (an answer, a cancel,
@@ -538,6 +548,7 @@ class Job(Lines):
         self._wrote, self._dirty, self._lock = 0.0, False, None
         self.retry, self._cancel_safe = retry, bool(cancel_safe)     # retry: retry_spec()'s, or None
         self._held, self._answers, self._kids_read = [], None, 0
+        self._told = None                                                  # the question _kick_notify() last told
 
     # -- its files
     def open(self):
@@ -577,6 +588,10 @@ class Job(Lines):
         self.rec["can"] = can(self.rec, bool(self.retry))
         write_json(self.path, fit(self.rec), 0o644)
         self._wrote, self._dirty = time.monotonic(), False
+        asked = (self.rec.get("question") or {}).get("asked_at")
+        if self.rec["state"] == "needs-you" and asked and asked != self._told:
+            self._told = asked
+            _kick_notify(self.env)
 
     def flush(self):
         if self._dirty:
@@ -1263,6 +1278,7 @@ def raise_alert(env, rec):
             alerts.run_pass(aenv, "system", checks={ALERT_CHECK})
     except Exception:
         pass
+    _kick_notify(env, ended=True)                  # its result, and the alert just written, to the channels
 
 
 def needing_a_look(env):
