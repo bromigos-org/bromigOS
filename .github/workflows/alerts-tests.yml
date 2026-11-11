@@ -9,6 +9,7 @@ on:
     paths:
       - "lib/bromigos_alerts.py"
       - "lib/bromigos_alerts_checks.py"
+      - "lib/bromigos_notify.py"
       - "lib/bromigos_drives.py"
       - "lib/bromigos_backups.py"
       - "lib/bromigos_activity.py"

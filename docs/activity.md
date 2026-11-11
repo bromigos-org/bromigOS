@@ -340,6 +340,9 @@ the owner's phone.
   things back, so nothing needs you.
 - A parent with a failed child stays quiet. The child's alert says what went wrong.
 - The alert holds only what the record holds. It never quotes the log, which is root's.
+- Then the job starts the alerts' channels (Discord, a webhook) without waiting for them, so
+  the alert goes out at once ([Channels](alerts.md#channels-discord-and-webhooks)). A
+  channel can also take every job's result, failed, done or asking, with `job-results`.
 
 ## How a job runs
 

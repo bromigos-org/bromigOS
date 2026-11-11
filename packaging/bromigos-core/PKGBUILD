@@ -260,7 +260,7 @@ package() {
   # yours as you (every 30 minutes, and the notification): on for everyone, as shipped links
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-alerts
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$startdir"/bromigos-alerts.{service,timer} \
-    "$startdir"/bromigos-alerts-boot.{service,timer}
+    "$startdir"/bromigos-alerts-boot.{service,timer} "$startdir"/bromigos-alerts-send.service
   install -d "$pkgdir/usr/lib/systemd/system/timers.target.wants"
   ln -s ../bromigos-alerts.timer "$pkgdir/usr/lib/systemd/system/timers.target.wants/bromigos-alerts.timer"
   ln -s ../bromigos-alerts-boot.timer "$pkgdir/usr/lib/systemd/system/timers.target.wants/bromigos-alerts-boot.timer"

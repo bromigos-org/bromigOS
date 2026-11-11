@@ -6,6 +6,9 @@ finds to one file. The desktop shows it as a notification, `bromigos alerts` lis
 BRODEC's machine agent sends it to your phone, end-to-end encrypted, with buttons to act on
 it.
 
+It can also post them to a Discord channel, or to any address that takes a signed webhook
+([Channels](#channels-discord-and-webhooks)).
+
 bromigOS only finds and describes problems. It never fixes one by itself. On the phone, *Fix
 it* asks VECTOR, the desktop's AI assistant, for a plan, and nothing runs until you approve it
 (BRODEC's `docs/MACHINE_JOBS.md`).
@@ -57,6 +60,150 @@ system pass writes something new (`bromigos-alerts-notify.path`).
 - A run shows at most three notifications. When more are due, the third says "And 3 more
   alerts on this computer".
 - Nothing shows outside a desktop session or without `notify-send` (package `libnotify`).
+
+## Channels: Discord and webhooks
+
+A channel is somewhere else alerts go: a Discord channel, or a webhook, an address your own
+tool listens on (Home Assistant, n8n, a script). They are one-way. Acting on an alert happens
+in BRODEC or on the Lab board, never from Discord or a webhook.
+
+```bash
+sudo bromigos alerts channels add discord     # paste the Discord webhook address when asked
+sudo bromigos alerts channels test discord    # a message marked TEST
+bromigos alerts channels                      # each channel, and what it sends
+```
+
+To get a Discord webhook address: in Discord, open the channel's **Edit Channel ›
+Integrations › Webhooks › New Webhook**, then **Copy Webhook URL**. `add` asks for it and
+doesn't show it as you paste. It is never an argument, so it never reaches your shell's
+history or the process list.
+
+### What goes where
+
+Each channel picks:
+
+- **Severities.** `critical` and `needs_you` by default. `info` is there to add.
+- **Sources.** `alerts` (every alert, the default), or some of them: `drives` (`disk.smart`,
+  `disk.scrub`), `disk-space`, `updates`, `backups`, `go-bag`, `power`, `services`,
+  `game-servers`, `app-data`, `field-kit`, `steam`, `failed-jobs` (`activity.job`), `custom`
+  and `other`. Two more are only sent when you name them:
+  - `job-results`: each [long job](activity.md) that finished, failed, or asks a question;
+  - `catalogue`: new models waiting for review in the lab's model catalogue, after its weekly
+    refresh ([lab-models.md](lab-models.md)).
+- **Quiet hours,** such as `22:00-07:00` (this computer's time). What comes in them waits
+  until they end. A critical alert goes anyway only with `critical_in_quiet`.
+- **Detail,** below.
+
+### The rules
+
+The same as the desktop's, for each channel on its own:
+
+- One message when an alert opens, and one when it gets worse.
+- A critical alert again after 6 hours, while it lasts. A needs-you alert isn't repeated.
+- With `resolved`, a message when it clears. An alert that clears and comes back within 30
+  minutes doesn't send again, unless its "cleared" message went.
+- At most `per_hour` messages an hour (10). The rest wait for the hour to free up. Nothing
+  is dropped.
+- A message that doesn't go is tried again twice, 1 and 2 seconds apart (Discord's "too
+  many" answer is waited out, up to 10 seconds). Then the channel rests 1 minute, then 2, 4,
+  and so on up to an hour, and tries again with what is true then.
+
+Sending runs after each system pass in `bromigos-alerts-send.service`, which the pass starts
+without waiting for it. A slow or unreachable channel never holds up the checks, and one
+channel failing never stops another. An activity job that ends starts it at once, after its
+`activity.job` alert is written. One that asks a question does too, when a channel takes
+`job-results`. Channels send the system pass's alerts: the ones your
+own pass finds (updates waiting, Steam) stay on this desktop and your phone.
+
+### Detail and privacy
+
+| Detail | What a message says |
+|---|---|
+| `minimal` | Counts only: "1 alert needs you on your lab (1 critical)", "1 job on your lab failed", and the Lab board's address when `[notify] board` is set. No machine name, device, title or command |
+| `full` | Each alert's title and sentence, the machine's name, the device, since when, the fix command |
+
+A Discord channel is `minimal` unless you choose `full`, because a Discord server is often
+shared with friends, and Discord itself reads what is posted. A webhook is `full`: it goes
+to your own tool.
+
+Whatever the detail, these never leave the computer:
+
+- an alert's `evidence` (what the check read: log lines, a drive's records);
+- anything that looks like a password, token or key (the same net as [activity
+  records](activity.md));
+- LAN addresses (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`, `100.64-127.x.x`, `fc00::/7`,
+  `fe80::`), shown as `[address]`. The board's address is sent as you set it.
+
+Discord messages ping no one: `@everyone` in an alert's text stays plain text.
+
+### The commands
+
+```bash
+bromigos alerts channels [list] [--json]
+sudo bromigos alerts channels add discord [NAME] [--detail full] [--severity critical]
+sudo bromigos alerts channels add webhook NAME [--sources drives,backups,job-results]
+                                   [--quiet 22:00-07:00] [--critical-in-quiet] [--resolved]
+                                   [--per-hour N] [--off]
+sudo bromigos alerts channels test NAME [--json]
+sudo bromigos alerts channels remove NAME
+sudo bromigos alerts channels send [--json]     # what the service runs
+```
+
+- `add webhook` asks for the address, then for a key to sign with. Press Enter to have one
+  made; `sudo cat /etc/bromigos/alerts-channels/NAME.key` shows it, for your receiver.
+- `list` shows each address and key only as `set` or `not set` (`set?` without sudo, which
+  can't look). It also shows the last message sent and the last problem.
+- Exit status: 0; 1 when a channel didn't take a message (`test`, `send`); 2 for a wrong
+  command or setting; 3 when it couldn't try (not root, no such channel, no address).
+
+### BRODEC
+
+BRODEC's phone is a channel already, and the best one: its machine agent reads the alerts
+itself and sends them end-to-end encrypted, with Fix it, Restart now and Snooze
+([How BRODEC uses it](#how-brodec-uses-it)). `channels list` shows it as `brodec (paired
+phone)` when `brodec-machine` is on this computer, read-only: BRODEC's rules and quiet hours
+are set on the phone. A `[channels.brodec]` table's `severities`, `sources` and `quiet` are
+published in `--json` (`wanted`), but the agent doesn't apply them yet (`applied: false`).
+
+### The webhook
+
+A `POST` with `Content-Type: application/json`, one per send (at most 20 events). Headers:
+
+| Header | What it is |
+|---|---|
+| `X-Bromigos-Signature-256` | `sha256=` and the HMAC-SHA256 of the raw body, keyed with the channel's key, in hex |
+| `X-Bromigos-Event` | `alerts`, or `test` |
+| `X-Bromigos-Delivery` | A new id for each POST; the body's `delivery` |
+| `X-Bromigos-Schema` | `1` |
+
+Check the signature over the bytes as they came, before parsing them. A receiver in Python:
+
+```python
+import hashlib, hmac
+good = "sha256=" + hmac.new(key.encode(), body, hashlib.sha256).hexdigest()
+ok = hmac.compare_digest(good, request.headers["X-Bromigos-Signature-256"])
+```
+
+The body, schema 1 (full detail):
+
+```json
+{"schema": 1, "type": "bromigos.alerts", "test": false, "delivery": "3f9c…", "sent_at": 1793390400000,
+ "detail": "full", "machine": "myserver", "board": "https://myserver.local",
+ "summary": ["1 alert needs you on your lab (1 critical)"],
+ "events": [{"event": "alert.opened", "severity": "critical", "source": "drives",
+             "title": "A drive is failing: Samsung SSD 980 PRO 2TB (nvme0)", "sentence": "…",
+             "subject": "nvme0", "since": 1793386800000,
+             "fix": ["bromigos storage health nvme0", "sudo smartctl -a /dev/nvme0"],
+             "alert": {ALERT, without evidence}}]}
+```
+
+- `event` is `alert.opened`, `alert.worse`, `alert.reminder`, `alert.resolved`,
+  `job.succeeded`, `job.failed`, `job.needs-you`, `catalogue.review` or `test`.
+- A job's event has `job`: `id`, `kind`, `title`, `state`, and `question` (`text`,
+  `choices`) when it asks.
+- Minimal detail: `machine` is null, and each event is only `event`, `severity`, `source`,
+  `since` and `ref`, a stand-in for the alert's id that stays the same while it lasts.
+- A newer schema adds fields; one that changes or removes a field gets a new number.
 
 ## Drives
 
@@ -156,6 +303,7 @@ bromigos alerts check                    # run your checks now
 sudo bromigos alerts check --system --only disk.smart --json
 bromigos alerts checks                   # each check: when it ran, and why one couldn't
 bromigos alerts notify                   # the desktop notification, once each
+bromigos alerts channels                 # where else alerts go (Discord, webhooks)
 ```
 
 `bromigos alerts` exits with 1 when something needs you, so a script can use it.
@@ -172,7 +320,9 @@ bromigos alerts notify                   # the desktop notification, once each
 | `~/.local/state/bromigos/alerts/user.json` | your pass | 0600 |
 | `~/.local/state/bromigos/alerts/state.json` | your pass: when each alert was first seen | 0600 |
 | `~/.local/state/bromigos/alerts/notified.json` | `notify`: what the desktop showed, and when | 0600 |
-| `/etc/bromigos/alerts.toml` | you, with sudo: the settings | |
+| `/etc/bromigos/alerts.toml` | you, with sudo: the settings, and the channels (`channels add`) | 0644 |
+| `/etc/bromigos/alerts-channels/NAME.url`, `NAME.key` | `channels add`: a channel's address and a webhook's key | 0600, folder 0700, root's |
+| `/var/lib/bromigos/alerts/channels/NAME.json` | sending: what each channel was sent and when, the last hour's messages, its rest after a failure, the last problem in words. No address | 0644 |
 | `/etc/bromigos/alerts.d/`, `~/.config/bromigos/alerts.d/` | you: your own checks | |
 
 Each file is replaced atomically, so a reader never sees half of one. One pass of each kind
@@ -197,6 +347,10 @@ Both passes write the same shape:
     were.
 - An alert from a check that ran, and that isn't in the newest document, has cleared.
 - Times are milliseconds since 1970.
+- `bromigos alerts --json` adds `channels`, the same as `bromigos alerts channels --json`:
+  `board`, the `sources` and `severities` a channel can pick, the `opt_in` sources, and each
+  channel's settings, `address` and `key` as `set` or `not set`, `last_ok`, `last_error` and
+  `retry_at`. It is what the Lab board's Settings › Notifications reads.
 
 ### An alert
 
@@ -247,7 +401,24 @@ off = []                 # checks turned off, such as "game.steam"
 
 [game]
 units = []               # the services that are game servers, such as "valheim.service"
+
+[notify]
+board = ""               # the Lab board's address, put in each message: "https://myserver.local"
+
+[channels.discord]       # one table for each channel; `channels add` writes it
+type = "discord"         # discord or webhook
+on = true
+detail = "minimal"       # minimal or full (a webhook's default)
+severities = ["critical", "needs_you"]
+sources = ["alerts"]     # or some of them, and job-results, catalogue
+quiet = ""               # "22:00-07:00"
+critical_in_quiet = false
+resolved = false
+per_hour = 10
 ```
+
+A channel's setting that is wrong (an unknown source, quiet hours that don't read) stops that
+channel, and `bromigos alerts channels` says which.
 
 A full disk stays raised until it is 2 points under `full_percent`, so a disk hovering at the
 line doesn't alert again and again. `systemd.failed` leaves out transient and masked units,
@@ -295,13 +466,17 @@ alerts that need you, with limits so nothing spams. Its side is in BRODEC's
 - `lib/bromigos_alerts.py`: the passes, the document, custom checks and the notification.
 - `lib/bromigos_alerts_checks.py`: the checks.
 - `lib/bromigos_drives.py`: `disk.smart`'s history and verdicts, and `bromigos storage health`.
-- `packaging/bromigos-core/bromigos-alerts*.{service,timer,path}`: the units.
+- `lib/bromigos_notify.py`: the channels: their settings, what is due, the messages, sending.
+  Alerts, job results and the catalogue all go through it.
+- `packaging/bromigos-core/bromigos-alerts*.{service,timer,path}`: the units, with
+  `bromigos-alerts-send.service` for the channels.
 - `packaging/bromigos-core/zz-bromigos-alerts.hook`: the boot pass again after a kernel or a
   graphics driver changes.
 - `tests/alerts/`: every check against stand-in commands in a stand-in root (`fake.py`).
   Nothing real is read, and no notification shows. `python3 tests/alerts/fake.py DIR` writes
   documents with an alert of every kind, for BRODEC's tests. `test_drive_health.py` moves a
-  clock over the drives in `tests/alerts/drives/`.
+  clock over the drives in `tests/alerts/drives/`. `test_channels.py` sends to an HTTP
+  stand-in on this machine's loopback, never to Discord.
 
 ```bash
 PYTHONPATH=lib python -m unittest discover -s tests/alerts
