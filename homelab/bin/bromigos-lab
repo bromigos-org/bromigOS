@@ -14,9 +14,9 @@
   bromigos lab models unload NAME   unload one (an Ollama model; `comfyui`: what ComfyUI holds)
   bromigos lab models add|remove|replace
                                     Phase 2: changes the lab, through your homelab repo
-  bromigos lab models recommend|plan|upgrades …
-                                    the model catalog: the best open models for your GPUs
-                                    (docs/lab-models.md)
+  bromigos lab models recommend|plan|upgrades|review …
+                                    the model catalog: the best open models for your GPUs, and
+                                    what the weekly refresh found (docs/lab-models.md)
   bromigos lab run KIND [PRESET] [options]
                                     queue a job on the lab's GPUs; KIND: image, image-edit,
                                     cutout, 3d, hologram, voice, transcribe, upscale, batch-llm, video
@@ -151,7 +151,7 @@ for p in reversed((os.path.join(os.path.dirname(HERE), "lib"), os.path.join(os.p
 from bromigos_homelab import jobqueue as Q  # noqa: E402
 from bromigos_homelab import jobs as J  # noqa: E402
 
-CATALOG_VERBS = ("recommend", "plan", "pick", "tiers", "upgrades", "refresh", "check")   # catalog.main (docs/lab-models.md)
+CATALOG_VERBS = ("recommend", "plan", "pick", "tiers", "upgrades", "refresh", "review", "check")   # catalog.main (docs/lab-models.md)
 COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
 MARK = {"ok": ("●", "32"), "warn": ("▲", "33"), "crit": ("✖", "31"), "unreachable": ("?", "31"), "empty": ("·", "2"),
         "unknown": ("·", "2"), "fail": ("✖", "31"), "skip": ("·", "2")}

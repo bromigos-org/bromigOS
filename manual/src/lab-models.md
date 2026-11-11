@@ -83,5 +83,12 @@ bromigos lab models refresh        # the newest signed list
 bromigos lab models refresh --hf   # also ask Hugging Face now (needs python-huggingface-hub)
 ```
 
+The list is checked against Hugging Face every week. What that finds waits for review,
+each with a recommendation: adopt, watch or ignore. To see it:
+
+```bash
+bromigos lab models review         # what the weekly check found, and what to do with each
+```
+
 The full tables, with every job, every card size and every licence, are in the developer
 docs: [lab-models.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-models.md).

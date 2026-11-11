@@ -30,6 +30,7 @@ bromigos lab models pick image 16      # the best image model for a 16 GB card
 bromigos lab models tiers llm          # the best LLM at every size
 bromigos lab models upgrades           # what the upgrade policy would do now
 bromigos lab models refresh            # fetch the newest signed catalog
+bromigos lab models review             # what the weekly refresh found: adopt, watch or ignore
 bromigos lab models check              # check the data is consistent
 ```
 
@@ -41,6 +42,7 @@ bromigos lab models check              # check the data is consistent
 | `tiers CAPABILITY` | `--markdown` prints the tables at the end of this page. |
 | `upgrades` | `--apply` isn't built yet. It says so, changes nothing, and shows what the policy would do. |
 | `refresh` | `--hf` asks Hugging Face now. `--submit-bench` sends your bench results. |
+| `review` | `--all` adds the dismissed entries. `accept ID` and `ignore ID [--reason TEXT]` decide one ([below](#reviewing-what-the-refresh-finds)). |
 
 The planning commands also take:
 
@@ -411,28 +413,74 @@ compatibility data for vLLM, SGLang, llama.cpp, Ollama and MLX, and from a Comfy
 repackage for ComfyUI. A family's newer member only counts under a Hub pipeline the
 catalog covers.
 
-It writes the metadata and `[[pending]]` entries into `models.toml`, and opens a pull
-request with an evidence report: why, scores, sizes, licences and links.
+It writes the metadata and `[[pending]]` entries into `models.toml`, with an evidence
+report: why, sizes, licences and links. Entries that waited more than eight weeks without
+a decision move to `[[archived]]` ([below](#reviewing-what-the-refresh-finds)).
 
-The refresh never changes picks or rankings. So once the catalog's tests pass, the
-workflow merges the pull request itself and publishes `bromigos-lab-catalog`. The
-repository is private, so it can't use branch protection's auto-merge. Where the GitHub
-organisation doesn't let Actions open pull requests, the workflow commits the tested change
-to main instead, and files the evidence report as an issue labelled `lab-catalog`.
+The refresh never changes picks or rankings, so nobody has to approve it every week. The
+change goes through the catalog's own tests first: `bromigos lab models check` and the
+catalog's unit tests. Only then does it land on main, by one of two routes:
+
+- **A commit to main.** This is what happens today, because the GitHub organisation
+  doesn't let Actions open pull requests.
+- **A pull request the workflow opens and merges itself.** This happens instead when
+  Actions may open pull requests. It leaves a pull request per week in the history, with
+  its own CI run, but it merges itself all the same.
+
+Which route is the owner's choice. The setting is **Settings › Actions › General ›
+Workflow permissions › Allow GitHub Actions to create and approve pull requests**. Tick it
+in the organisation's settings, then in the repository's. Untick it to go back to commits.
+
+After either route, the workflow publishes `bromigos-lab-catalog` through the packages
+workflow.
 
 The refresh lives in this repository, not a separate one. The data ships with the code
 that reads it and its tests, through the same signed package pipeline.
 
-### Reviewing pending entries
+### Reviewing what the refresh finds
 
-Pending entries are the review list. `bromigos lab models refresh` lists them. Each one
-ends in one of two ways:
+Pending entries are the review queue. Every week the workflow updates one GitHub issue,
+**Lab catalog review**, with the whole queue. It never files a new issue each week. If the
+issue was closed, it reopens it; when the queue is empty, it closes it. Older weekly
+issues labelled `lab-catalog` are closed with a link to it.
 
-- Someone researches the candidate's quality, peak VRAM, speed and licence, and edits the
-  catalog by hand. It becomes a pick.
-- Someone sets `state = "dismissed"`, with the reason in `dismissed`. A dismissed entry
-  isn't listed or proposed again. For example, the first refresh found three FLUX.3
-  "action" repositories that are robot policies, not image models.
+On your own computer, in a bromigOS checkout:
+
+```bash
+bromigos lab models review                          # the queue, in plain words
+bromigos lab models review --json                   # the same, for scripts
+bromigos lab models review accept hf:org/Model-9B   # research it, then add it
+bromigos lab models review ignore hf:org/Model-9B --reason "a robot policy, not an image model"
+```
+
+`accept` and `ignore` edit `homelab/share/lab/models.toml` and need `python-tomlkit`, which
+keeps the file's comments and layout. `--catalog PATH` names another copy. Commit the change
+in a pull request, like any data edit. `review` exits 0 when it shows the queue, and 2 when
+it can't read or write the catalog.
+
+Each entry has a recommendation, computed from the catalog's own rules:
+
+| Recommendation | When |
+|---|---|
+| **adopt** | bromigOS's stack runs it, its licence tier is clean or conditional, it fits a setup the catalog plans for, and many people use it (300 likes or 20,000 downloads), or it's a newer member of a family that's within 8 quality points of the best for its job. A licence the Hub now reports differently is adopt too: read the card and fix the catalog's licence. |
+| **watch** | Not yet. The reason says what's missing: support in bromigOS's runtimes, a licence the Hub doesn't name, a preview, or evidence. |
+| **ignore** | It can't be a pick: too big for any setup, far smaller than the smallest model the catalog keeps for the job, a base model for chat, non-commercial and unsupported, or unsupported and little used. A ready one that's still little used after four weeks is ignore too. |
+
+The size comes from the Hub's parameter count, or from the repository's name ("35B-A3B"),
+at about 0.56 GiB per billion parameters at 4-bit. The licence tier comes from the
+`[licence]` the Hub's licence id means: *clean* (Apache, MIT, BSD, CC-BY, OpenMDW),
+*conditional* (use restrictions, caps, territory) or *non-commercial*.
+
+Each entry then ends in one of three ways:
+
+- **Accepted.** Someone researches the candidate's quality, peak VRAM, speed and licence,
+  and adds it as a `[[model]]`. When a model with its repository is in the catalog, the
+  next refresh moves the entry to `[[archived]]`, as "added to the catalog".
+- **Dismissed.** `state = "dismissed"`, with the reason in `dismissed`. It isn't listed or
+  proposed again. For example, the first refresh found three FLUX.3 "action"
+  repositories that are robot policies, not image models.
+- **Archived.** An entry nobody decided on in eight weeks moves to `[[archived]]`, with
+  its last recommendation as the reason. The refresh doesn't propose it again.
 
 ### Distribution
 
@@ -482,7 +530,7 @@ What it does depends on the model:
 
 Results go to `~/.local/state/bromigos/lab/bench.jsonl`. They replace the published
 figures for that GPU. `bromigos lab models refresh --submit-bench` posts them to the open
-catalog pull request, or issue.
+catalog pull request, or else to the Lab catalog review issue.
 
 ## How the data is laid out
 
@@ -496,7 +544,8 @@ catalog pull request, or issue.
 | `[[model]]` | a model: its capabilities, family, repository, licence, quality scores and `cite` |
 | `[[model.variant]]` | one way to run it: runtime, quantisation, weights, VRAM, RAM, vendors and `stack` |
 | `[[model.serving]]` | published serving figures on a given GPU, runtime and concurrency |
-| `[[pending]]` | a candidate the weekly refresh found, waiting for review |
+| `[[pending]]` | a candidate the weekly refresh found, waiting for review (or accepted, or dismissed) |
+| `[[archived]]` | a candidate that waited eight weeks without a decision, or that was added as a model |
 
 Edit facts here, never picks. The picks are computed. Run `bromigos lab models check`
 after an edit.

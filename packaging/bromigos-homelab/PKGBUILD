@@ -13,7 +13,8 @@ depends=('bromigos-core' 'bromigos-lab' 'bromigos-lab-catalog')
 # VECTOR's terminal must know `bromigos lab`'s aliases (target, connect) and refuse what
 # changes the lab before they exist: vector c5f67cb (r33)
 conflicts=('bromigos-vector<0.1.0.r33')
-checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf')   # the homelab widgets drawn in their tests; Find my lab's recorded mDNS answer
+checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf'
+              'python-tomlkit')   # the homelab widgets drawn in their tests; Find my lab's recorded mDNS answer; the catalog review's edits
 optdepends=('ansible-core: apply a reviewed lab provision plan'
             'libvirt-python: manage VMs on a local libvirt host'
             'qemu-base: run local KVM guests and manage their disks'
@@ -30,6 +31,7 @@ optdepends=('ansible-core: apply a reviewed lab provision plan'
             'vault: @vault: references in homelab.toml'
             'python-numpy: VECTOR Gnosis memory mirror'
             'python-huggingface-hub: bromigos lab models refresh --hf (newer models on Hugging Face)'
+            'python-tomlkit: bromigos lab models review accept|ignore (edits the catalog in a checkout)'
             'python-boto3: s3 sources: bucket sizes (with a read-only key)'
             'poppler: the ocr job kind: PDF pages')
 makedepends=('git' 'python')

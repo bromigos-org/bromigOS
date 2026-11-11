@@ -100,6 +100,16 @@ class Licence:
             return False, f"{self.name} has conditions ({self.conditions or self.commercial})"
         return True, ""
 
+    @property
+    def tier(self):
+        """clean (no conditions beyond keeping a notice or simple credit) | conditional (use
+        restrictions, caps, territory, attribution in the product) | non-commercial."""
+        if self.commercial == "no":
+            return "non-commercial"
+        if self.permissive and self.commercial == "yes" and not self.territory:
+            return "clean"
+        return "conditional"
+
     def plain(self):
         if self.commercial == "yes" and not self.territory:
             s = "commercial use OK"
@@ -293,6 +303,7 @@ class Catalog:
                     tuple(ALIASES.get(c, c) for c in v.get("capabilities", ()))))
             self.models[mod.id] = mod
         self.pending = list(doc.get("pending") or [])
+        self.archived = list(doc.get("archived") or [])    # pending entries that waited too long, or were added
         self.combos = list(doc.get("combo") or [])
         self._speed_range = {}
 
@@ -326,6 +337,20 @@ class Catalog:
         """(lo, hi) the 0..100 speed score spans: the capability's speed_span, else its unit's."""
         c = self.caps[cap]
         return tuple(c.span) if len(c.span) == 2 else SPEED_SPAN.get(c.unit, (0.5, 500.0))
+
+    def hub_licence(self, hub_id):
+        """The [licence] a Hugging Face licence id means ("apache-2.0" -> apache-2), or None when
+        the Hub doesn't name one ("other", "unknown", none: read the card)."""
+        h = (hub_id or "").strip().lower()
+        if not h or h in ("other", "unknown"):
+            return None
+        for k in (h, re.sub(r"\.0$", "", h)):              # cc-by-nc-4.0 -> [licence.cc-by-nc-4]
+            if k in self.licences:
+                return self.licences[k]
+        for lic in sorted(self.licences.values(), key=lambda x: (not x.permissive, x.id)):
+            if h in (x.lower() for x in lic.hub) and lic.id not in ("pending", "research-unclear"):
+                return lic
+        return None
 
 
 def canon(cap):
@@ -1633,7 +1658,7 @@ def markdown_tables(cat, licence="any", tiers=DOC_TIERS, region="US"):
 
 
 # ------------------------------------------------------------------ the command
-USAGE = """bromigos lab models recommend|plan|pick|tiers|upgrades|refresh|check (docs/lab-models.md)
+USAGE = """bromigos lab models recommend|plan|pick|tiers|upgrades|refresh|review|check (docs/lab-models.md)
 
   recommend [--json] [--goal G] [--licence L]       what fits this lab's GPUs, installed vs recommended
   plan [--budget gpu0=24G,RTX 5070=6G] [--always llm,tts,stt] [--want …] [--goal quality|balanced|speed
@@ -1647,6 +1672,8 @@ USAGE = """bromigos lab models recommend|plan|pick|tiers|upgrades|refresh|check 
   upgrades [--json] [--apply]                       what the upgrade policy ([lab.upgrade]) would do now
   refresh [--hf] [--json]                           a newer signed catalog; --hf: check Hugging Face for
                                                     newer or better candidates (flagged for review, never applied)
+  review [--json] [--all]                           what the weekly refresh found, each with adopt, watch or ignore
+  review accept|ignore ID [--reason TEXT]           decide one (edits models.toml in a bromigOS checkout)
   check                                             the catalog's data is consistent
 Capabilities: """ + " ".join(CAPABILITIES)
 
@@ -1669,7 +1696,8 @@ def _arg(argv, name, default=None, many=False):
 
 
 VALUED = {"--catalog", "--goal", "--licence", "--region", "--vendor", "--gpu", "--gpus", "--ram", "--hw", "--budget",
-          "--always", "--want", "--clients", "--context", "--prompt", "--output", "--priority", "--since", "--repo"}
+          "--always", "--want", "--clients", "--context", "--prompt", "--output", "--priority", "--since", "--repo",
+          "--reason", "--report", "--issues", "--today"}
 
 
 def _positional(argv):
@@ -1815,6 +1843,9 @@ def main(argv):
         if cmd == "refresh":
             from . import catalog_refresh
             return catalog_refresh.main(rest)
+        if cmd == "review":
+            from . import catalog_review
+            return catalog_review.main(rest)
         if cmd == "upgrades":
             from . import catalog_upgrade
             return catalog_upgrade.main(rest)

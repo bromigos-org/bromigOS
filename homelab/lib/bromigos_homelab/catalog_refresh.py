@@ -186,6 +186,13 @@ def _quant_of(repo_id, tags=(), library=None):
     return None
 
 
+def _params_b(info):
+    """Billions of parameters from the Hub's safetensors index, or None."""
+    st = getattr(info, "safetensors", None)
+    total = getattr(st, "total", None) if st else None
+    return round(total / 1e9, 2) if total and total > 1e7 else None
+
+
 def _days_ago(dt):
     if not dt:
         return None
@@ -226,6 +233,9 @@ class Finding:
     field: str = ""          # metadata: the field and its new value
     value: object = None
     review: bool = True
+    likes: int = None        # the Hub's signals, for the review's recommendation (catalog_review)
+    downloads: int = None
+    params_b: float = None
 
     def doc(self):
         d = {k: v for k, v in dataclasses.asdict(self).items() if v not in ("", None, (), [], 0.0)}
@@ -267,7 +277,7 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
         for r in (m.repo, *[v.weights for v in m.variants]):
             if r and "/" in r and " " not in r:
                 known.add(r.split(":")[0].lower())
-    for p in cat.pending:
+    for p in cat.pending + cat.archived:                       # archived: proposed once is enough
         if p.get("repo"):
             known.add(p["repo"].lower())
     try:
@@ -344,7 +354,8 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
                 continue
             try:
                 cands = list(api.list_models(author=m.repo.split("/")[0], search=stem, sort="created_at", limit=20,
-                                             expand=["createdAt", "likes", "tags", "pipeline_tag"]))
+                                             expand=["createdAt", "likes", "downloads", "tags", "pipeline_tag",
+                                                     "safetensors"]))
             except Exception:                                 # noqa: BLE001
                 continue
             for x in cands:
@@ -368,14 +379,15 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
                                    f"{m.repo.split('/')[0]} published it {age} days ago ({x.likes or 0} likes); the "
                                    f"catalog's {m.family} is {m.name} ({m.released or 'undated'})", x.id,
                                    (f"https://huggingface.co/{x.id}",), _support(api, cap, x.id, comfy=comfy),
-                                   model=m.id))
+                                   model=m.id, likes=x.likes, downloads=getattr(x, "downloads", None),
+                                   params_b=_params_b(x)))
     # 4. new and trending models per capability
     if trending:
         for cap, tags in PIPELINES.items():
             for tag in tags:
                 try:
                     xs = list(api.list_models(pipeline_tag=tag, sort="trending_score", limit=per_tag,
-                                              expand=["createdAt", "likes", "tags", "downloads"]))
+                                              expand=["createdAt", "likes", "tags", "downloads", "safetensors"]))
                 except Exception as e:                        # noqa: BLE001
                     out.append(Finding(f"error:trending:{tag}", "error", cap, f"trending {tag} didn't list",
                                        str(e)[:160], review=False))
@@ -398,20 +410,23 @@ def hf_check(cat, api=None, since_days=60, min_likes=40, per_tag=25, families=Tr
                     out.append(Finding(f"hf:{x.id}", "new model", cap, f"{x.id}: trending {tag}",
                                        f"new in the last {since_days} days ({age} days old), {x.likes or 0} likes, "
                                        f"{x.downloads or 0} downloads", x.id, (f"https://huggingface.co/{x.id}",),
-                                       _support(api, cap, x.id, comfy=comfy), licence=_licence_id(x) or ""))
+                                       _support(api, cap, x.id, comfy=comfy), licence=_licence_id(x) or "",
+                                       likes=x.likes, downloads=x.downloads, params_b=_params_b(x)))
     return out
 
 
 # ------------------------------------------------------------------ the CI proposal
-def propose(path, findings, today=None):
+def propose(path, findings, today=None, cat=None):
     """models.toml's new text: metadata applied (parameter counts), new [[pending]] entries
-    appended, `version` bumped and `refreshed` set. -> (text, {"metadata": n, "pending": n,
-    "review": n}). Needs tomlkit (keeps the file's comments and layout)."""
+    appended, entries that waited more than eight weeks (or were added since) moved to
+    [[archived]], `version` bumped and `refreshed` set. -> (text, {"metadata": n, "pending": n,
+    "review": n, "archived": n}). Needs tomlkit (keeps the file's comments and layout)."""
     import tomlkit
+    from . import catalog_review
     today = today or datetime.date.today().isoformat()
     with open(path) as f:
         doc = tomlkit.parse(f.read())
-    counts = {"metadata": 0, "pending": 0, "review": 0}
+    counts = {"metadata": 0, "pending": 0, "review": 0, "archived": 0}
     models = {m["id"]: m for m in doc.get("model", [])}
     for fd in findings:
         if fd.kind == "metadata" and fd.model in models and fd.field in ("params_b", "disk_gib", "released"):
@@ -435,7 +450,8 @@ def propose(path, findings, today=None):
         have.add(fd.id)
         counts["pending"] += 1
         counts["review"] += 1 if fd.review else 0
-    if counts["metadata"] or counts["pending"]:
+    counts["archived"] = len(catalog_review.archive(doc, cat or C.load(path), today))
+    if counts["metadata"] or counts["pending"] or counts["archived"]:
         doc["version"] = int(doc.get("version", 0)) + 1
         doc["refreshed"] = today
     return tomlkit.dumps(doc), counts
@@ -445,7 +461,8 @@ def report(cat, findings, counts):
     """The pull request's evidence report (Markdown)."""
     lines = [f"Weekly lab model catalog refresh ({datetime.date.today().isoformat()}).", "",
              f"Catalog researched {cat.researched}; this run: {counts['metadata']} metadata updates, "
-             f"{counts['pending']} new pending entries ({counts['review']} for review).", "",
+             f"{counts['pending']} new pending entries ({counts['review']} for review), "
+             f"{counts.get('archived', 0)} moved to `[[archived]]` after eight weeks without a decision.", "",
              "Picks and rankings are unchanged: a pending entry becomes a pick only when someone researches it "
              "(quality, peak VRAM, speed, licence) and edits `homelab/share/lab/models.toml` by hand "
              "(docs/lab-models.md, \"Staying current\").", ""]
@@ -523,7 +540,7 @@ def main(argv):
         path = C._arg(argv, "--catalog", os.path.join(os.path.dirname(C.HERE), "..", "share", "lab", "models.toml"))
         cat = C.load(path)
         fs = hf_check(cat, since_days=int(C._arg(argv, "--since", 60)), log=lambda s: print(s, file=sys.stderr))
-        text, counts = propose(path, fs)
+        text, counts = propose(path, fs, cat=cat)
         with open(C._arg(argv, "--out", path), "w") as f:
             f.write(text)
         rep = report(cat, fs, counts)
@@ -531,7 +548,7 @@ def main(argv):
             with open(C._arg(argv, "--report"), "w") as f:
                 f.write(rep)
         print(json.dumps({"counts": counts, "review": counts["review"] > 0,
-                          "changed": bool(counts["metadata"] or counts["pending"])}))
+                          "changed": bool(counts["metadata"] or counts["pending"] or counts["archived"])}))
         return 0
     if "--weekly" in argv:
         # bromigos-lab-models.timer: the newest signed catalog, then one quiet nudge if a better
@@ -556,6 +573,8 @@ def main(argv):
     out["catalog"] = {"path": cat.path, "version": cat.version, "researched": cat.researched,
                       "refreshed": cat.refreshed}
     out["pending"] = pending(cat)
+    from . import catalog_review
+    out["review"] = catalog_review.counts(catalog_review.queue(cat))
     if "--hf" in argv:
         try:
             fs = hf_check(cat, since_days=int(C._arg(argv, "--since", 60)),
@@ -573,11 +592,10 @@ def main(argv):
                               else f"{f['why']}")) + (f" · from {f['url_host']}" if f.get("url_host") else ""))
     c = out["catalog"]
     print(f"in use: {c['path']} · version {c['version']} · researched {c['researched']} · refreshed {c['refreshed']}")
-    if out["pending"]:
-        print(f"\npending review ({len(out['pending'])}):")
-        for p in out["pending"]:
-            print(f"  [{p.get('capability', '')}] {p.get('title', p.get('id'))}: {p.get('why', '')}"
-                  + (f" · {p['stack']}" if p.get("stack") else ""))
+    r = out["review"]
+    if r["to_review"] or r["accepted"]:
+        print(f"\nwaiting for review: {r['to_review']} ({r['adopt']} to adopt, {r['watch']} to watch, {r['ignore']} to "
+              f"ignore), {r['accepted']} accepted: bromigos lab models review")
     if out["hub"] is not None:
         print(f"\nHugging Face now ({len(out['hub'])} findings, flagged, nothing applied):")
         for h in out["hub"]:

@@ -4,33 +4,41 @@
 # for metadata of the catalog's models (parameter counts, licences, dates), new quantisations of
 # its picks by the usual publishers, newer members of its families and new trending models per
 # capability, each with whether bromigOS's runtimes can run it. It writes metadata and
-# `[[pending]]` review entries into homelab/share/lab/models.toml and opens a pull request with
-# the evidence report. Picks and rankings never change here.
+# `[[pending]]` review entries into homelab/share/lab/models.toml, and moves entries that waited
+# more than eight weeks without a decision to `[[archived]]`. Picks and rankings never change here.
 #
-# The proposal never changes picks, so after the catalog tests pass on it this workflow merges
-# it itself (the repository is private: no branch-protection auto-merge), then dispatches the
-# packages workflow (a merge made with GITHUB_TOKEN triggers no workflow on its own), which
-# publishes bromigos-lab-catalog and the signed models.toml. Pending review entries are listed
-# in the pull request and by `bromigos lab models refresh`. Where the organisation doesn't let
-# Actions open pull requests (Settings › Actions › General: "Allow GitHub Actions to create and
-# approve pull requests"), the tested change is committed to main and the report filed as an
-# issue labelled lab-catalog instead.
+# The change goes through the catalog's own tests first. It then lands on main by one of two
+# routes, whichever the organisation's settings allow:
+#   - a pull request the workflow opens and merges itself, when Settings › Actions › General ›
+#     Workflow permissions has "Allow GitHub Actions to create and approve pull requests" ticked
+#     (for the organisation and this repository); the owner's choice, docs/lab-models.md;
+#   - otherwise (today) a commit straight to main, the same tested change.
+# Either way it then dispatches the packages workflow (a push made with GITHUB_TOKEN triggers no
+# workflow on its own), which publishes bromigos-lab-catalog and the signed models.toml.
+#
+# The review queue lives in one issue, "Lab catalog review", which every run updates (or opens,
+# or reopens) with each pending entry's recommendation: adopt, watch or ignore
+# (bromigos_homelab.catalog_review). Older weekly issues labelled lab-catalog are closed with a
+# link to it. `bromigos lab models review` shows the same queue.
+#
+# The repository is public. This workflow runs only on its schedule or by hand, never on a pull
+# request, so a fork's code never reaches the runner it uses.
 name: lab-catalog
 
 on:
   schedule:
-    - cron: "17 13 * * 1"          # Mondays 13:17 UTC (06:17 Pacific)
+    - cron: "17 13 * * 1"          # Mondays 13:17 UTC (05:17 Pacific in winter, 06:17 in summer)
   workflow_dispatch:
     inputs:
       hosted:
-        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        description: "Run on GitHub's hosted runner instead of the packages runner"
         type: boolean
         default: false
       since:
         description: "How far back new models count (days)"
         default: "60"
       merge:
-        description: "Merge the proposal when its tests pass"
+        description: "Land the tested change on main (off: leave it on a branch)"
         type: boolean
         default: true
 
@@ -85,9 +93,10 @@ jobs:
         working-directory: homelab
         run: |
           python -m bromigos_homelab.catalog check --catalog share/lab/models.toml
-          python -m unittest tests.test_lab_catalog
+          python -m unittest tests.test_lab_catalog tests.test_lab_catalog_review
 
-      - name: Pull request, or a commit and an issue
+      - name: Land the tested change (a pull request, or a commit to main)
+        id: land
         if: steps.propose.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,27 +108,40 @@ jobs:
           git config user.email "packages@bromigos.org"
           gh label create lab-catalog --color 5319e7 --description "Lab model catalog refresh" 2>/dev/null || true
           gh label create pending-review --color fbca04 --description "Catalog candidates to research" 2>/dev/null || true
-          labels="lab-catalog"
-          if [ "${{ steps.propose.outputs.review }}" = "true" ]; then labels="$labels,pending-review"; fi
           git switch -c "$branch"
           git add homelab/share/lab/models.toml
-          git commit -q -m "lab catalog: weekly refresh $day (metadata and pending review entries)" \
-            -m "Proposed by .github/workflows/lab-catalog.yml; picks and rankings unchanged."
+          git commit -q -m "lab catalog: weekly refresh $day (metadata, pending review entries, archive)" \
+            -m "Proposed by .github/workflows/lab-catalog.yml; picks and rankings unchanged. The review queue: the issue \"Lab catalog review\"."
           git push -q -f origin "$branch"
           if url=$(gh pr create --base main --head "$branch" --title "Lab catalog: weekly refresh $day" \
-                     --body-file /tmp/report.md --label "$labels" 2>/tmp/pr.err); then
+                     --body-file /tmp/report.md --label lab-catalog 2>/tmp/pr.err); then
             echo "pull request: $url"
             if [ "$MERGE" = yes ]; then gh pr merge "$url" --squash --delete-branch; fi
           else
-            # the organisation doesn't let Actions open pull requests: the same change, tested,
-            # straight to main (a refresh never changes picks), and the report as an issue
-            echo "no pull request ($(tail -1 /tmp/pr.err)); committing to main and filing the report as an issue"
+            # the organisation doesn't let Actions open pull requests (Settings › Actions ›
+            # General): the same change, tested above, straight to main (a refresh never changes picks)
+            echo "no pull request ($(tail -1 /tmp/pr.err))"
             if [ "$MERGE" = yes ]; then
               git fetch -q origin main
               git rebase -q origin/main
               git push -q origin "HEAD:main"
+              git push -q origin --delete "$branch" || true
+              echo "committed to main"
+            else
+              echo "left on the branch $branch (merge: off)"
             fi
-            git push -q origin --delete "$branch" || true
-            gh issue create --title "Lab catalog: weekly refresh $day" --body-file /tmp/report.md --label "$labels"
           fi
           if [ "$MERGE" = yes ]; then gh workflow run packages.yml -f only=bromigos-lab-catalog; fi
+
+      - name: The review issue
+        # every run, changed or not: recommendations move as models age and gain users
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BROMIGOS_HOMELAB_CONFIG: /nonexistent
+          BROMIGOS_LAB_SETTINGS: /nonexistent
+          PYTHONPATH: homelab/lib
+        run: |
+          gh label create lab-catalog --color 5319e7 --description "Lab model catalog refresh" 2>/dev/null || true
+          gh label create pending-review --color fbca04 --description "Catalog candidates to research" 2>/dev/null || true
+          python -m bromigos_homelab.catalog_review issue-sync --catalog homelab/share/lab/models.toml \
+            --repo "$GITHUB_REPOSITORY" --report /tmp/report.md
