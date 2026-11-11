@@ -80,7 +80,8 @@ DELETE_DATA = "delete-data"             # its word in [board] actions
 JOB_VERBS = {"answer": "job.answer", "cancel": "job.cancel", "retry": "job.retry"}
 JOB_WORDS = {"job.answer": "Answered.", "job.cancel": "Stopped.", "job.retry": "Started again."}
 # a job's id, whole, as the activity records name it (20261110-1200-app.restart-photos-1a2b)
-JOB_ID = re.compile(r"\d{8}-\d{4}-[a-z0-9][a-z0-9.-]{0,80}-[0-9a-f]{4}\Z")
+# ([0-9], never \d: \d is any script's digit, and "２0261110" isn't an id)
+JOB_ID = re.compile(r"[0-9]{8}-[0-9]{4}-[a-z0-9][a-z0-9.-]{0,80}-[0-9a-f]{4}\Z")
 ANSWER_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")       # a question's id, and a choice's
 DEFAULT_ACTIONS = (*VERBS, DELETE_DATA, *JOB_VERBS.values())
 ENDED = ("succeeded", "failed", "rolled-back", "cancelled", "interrupted")       # the activity records' final states
@@ -113,6 +114,8 @@ REFUSALS = {
     "cant-retry": "That job can't be started again from here: it didn't end badly, or it wasn't started as safe to "
                   "start again.",
     "not-taken": "The job didn't take that in time. Look at its card, and try again.",
+    "danger-needs-code": "That answer can't be undone, so it needs a fresh code: run sudo bromigos server board code "
+                         "at the server, and type it here. A code that signed a browser in doesn't count.",
 }
 
 
@@ -139,9 +142,10 @@ def check_shape(verb, app, delete_data=False, code=None):
         raise Refused("needs-code")
 
 
-def check_job_shape(verb, job, question=None, choice=None):
+def check_job_shape(verb, job, question=None, choice=None, code=None):
     """What both sides check first of a job's action: a verb on the list, a job's whole id, and for
-    an answer the question's id and the choice's, each a plain word."""
+    an answer the question's id and the choice's, each a plain word, and maybe a code (for a
+    choice the job marks as can't be undone)."""
     if not isinstance(verb, str) or verb not in JOB_WORDS:
         raise Refused("unknown-verb")
     if not isinstance(job, str) or not JOB_ID.match(job):
@@ -151,7 +155,9 @@ def check_job_shape(verb, job, question=None, choice=None):
             raise Refused("not-asking")
         if not isinstance(choice, str) or not ANSWER_ID.match(choice):
             raise Refused("bad-choice")
-    elif question is not None or choice is not None:
+        if code is not None and not (isinstance(code, str) and 0 < len(code) <= 32):
+            raise Refused("bad-request")
+    elif question is not None or choice is not None or code is not None:
         raise Refused("bad-request")
 
 
@@ -187,17 +193,20 @@ def ask(verb, app, session, now=None, delete_data=False, code=None):
     return rid
 
 
-def ask_job(verb, job, session, now=None, question=None, choice=None):
+def ask_job(verb, job, session, now=None, question=None, choice=None, code=None):
     """Write the request for a job's own action (verb: answer, cancel or retry), as ask() does
-    for an app's; its id."""
+    for an app's; its id. `code`: a fresh console code, for a choice the job marks as can't be
+    undone; root checks it and uses it up."""
     word = JOB_VERBS.get(verb) if isinstance(verb, str) else None
-    check_job_shape(word, job, question, choice)
+    check_job_shape(word, job, question, choice, code)
     now = paths.now_ms() if now is None else now
     rid = secrets.token_hex(8)
     doc = {"schema": SCHEMA, "id": rid, "verb": word, "job": job, "at": now, "session": session.get("id"),
            "browser": session.get("browser")}
     if word == "job.answer":
         doc.update(question=question, choice=choice)
+        if code is not None:
+            doc["code"] = code
     dfd = paths.open_folder(paths.at(REQUESTS))
     try:
         paths.write_at(dfd, rid + ".json", paths.dump(doc), 0o640, replace=False)
@@ -413,7 +422,7 @@ def decide_job(doc, now, run, log, record=None):
     """A request for a job's own action that was read: checked again against root's record of the
     job, and passed to `bromigos activity`. The answer."""
     verb, job, question, choice = doc.get("verb"), doc.get("job"), doc.get("question"), doc.get("choice")
-    check_job_shape(verb, job, question, choice)
+    check_job_shape(verb, job, question, choice, doc.get("code"))
     if not isinstance(doc.get("at"), int) or isinstance(doc.get("at"), bool) or not 0 <= now - doc["at"] <= REQUEST_MAX_AGE_MS:
         raise Refused("too-old")
     if verb not in allowed_verbs():
@@ -429,8 +438,14 @@ def decide_job(doc, now, run, log, record=None):
         # the question's id is in the request so that an answer to a question that was replaced is refused
         if state != "needs-you" or not q or q.get("id") != question:
             raise Refused("not-asking")
-        if choice not in [c.get("id") for c in q.get("choices") or [] if isinstance(c, dict)]:
+        picked = next((c for c in q.get("choices") or [] if isinstance(c, dict) and c.get("id") == choice), None)
+        if picked is None:
             raise Refused("bad-choice")
+        # a choice the job marks as can't be undone (`[id!]`, "danger") takes what deleting an
+        # app's data takes: a fresh code that root made, used up here. The session alone isn't
+        # enough, whoever started the job (DESIGN §1: what can't be undone asks again)
+        if picked.get("danger") is not False and picked.get("danger") is not None and not use_delete_code(doc.get("code"), now):
+            raise Refused("danger-needs-code")
     elif verb == "job.cancel":
         if state in ENDED:
             raise Refused("ended")

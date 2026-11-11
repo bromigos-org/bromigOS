@@ -854,7 +854,9 @@ A signed-in browser can do all of this until its session ends, 30 days later at 
   ([A job's own actions](#a-jobs-own-actions)).
 
 It can't delete an app's data, run a command, read a file or change a setting. Deleting
-data needs a fresh code from the server each time ([below](#deleting-an-apps-data)).
+data needs a fresh code from the server each time ([below](#deleting-an-apps-data)), and so
+does an answer that a job marks as can't be undone
+([A job's own actions](#a-jobs-own-actions)).
 
 So a stolen session cookie can add and remove apps. If that is more than you want from a
 browser, say which actions the page may use, as root, in `/etc/bromigos/server.toml`:
@@ -864,12 +866,22 @@ browser, say which actions the page may use, as root, in `/etc/bromigos/server.t
 actions = ["restart"]        # only restarts; [] turns every action off
 ```
 
-Left out, it means `["restart", "add", "remove", "delete-data", "job.answer", "job.cancel",
-"job.retry"]`. With `[]` the page only
-shows what the server is doing, and you add and remove apps with `sudo bromigos lab apps`.
-The board's document carries the list as `actions`, so the page offers only what the server
-allows.
+Left out on a new install, it means `["restart", "add", "remove", "delete-data",
+"job.answer", "job.cancel", "job.retry"]`. With `[]` the page only shows what the server is
+doing, and you add and remove apps with `sudo bromigos lab apps`. The board's document
+carries the list as `actions`, so the page offers only what the server allows.
 `sudo bromigos server board sessions --end-all` signs every browser out at once.
+
+**An upgrade never widens it.** Browsers already signed in were let in for what the board
+could do then. So when the package is upgraded on a server whose `server.toml` doesn't say
+`[board] actions`, the upgrade writes in the list the board allowed before, and says so:
+
+- from a board that could only look: `actions = []`;
+- from a board with the app actions but not the job actions:
+  `actions = ["restart", "add", "remove", "delete-data"]`.
+
+To have the new default, remove that line (or list the words you want). A server that names
+its own list keeps it, and a new install writes nothing, so it gets the new default.
 
 #### How a request reaches root
 
@@ -973,6 +985,12 @@ of it ([activity.md](activity.md)):
    id is in the request so that an answer to a question that was since replaced is refused.
    Stopping needs the job to say that stopping now is safe. Starting again needs a job that
    ended failed, put back, cancelled or interrupted, and was started as safe to start again.
+   **A choice the job marks as can't be undone** (`[wipe!]` in its `::ask` line, `"danger":
+   true` in the record) also needs a fresh code from `sudo bromigos server board code`, sent
+   as `"code"` with the answer, exactly as deleting an app's data does: root takes it only
+   when its own note of the code is there, uses it up, and a code that signed a browser in
+   doesn't count. It doesn't matter who started the job: one started at the terminal with
+   `sudo` asks the page for the code too. Wrong codes are counted and slowed as at sign-in.
 4. Then the helper runs `bromigos activity answer JOB CHOICE`, `cancel JOB` or
    `retry JOB --via board`, with the id and the choice it checked. Nothing else in the
    request reaches the command.
@@ -984,6 +1002,8 @@ The command checks once more as it acts, and what it refuses comes back as the s
 | 202 | | Done, or passed on: `{"ok": true, "job": "<id>", "words": "Answered."}`. For `retry`, `job` is the new job's id. When root hadn't answered within 10 seconds, the words say to watch the job's card, and `job` is null for a retry |
 | 404 | `no-job`, `unknown-verb` | No job has that whole id; or the last word isn't `answer`, `cancel` or `retry` |
 | 409 | `not-asking`, `bad-choice` | The job isn't asking that question now; or that isn't one of its answers |
+| 403 | `danger-needs-code` | That choice can't be undone, and no fresh code came with it (or a wrong, used or late one) |
+| 429 | `too-many` | Too many wrong codes from this address |
 | 409 | `not-safe` | The job hasn't said that stopping it now is safe. Its record's `cancel_note` says why |
 | 409 | `ended` | The job has already ended |
 | 409 | `cant-retry` | The job didn't end badly, or wasn't started as safe to start again |
@@ -1016,7 +1036,7 @@ A wrong code for a deletion is counted and slowed like a wrong code at sign-in.
 
 | Path | What |
 |---|---|
-| `/usr/lib/bromigos/board/bromigos-board` | The board's own command: `serve`, `snapshot`, `code`, `sessions`, `act` |
+| `/usr/lib/bromigos/board/bromigos-board` | The board's own command: `serve`, `snapshot`, `code`, `sessions`, `act`, `keep-actions` |
 | `/usr/lib/bromigos/lib/bromigos_board/` | Its library |
 | `/usr/share/bromigos-board/caddy/site.caddy` | The site's rules, imported by the server's Caddy site |
 | `/etc/caddy/conf.d/bromigos-board.caddy` | The site, written by the catalogue's `board` step for `<server>.local` and `home-<server>.local` |

@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import sys
 import time
 
@@ -35,6 +36,7 @@ from starlette.routing import Route
 from . import SCHEMA, actions, auth, board, door, net, paths
 
 READ_METHODS = ("GET", "HEAD", "OPTIONS")
+DIGITS = re.compile(r"[0-9]{1,12}\Z")      # a length in ASCII digits ("²".isdigit() is true, and int() refuses it)
 BODY_MAX = 4096                 # bytes of a request's body; more is refused unread
 CONNECTIONS_MAX = 64            # connections at once (uvicorn's limit_concurrency); more get 503
 DOOR_EVERY_S = 120              # the door asks root's reader for a reading this often at most
@@ -163,7 +165,7 @@ async def json_body(request):
         return None, error(415, ("not-json", "Send JSON (Content-Type: application/json)."))
     too_big = error(413, ("too-big", "That request is too big."), headers={"Connection": "close"})
     length = request.headers.get("content-length")
-    if length is not None and (not length.isdigit() or int(length) > BODY_MAX):
+    if length is not None and (not DIGITS.match(length) or int(length) > BODY_MAX):
         return None, too_big                     # refused by what it says of itself, unread
     body = b""
     async for chunk in request.stream():         # and read no further than the limit, whatever it said
@@ -401,9 +403,15 @@ async def post_job_action(request):
     if bad:
         return bad
     st = request.app.state
+    src = source_of(request)
     job, verb = request.path_params["job"], request.path_params["verb"]
+    if doc.get("code") is not None:
+        why = st.tries.blocked(src)             # its code is counted like one at sign-in
+        if why:
+            return error(429, ("too-many", why), headers={"Retry-After": "60"})
     try:
-        rid = await run_in_threadpool(actions.ask_job, verb, job, rec, None, doc.get("question"), doc.get("choice"))
+        rid = await run_in_threadpool(actions.ask_job, verb, job, rec, None, doc.get("question"), doc.get("choice"),
+                                      doc.get("code"))
     except actions.Refused as e:
         return error(JOB_STATUS.get(e.code, 400), (e.code, e.words))
     except OSError:
@@ -416,6 +424,8 @@ async def post_job_action(request):
                              "words": "Asked. The job's card shows what became of it."}, status_code=202)
     if not out.get("ok"):
         code = out.get("code") if out.get("code") in actions.REFUSALS else "bad-request"
+        if code == "danger-needs-code" and doc.get("code") is not None:
+            await st.sleep(st.tries.wrong(src))
         return error(JOB_STATUS.get(code, 403), (code, actions.REFUSALS[code]))
     return JSONResponse({"schema": SCHEMA, "ok": True, "job": out.get("job"), "request": rid, "words": out.get("words")},
                         status_code=202)

@@ -499,8 +499,8 @@ class JobActions(Base):
         self.done = self.job("backup.run", "Backing up this server", end={"exit_code": 0})
         self.once = self.job("app.update", "Updating Films and TV", end={"exit_code": 1})      # not safe to start again
 
-    def job(self, kind, title, lines=(), end=None, **kw):
-        j = self.A.Job(self.env, kind, title, command=["bromigos", *kind.split(".")], via="timer", **kw).open()
+    def job(self, kind, title, lines=(), end=None, via="timer", **kw):
+        j = self.A.Job(self.env, kind, title, command=["bromigos", *kind.split(".")], via=via, **kw).open()
         j.begin()
         for line in lines:
             j.feed(line)
@@ -663,6 +663,60 @@ class JobActions(Base):
         self.assertEqual((r.status_code, r.json()["job"]), (202, self.runs))
         self.assertIn("card", r.json()["words"])
         self.assertEqual(len(self.left()), 1, "the request waits for the helper")
+
+    def test_a_choice_that_cant_be_undone_needs_a_fresh_code(self):
+        """Review N1. A job the owner started at the terminal, with sudo, asks a question whose one
+        choice can't be undone (`[wipe!]`). From the page, that choice takes what deleting an app's
+        data takes: a fresh code root made. The session alone, a made-up code, or the code that
+        signed this browser in are each refused, with the board's own words, and nothing runs."""
+        wipes = self.job("disk.prepare", "Preparing a data disk", via="cli",
+                         lines=["::ask wipe Wipe the data disk? Everything on it goes. [wipe!] Wipe it [keep] Keep it"])
+        q = self.A.find(self.env, wipes)["question"]
+        self.assertEqual([(c["id"], c["danger"]) for c in q["choices"]], [("wipe", True), ("keep", False)])
+        self.sign_in()
+        wipe = {"question": "wipe", "choice": "wipe"}
+        self.refused(self.do(wipes, "answer", wipe), 403, "danger-needs-code")
+        self.refused(self.do(wipes, "answer", dict(wipe, code="ABCD-EFGH")), 403, "danger-needs-code")
+        # the code that signed a browser in: its board record is gone, so it deletes nothing and wipes nothing
+        code, _ = self.new_code()
+        self.assertEqual(self.c.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
+        self.refused(self.do(wipes, "answer", dict(wipe, code=code)), 403, "danger-needs-code")
+        self.assertEqual(self.ran, [], "nothing was run")
+        # a code that isn't a word is refused before it is written down
+        self.refused(self.do(wipes, "answer", dict(wipe, code=["x"])), 400, "bad-request")
+        # the other choice needs nothing more, and spends no code
+        fresh, _ = self.new_code()
+        self.assertEqual(self.do(wipes, "answer", {"question": "wipe", "choice": "keep"}).status_code, 202)
+        # a fresh code: once
+        self.assertEqual(self.do(wipes, "answer", dict(wipe, code=fresh)).status_code, 202)
+        self.assertEqual(self.ran[-1], ["bromigos-activity", "answer", wipes, "wipe", "--json"])
+        self.refused(self.do(wipes, "answer", dict(wipe, code=fresh)), 403, "danger-needs-code")
+        self.assertEqual(len(self.ran), 2)
+        # the code never reaches the job's command, and no answer quotes it
+        self.assertFalse(any(fresh in " ".join(a) for a in self.ran))
+        for name in self.left(actions.RESULTS):
+            self.assertNotIn(fresh, self.path(f"{actions.RESULTS}/{name}").read_text())
+
+    def test_wrong_codes_for_a_choice_that_cant_be_undone_are_counted_as_at_sign_in(self):
+        wipes = self.job("disk.prepare", "Preparing a data disk", via="cli",
+                         lines=["::ask wipe Wipe the data disk? [wipe!] Wipe it [keep] Keep it"])
+        self.sign_in()
+        for _ in range(auth.TRIES_PER_SOURCE[0]):
+            self.refused(self.do(wipes, "answer", {"question": "wipe", "choice": "wipe", "code": "ABCD-EFGH"}), 403,
+                         "danger-needs-code")
+        r = self.do(wipes, "answer", {"question": "wipe", "choice": "wipe", "code": "ABCD-EFGH"})
+        self.assertEqual((r.status_code, r.json()["error"]["code"]), (429, "too-many"))
+        self.assertTrue(self.waits, "a wrong code's answer waits, as at sign-in")
+        self.assertEqual(self.ran, [])
+
+    def test_a_job_id_is_ascii_digits_only(self):
+        """Review N6: \\d is any script's digit. A fullwidth one isn't an id."""
+        for bad in ("\uff12" + self.runs[1:], self.runs[:9] + "\u0663" + self.runs[10:]):
+            with self.assertRaises(actions.Refused) as e:
+                actions.check_job_shape("job.cancel", bad)
+            self.assertEqual(e.exception.code, "no-job")
+        actions.check_job_shape("job.cancel", self.runs)
+        self.assertIsNone(api.DIGITS.match("\u00b2"), "nor is a superscript a length")
 
     def test_against_the_real_command(self):
         """`bromigos activity` itself, on the stand-in root: what it prints is what the helper reads."""
