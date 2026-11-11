@@ -12,7 +12,7 @@ from common import FIXTURES, LAN, NOW, Root
 
 from starlette.testclient import TestClient
 
-from bromigos_board import api, auth, door, net, paths, snapshot
+from bromigos_board import api, auth, board, door, net, paths, snapshot
 
 ORIGIN = "https://myserver.local"
 PAGE = {"x-bromigos-board": "1", "origin": ORIGIN}       # what the board's own page sends
@@ -189,16 +189,24 @@ class BoardContractTests(Base):
                                            "words": "A restart finishes the update",
                                            "detail": "The kernel was updated. Restart when it suits you.",
                                            "since": 1794200000000, "go": "supply/updates", "job": None}])
+        # what fixed itself: the job's own title, and what became of it
         self.assertEqual(b["fixed"], [{"id": "20261110-0530-app.update-photos-1a2b", "machine": "myserver",
+                                       "title": "Updating Photos",
                                        "words": "Photos didn't answer after the update, so it was put back.",
                                        "at": 1794260000000}])
         m = b["machines"][0]
         self.assertEqual((m["name"], m["here"], m["state"], m["state_word"], m["apps"]), ("myserver", True, "warn", "needs you", 6))
+        self.assertEqual(set(m), {"name", "kind", "here", "page", "state", "state_word", "roles", "updates", "readings",
+                                  "hardware", "apps"})
+        # what is in the box, from the app manager's scan; nothing measures the machine yet
+        self.assertEqual(m["hardware"], {"cpu": 4, "ram_gb": 16, "disk_gb": 512, "gpu": False, "gpu_kind": None,
+                                         "gpu_name": None, "gpu_vram_gb": 0})
+        self.assertIsNone(m["readings"])
         # the cards: the shipped commands' --json, unchanged
         self.assertEqual(b["storage"], json.loads((FIXTURES / "storage-health.json").read_text()))
         self.assertEqual(b["backups"], json.loads((FIXTURES / "backups-status.json").read_text()))
         self.assertEqual(b["apps"], snapshot.scrub(json.loads((FIXTURES / "apps-list.json").read_text())))   # as printed, less secrets
-        self.assertEqual(b["updates"]["updates"]["phase"], "done")
+        self.assertEqual(b["updates"]["updates"]["phase"], "ok")
         self.assertEqual(b["ups"], {"found": False})
         for name, src in b["sources"].items():
             self.assertEqual(set(src) - {"why"}, {"command", "at", "ok", "rc"}, name)
@@ -240,6 +248,79 @@ class BoardContractTests(Base):
         self.assertIsNone(b["machines"][0]["apps"])
         self.assertFalse(b["sources"]["apps"]["ok"])
         self.assertTrue(b["sources"]["apps"]["why"])
+        self.assertIsNone(b["machines"][0]["hardware"], "the scan is the app manager's too")
+
+
+class StatusLine(Base):
+    """The one status line never says more than was read (docs/board.md, "GET /api/board")."""
+
+    def shape(self, change=None, missing=""):
+        os.environ["BOARD_MISSING"] = missing
+        snap = snapshot.gather()
+        snap["alerts"] = snap["alerts"] and dict(snap["alerts"], alerts=[])           # nothing needs anyone
+        snap["activity"] = snap["activity"] and dict(snap["activity"], jobs=[])
+        (change or (lambda s: None))(snap)
+        b = board.shape(snap, snap["at"])
+        return b["status"]["state"], b["status"]["words"], b["machines"][0]["state"], b["machines"][0]["state_word"]
+
+    def test_everything_read_and_nothing_wrong(self):
+        self.assertEqual(self.shape(), ("ok", "Everything is running.", "ok", "online"))
+
+    def test_a_part_that_wasnt_read_is_never_everything_is_running(self):
+        # the stand-in `bromigos` takes a command's first word: "lab" is the apps and the backups both
+        for missing, words in (("alerts", "the alerts"), ("activity", "the jobs"), ("storage", "the drives' health"),
+                               ("server", "the system's status"), ("lab", "the apps and the backups")):
+            state, said, machine, word = self.shape(missing=missing)
+            self.assertEqual(state, "unknown", missing)
+            self.assertEqual(said, f"Can't say everything is running: {words} couldn't be read (bromigos lab: no command apps).",
+                             missing)
+            # the machine answered: its row doesn't say it can't be checked
+            self.assertEqual((machine, word), ("ok", "online"), missing)
+
+    def test_several_parts_with_one_reason_say_it_once(self):
+        os.environ["PATH"] = str(self.root)                    # no bromigos at all
+        snap = snapshot.gather()
+        b = board.shape(snap, snap["at"])
+        self.assertEqual(b["status"], {"state": "unknown", "checked_at": snap["at"], "words":
+                         "Can't say everything is running: the alerts, the jobs, the apps, the drives' health, the backups "
+                         "and the system's status couldn't be read (bromigos isn't installed)."})
+
+    def test_each_part_its_own_reason(self):
+        def change(snap):
+            snap["apps"] = {"schema": 1, "ok": False, "error": "the catalogue can't be read"}     # it answered, with an error
+            snap["backups"] = {"schema": 1, "ok": False, "server": False,
+                               "error": {"code": "not-a-server", "message": "This computer isn't a bromigOS Server."}}
+        state, said, _, _ = self.shape(change)
+        self.assertEqual(state, "unknown")
+        self.assertEqual(said, "Can't say everything is running: the apps couldn't be read (the catalogue can't be read); "
+                               "the backups couldn't be read (This computer isn't a bromigOS Server.).")
+
+    def test_an_app_that_isnt_running_or_backups_that_need_a_look(self):
+        def down(snap):
+            for t in snap["apps"]:
+                if t["id"] in ("photos", "passwords"):
+                    t["state"] = "down"
+        state, said, machine, _ = self.shape(down)
+        self.assertEqual((state, said, machine), ("needs-you", "Photos and Passwords aren't running.", "ok"))
+
+        def one(snap):
+            next(t for t in snap["apps"] if t["id"] == "photos")["state"] = "degraded"
+        self.assertEqual(self.shape(one)[:2], ("needs-you", "Photos isn't running."))
+
+        def backups(snap):
+            snap["backups"]["health"] = {"state": "attention", "verdict": "The last backup failed 7 hours ago.", "problems": []}
+        self.assertEqual(self.shape(backups)[:2], ("needs-you", "The last backup failed 7 hours ago."))
+
+    def test_what_needs_you_comes_first_and_nothing_installed_before_what_wasnt_read(self):
+        snap = snapshot.gather()
+        snap["storage"] = None
+        b = board.shape(snap, snap["at"])
+        self.assertEqual((b["status"]["state"], b["status"]["words"]), ("needs-you", "1 thing needs you."))
+
+        def none(snap):
+            snap["apps"] = [dict(t, installed=False) for t in snap["apps"]]
+            snap["backups"] = None
+        self.assertEqual(self.shape(none)[:2], ("setup", "Nothing is set up yet."))
 
     def test_every_answer_is_json_and_never_cached(self):
         for path in ("/api/door", "/api/session", "/api/board", "/api/nothing"):

@@ -8,6 +8,7 @@ case "$*" in
   "activity list --json") f=activity-list.json ;;
   "alerts --json") f=alerts.json; rc=1 ;;
   "lab apps list --json") f=apps-list.json ;;
+  "lab apps budget --json") f=apps-budget.json ;;
   *) echo "bromigos: no command $*" >&2; exit 2 ;;
 esac
 for m in $BOARD_MISSING; do

@@ -6,7 +6,7 @@
  "drives": [
   {"key": "nvme-a1b2c3", "device": "nvme0", "model": "Example NVMe 1TB", "serial_tail": "9F2A", "firmware": "1.0",
    "kind": "nvme", "present": true, "reports": true, "stable_identity": true, "first_seen": 1790000000000,
-   "last_seen": 1794290000000, "silent_since": null, "verdict": "fine", "words": "Fine", "alert": null,
+   "last_seen": 1794290000000, "silent_since": null, "verdict": "healthy", "words": "healthy", "alert": null,
    "since": 1790000000000, "summary": "", "reasons": [], "advice": "", "quiet_on": null, "readings": {"temp_c": 38},
    "trend": {}, "events": []}
  ]

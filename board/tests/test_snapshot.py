@@ -18,7 +18,7 @@ from bromigos_board import paths, snapshot
 class GatherTests(Root):
     def test_every_part_from_its_command(self):
         doc = snapshot.gather()
-        self.assertEqual([n for n, _ in snapshot.SOURCES], ["system", "storage", "backups", "activity", "alerts", "apps"])
+        self.assertEqual([n for n, _ in snapshot.SOURCES], ["system", "storage", "backups", "activity", "alerts", "apps", "budget"])
         for name, argv in snapshot.SOURCES:
             self.assertEqual(argv[0], "bromigos")
             self.assertEqual(argv[-1], "--json")
@@ -214,16 +214,47 @@ class FilterTests(Root):
     def test_names(self):
         for name in ("password", "passwords", "passphrase", "pwd", "secret", "client_secret", "token", "admin_token", "API_KEY",
                      "apiKey", "authkey", "key", "keys", "ssh_key", "psk", "pin", "otp_seed", "cookie", "credentials",
-                     "recovery_bundle", "join_code", "joinCode", "unseal_key", "Authorization"):
+                     "recovery_bundle", "join_code", "joinCode", "unseal_key", "Authorization", "DB_PASSWORD",
+                     "HTTPToken", "JOIN_CODE", "X-Api-Key"):
             self.assertTrue(snapshot.secret_name(name), name)
+        for name in ("password_hash", "token_b64", "keyFile", "password-file", "secret_id", "access_key_id", "SECRET_VALUE", "password2",
+                     "token_1"):
+            self.assertTrue(snapshot.secret_name(name), name)       # a secret's word, then the form it is in
         for name in ("exit_code", "code", "passed", "last_check_passed", "monkey", "spin", "pinned", "hotkeys", "seeded_from",
-                     "id", "to", "model", "verdict", "state", "open", "household"):
+                     "id", "to", "model", "verdict", "state", "open", "household", "", "_"):
             self.assertFalse(snapshot.secret_name(name), name)
+
+    def test_a_name_is_read_by_its_words_and_the_last_one_says_what_the_value_is(self):
+        # words, never a run of letters inside one: "passed" isn't "pass", "monkey" isn't "key"
+        for name in ("last_test_passed", "last_check_passed", "passes", "bypass", "compass", "tokenizer", "keyboard", "pinned_at"):
+            self.assertFalse(snapshot.secret_name(name), name)
+        # a count, a time, a place or a yes/no about a secret is not the secret
+        for name in ("token_count", "key_count", "secret_store", "token_ttl", "key_age_days", "password_changed_at", "keys_total",
+                     "password_required", "token_expires", "key_kind", "public_key", "ssh_public_key"):
+            self.assertFalse(snapshot.secret_name(name), name)
+
+    def test_the_backups_last_passed_test_and_check_reach_the_page(self):
+        """`bromigos lab backups status --json` as it is printed: the last test restore and the
+        last check that passed are records, and the page reads their times."""
+        rec = {"phase": "ok", "at": "2026-10-29T05:53:20+00:00", "ts": 1793253200.0, "age_s": 1036800, "files": 100}
+        doc = {"schema": 1, "server": True, "configured": True, "to": "s3:https://s3.example/backups/myserver",
+               "last_test": dict(rec), "last_test_passed": dict(rec), "last_check": dict(rec, files=None),
+               "last_check_passed": dict(rec, files=None), "token_count": 2, "key_count": 1, "secret_store": "the system keyring",
+               "snapshots": {"count": 17, "oldest": "2026-05-14T05:53:20+00:00", "newest": "2026-11-09T22:53:20+00:00"}}
+        self.assertEqual(snapshot.scrub(doc, "backups"), doc)
+        got = snapshot.scrub(dict(doc, password="hunter2", repository_password_file="/etc/x", last_test_passed=dict(rec, token="t0k")))
+        self.assertEqual(got, dict(doc, last_test_passed=rec))
 
     def test_only_yes_no_and_nothing_stay_under_a_secrets_name(self):
         self.assertEqual(snapshot.scrub({"password": "x", "passwords": False, "token": None, "join_code": 482913, "pin": 1234,
                                          "key": {"a": 1}, "keys": ["a"], "secret": 0.5, "has_key": True, "ok": "fine", "n": 3}),
                          {"passwords": False, "token": None, "has_key": True, "ok": "fine", "n": 3})
+
+    def test_whether_a_secret_is_set_stays(self):
+        # `bromigos alerts --json`, a channel: its address and key are only ever said to be set or not
+        ch = {"name": "ops", "type": "webhook", "address": "set", "key": "set", "token": "not set", "password": None}
+        self.assertEqual(snapshot.scrub({"channels": [ch]}, "alerts"), {"channels": [ch]})
+        self.assertEqual(snapshot.scrub({"key": "set ", "token": "unset", "secret": ["set"]}), {})
 
     def test_the_shapes_the_review_named(self):
         doc = {

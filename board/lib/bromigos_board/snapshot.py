@@ -31,6 +31,9 @@ SOURCES = (
     ("alerts", ["bromigos", "alerts", "--json"]),
     # the app manager's list (DESIGN's tile contract): read when this server's bromigos has it
     ("apps", ["bromigos", "lab", "apps", "list", "--json"]),
+    # what is in the box (cores, memory, free disk, a graphics card): the scan the app manager
+    # fits apps against, which is the only shipped command that prints it
+    ("budget", ["bromigos", "lab", "apps", "budget", "--json"]),
 )
 INTERVAL_S = 15
 IDLE_S = 45                     # nobody looked for this long: stop
@@ -42,29 +45,50 @@ NOT_ON_DOOR = ("board", "start-page")     # the page itself, and the one it repl
 # printed anyway, as well as it can (docs/board.md, "Where the readings come from"):
 #
 # - a value under a name that says it's a secret is dropped, unless it's true, false or null
-#   ("passwords": false says whether SSH takes passwords; it holds none);
+#   ("passwords": false says whether SSH takes passwords; it holds none), or the words "set" and
+#   "not set";
 # - {"name": "<a secret's name>", "value": …} loses its value;
 # - every piece of text, a command's error line included, loses a user:password@ in an address
 #   and goes through the activity records' own filter (bromigos_activity.redact: NAME=value, a
 #   secret in a link's query, tokens by their shape); an option that names a secret takes the
 #   next word with it.
+#
+# A name says so by its words, never by a run of letters inside one: "last_test_passed" isn't
+# "pass". And by where the word stands: the name's last word is what the value is, so "api_key"
+# and "db_password" are secrets while "key_count", "token_ttl" and "secret_store" are a count, a
+# time and a place (secret_name).
 SECRET_WORDS = frozenset("""pass password passwords passwd passphrase passphrases pwd secret secrets token tokens key keys
     apikey authkey psk pin otp totp seed cookie cookies credential credentials recovery unseal bundle bearer
     authorization""".split())
+# after a secret's word, these still name the secret itself, in another form or where it is kept
+# (password_hash, token_b64, key_file, secret_id); any other last word names something about it
+SECRET_FORMS = frozenset("""value values hash plain plaintext text string str raw data material pem b64 base64 hex enc
+    encrypted new old current file path id""".split())
+# under a secret's name these say whether there is one, as true and false do, and stay
+# (`bromigos alerts --json`: a channel's "key": "set")
+SAYS_WHETHER = ("set", "not set")
 # "code" is a secret after one of these (join_code), and not otherwise (exit_code, an error's code)
 CODE_OF = frozenset("join recovery pairing pair auth device user unseal backup otp invite access signin sign".split())
 USERINFO = re.compile(r"\b([a-z][a-z0-9+.-]*://)[^/@\s]+@", re.I)
 OPTION = re.compile(r"(?<![\w-])(--?[\w-]*)(\s+)(?!-)(\S+)")
-WORD = re.compile(r"[A-Za-z][a-z]*|[A-Z]+(?![a-z])|[0-9]+")
+WORD = re.compile(r"[A-Z]+(?![a-z])|[A-Za-z][a-z]*|[0-9]+")        # DB_PASSWORD, dbPassword, HTTPToken2
 DRIVE_KEY = re.compile(r"[a-z0-9][a-z0-9._:-]{0,95}\Z")
 
 
 def secret_name(name):
-    """Whether a field's name says its value is a secret."""
+    """Whether a field's name says its value is a secret: by its last word (api_key, password2),
+    by the whole name run together (apiKey, authkey), by a secret's word and then its form
+    (token_b64), or a code that lets someone in (join_code)."""
     words = [w.lower() for w in WORD.findall(str(name))]
-    if any(w in SECRET_WORDS for w in words) or "".join(words) in SECRET_WORDS:
+    if any(words[i - 1] in SECRET_WORDS and "".join(words[i:]) in SECRET_FORMS for i in range(1, len(words))):
         return True
-    return any(w in ("code", "codes") and i and words[i - 1] in CODE_OF for i, w in enumerate(words))
+    while len(words) > 1 and words[-1].isdigit():           # password2, token_1: still the password, the token
+        words.pop()
+    if not words:
+        return False
+    if words[-1] in SECRET_WORDS or "".join(words) in SECRET_WORDS:
+        return words[-2:] != ["public", "key"]
+    return words[-1] in ("code", "codes") and len(words) > 1 and words[-2] in CODE_OF
 
 
 def _redact():
@@ -91,7 +115,7 @@ def scrub(doc, parent=None, redact=None):
             if parent == "drives" and k == "key" and isinstance(v, str) and DRIVE_KEY.match(v):
                 out[k] = v                    # a drive's own id in the drive reports, not a key that opens anything
                 continue
-            if (secret_name(k) or (named and k == "value")) and v is not None and not isinstance(v, bool):
+            if (secret_name(k) or (named and k == "value")) and v is not None and not isinstance(v, bool) and v not in SAYS_WHETHER:
                 continue
             out[k] = scrub(v, k, redact)
         return out

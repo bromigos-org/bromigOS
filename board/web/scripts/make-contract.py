@@ -6,8 +6,9 @@ Nothing in the file is written by hand. Each part is made by the code that makes
 
   the commands' documents   the libraries behind `bromigos storage health`, `bromigos alerts`,
                             `bromigos lab backups status`, `bromigos activity list`,
-                            `bromigos server status` and `bromigos lab apps list` (each with
-                            --json), run on the stand-in machines their own tests use
+                            `bromigos server status`, `bromigos lab apps list` and
+                            `bromigos lab apps budget` (each with --json), run on the stand-in
+                            machines their own tests use
   the board and the door    the service's snapshot reader (snapshot.gather, with its scrub) and
                             its API (api.make_app), asked over HTTP through Starlette's test client
 
@@ -240,7 +241,9 @@ def system():
 
 def apps():
     """`bromigos lab apps list --json` from the stand-in machine homelab/tests uses: Caddy, Photos
-    and Passwords installed and running; the same with Photos' services down; nothing installed."""
+    and Passwords installed and running; the same with Photos' services down; nothing installed.
+    And `bromigos lab apps budget --json` from each (under "<name>.budget"): the service reads
+    what is in the box from it."""
     import test_lab_apps as T
     from bromigos_homelab import labapps as A, provcatalog as PC
     out = {}
@@ -256,12 +259,15 @@ def apps():
                     case.fm.active -= set(T.PHOTOS_UNITS)
                 code, text = quiet(A.main, ["list", "--json"], ["/usr/lib/bromigos/bin/bromigos-lab", "apps"], case.m)
                 out[name] = strip(json.loads(text), case.root)
+                code, text = quiet(A.main, ["budget", "--json"], ["/usr/lib/bromigos/bin/bromigos-lab", "apps"], case.m)
+                out[f"{name}.budget"] = strip(json.loads(text), case.root)
             finally:
                 case.doCleanups()
         PC._cache.clear()
     by = {t["id"]: t for t in out["running"]}
     assert by["photos"]["state"] == "ok" and {t["id"]: t for t in out["down"]}["photos"]["state"] == "down"
     assert not any(t["installed"] for t in out["none"])
+    assert out["running.budget"]["hardware"]["cpu"] == T.HW["cpu"] and out["none.budget"]["installed"]["ids"] == []
     return out
 
 
@@ -410,11 +416,14 @@ def build(args):
             act, _ = activity(root, jobs)
             parts = {"storage-health.json": cmds["drives"][drives]["storage"], "alerts.json": cmds["drives"][drives]["alerts"],
                      "backups-status.json": cmds["backups"][backups_], "apps-list.json": cmds["apps"][apps_],
+                     "apps-budget.json": cmds["apps"][f"{apps_}.budget"],
                      "server-status.json": cmds["system"], "activity-list.json": strip(act, root)}
             parts.update(replace or {})
+            # a server without `bromigos lab apps` has neither its list nor its budget
+            gone = set(missing) | ({"apps-budget.json"} if "apps-list.json" in missing else set())
             for name, doc in parts.items():
                 # a command that isn't there prints no JSON: the snapshot notes why and its part is null
-                (fix / name).write_text("bromigos: no such command\n" if name in missing else json.dumps(doc))
+                (fix / name).write_text("bromigos: no such command\n" if name in gone else json.dumps(doc))
             os.environ["BROMIGOS_BOARD_NOW_MS"] = str(at)
             doc = snapshot.gather()
             snapshot.write(doc)

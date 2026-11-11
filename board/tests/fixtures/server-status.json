@@ -4,7 +4,7 @@
  "ssh": {"enabled": true, "running": "active", "passwords": false, "how": "keys only"},
  "firewall": {"running": "active", "allow": ["web-lan"], "tcp": [], "udp": [], "public_tcp": [], "public_udp": []},
  "roles": {"enabled": ["home-services"], "titles": ["Home services"]},
- "updates": {"phase": "done", "started": "2026-11-10T03:00:04-08:00", "finished": "2026-11-10T03:06:41-08:00",
+ "updates": {"phase": "ok", "started": "2026-11-10T03:00:04-08:00", "finished": "2026-11-10T03:06:41-08:00",
              "auto": true, "mode": "auto", "window": "03:00-05:00", "channel": "live", "notify": true,
              "cluster_reboots": false, "timer": "active"},
  "health": {"checks": ["startup", "units", "network", "sshd"], "scripts": []},

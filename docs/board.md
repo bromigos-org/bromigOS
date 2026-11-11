@@ -64,8 +64,9 @@ gathers the readings, the Caddy site, and what the page never shows.
   Reports and upcoming jobs; and inside
   the built pages: This week, VECTOR's plans, power, system versions, the pool's layout, a
   new disk, replacing a drive, getting files back, a friend's lab, Move in, and the apps'
-  updates. A machine's processor, memory, heat and network, its hardware and its trends
-  show as "not measured" until the service sends them.
+  updates. A machine's cores, memory and graphics card come from the service. How busy its
+  processor and memory are, its heat, its network and its trends show as "not measured"
+  until something on the server measures them.
 
 ## Where things are
 
@@ -353,8 +354,8 @@ by hand. `scripts/make-contract.py` makes it:
 
 - **the commands' documents** come from the libraries behind `bromigos storage health`,
   `bromigos alerts`, `bromigos lab backups status`, `bromigos activity list`,
-  `bromigos server status` and `bromigos lab apps list`, run on the stand-in machines their
-  own tests use;
+  `bromigos server status`, `bromigos lab apps list` and `bromigos lab apps budget`, run on
+  the stand-in machines their own tests use;
 - **the board, the door, the session and the stream** come from the service's own reader
   and API, asked over HTTP with its test client.
 
@@ -641,6 +642,7 @@ keep the reader running, and the door's tiles can be two minutes behind.
 | `activity` | `bromigos activity list --json` |
 | `alerts` | `bromigos alerts --json` |
 | `apps` | `bromigos lab apps list --json` |
+| `budget` | `bromigos lab apps budget --json` |
 
 A command that exits 1 with its JSON has still answered: 1 means it found a problem. A
 command that is missing, fails or prints no JSON leaves its part `null`, and `sources` says
@@ -651,14 +653,23 @@ why. The page then says it can't check, rather than guessing.
 lists the catalogue's web apps that `bromigos lab provision --local` set up, as the start page
 did.
 
+`bromigos lab apps budget --json` is read for its `hardware`: the cores, the memory, the free
+disk where apps keep their data, and whether there is a graphics card. It is the scan the
+app manager fits apps against, and the only shipped command that prints it. Nothing the
+reader runs measures how busy the machine is, so the board sends no such reading.
+
 **The filter is the second line, and best effort.** The first line is that these commands
 don't print secrets, and that only a signed-in browser sees `board.json`. The reader still
 filters what it writes, a failed command's error line included:
 
 - a value is dropped when its name says it's a secret: a password, a passphrase, a secret, a
-  token, a key, a PIN, a seed, a cookie, a recovery or join code. Only `true`, `false` and
-  `null` stay under such a name: `"passwords": false` says SSH takes no passwords, and holds
-  none. A drive's `key` in the drive reports stays: it's the drive's id;
+  token, a key, a PIN, a seed, a cookie, a recovery or join code. Only `true`, `false`,
+  `null` and the words `"set"` and `"not set"` stay under such a name: `"passwords": false`
+  says SSH takes no passwords, and holds none. A drive's `key` in the drive reports stays: it's the drive's id;
+- a name is read by its words, and its last word says what the value is. `api_key`,
+  `DB_PASSWORD` and `token_b64` are secrets. `last_test_passed`, `key_count`, `token_ttl`,
+  `secret_store` and `public_key` are a result, a count, a time, a place and a public key,
+  and they stay;
 - `{"name": "admin_token", "value": "…"}` loses its value;
 - in text, a `user:password@` part of an address is cut, and `NAME=value`, a secret in a
   link's query, an option such as `--password` with the word after it, and tokens with a
@@ -743,12 +754,14 @@ draws first from those same documents:
  "status": {"state": "needs-you", "words": "1 thing needs you.", "checked_at": 1794290000000},
  "machines": [{"name": "myserver", "kind": "server", "here": true, "page": true, "state": "warn",
                "state_word": "needs you", "roles": ["home-services"], "updates": null, "readings": null,
+               "hardware": {"cpu": 4, "ram_gb": 16, "disk_gb": 512, "gpu": false, "gpu_kind": null,
+                            "gpu_name": null, "gpu_vram_gb": 0},
                "apps": 6}],
  "needs_you": [{"id": "update.restart", "machine": "myserver", "subject": null, "severity": "warn",
                 "words": "A restart finishes the update",
                 "detail": "The kernel was updated. Restart when it suits you.",
                 "since": 1794200000000, "go": "supply/updates", "job": null}],
- "fixed": [{"id": "20261110-0530-app.update-photos-1a2b", "machine": "myserver",
+ "fixed": [{"id": "20261110-0530-app.update-photos-1a2b", "machine": "myserver", "title": "Updating Photos",
             "words": "Photos didn't answer after the update, so it was put back.", "at": 1794260000000}],
  "apps": ["… bromigos lab apps list --json's apps"],
  "storage": "… bromigos storage health --json",
@@ -762,13 +775,36 @@ draws first from those same documents:
  "alerts": "… bromigos alerts --json", "host": "myserver", "settings": {"door": true, "world": "wick"}}
 ```
 
-- `status.state` is `ok`, `needs-you`, `setup` (the apps list says nothing is installed) or
-  `unknown` (the reading is more than 45 seconds old: `stale`).
+- `status` is the one line for the whole server, and it never says more than was read.
+  `status.words` is "Everything is running." only when every part was read and nothing in
+  them says otherwise. In order, worst first:
+
+  | `status.state` | When | `status.words`, for example |
+  |---|---|---|
+  | `unknown` | the reading is more than 45 seconds old (`stale`) | Can't check right now: the last reading is old. |
+  | `needs-you` | something is in `needs_you` | 2 things need you. |
+  | `needs-you` | an installed app is `down` or `degraded` | Photos isn't running. |
+  | `needs-you` | the backups' health is `attention` | the backups' own verdict |
+  | `setup` | the apps list was read and nothing is installed | Nothing is set up yet. |
+  | `unknown` | a part couldn't be read: the alerts, the jobs, the apps, the drives' health, the backups or the system's status | Can't say everything is running: the alerts couldn't be read (bromigos: no such command). |
+  | `ok` | none of the above | Everything is running. |
+
+  The reason in brackets is `sources.<part>.why`, or what the command's error document said.
+- `machines[].state` is the machine's own row: `unknown` when the reading is old, `warn` when
+  something on it is in `needs_you`, else `ok` ("online"). A machine that answered is never
+  "can't check" because one part couldn't be read: that is the status line's to say.
+- `machines[].hardware` is what is in the box, from the app manager's scan: `cpu` (cores),
+  `ram_gb`, `disk_gb` (free where apps keep their data), `gpu` (true or false), `gpu_kind`
+  (`"nvidia"`, `"amd"` or null), `gpu_name` (null: the command doesn't print it yet)
+  and `gpu_vram_gb`. It is null when `bromigos lab apps budget` didn't answer. The drives
+  aren't repeated there: `storage.drives` has them.
 - `needs_you` lists the alerts a person must act on (severity `needs_you`, shown as `warn`,
   or `critical`), then the jobs waiting for an answer. `go` names the part of the page that
   owns the fact: `data`, `data/backups`, `supply/updates` or `activity`.
-- `fixed` lists the jobs that failed and put things back by themselves (`rolled-back`).
-- `readings` and `updates` in `machines` are null: nothing the reader runs measures them yet.
+- `fixed` lists the jobs that failed and put things back by themselves (`rolled-back`):
+  `title` is the job's own ("Updating Photos"), `words` what became of it.
+- `readings` and `updates` in `machines` are null: nothing the reader runs measures how busy
+  a machine is, or counts its waiting updates, yet.
 
 Times are milliseconds since 1970, UTC.
 
