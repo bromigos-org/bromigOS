@@ -10,6 +10,9 @@
   bromigos lab backups test [--all]          a test restore: a sample (or everything) restored to
                                              a scratch folder, read back, then removed
   bromigos lab backups run | check [--data]  = bromigos server backup run | check
+  bromigos lab backups go-bag …              the backup on a USB drive you carry away: status,
+                                             drives, setup, run, forget (lib/bromigos_backup_drive.py)
+  … list | show | restore | test --from go-bag   the same commands, reading that drive
 
 The nightly backup itself is bromigos-server's (`backup run`, `backup check`): restic, to
 [backup] to in /etc/bromigos/server.toml. This module reads what it leaves, and restores from it.
@@ -21,7 +24,8 @@ alerts` all call it, so they can't disagree.
 Files (BROMIGOS_SERVER_ROOT puts them under a stand-in root, for the tests):
   /etc/bromigos/server.toml               [backup] to, env_file
   /etc/bromigos/server/backup.key         the backup's key (root only); never made here
-  /var/lib/bromigos/server/backup.json    the last backup, check and test restore; the count
+  /var/lib/bromigos/server/backup.json    the last backup, check and test restore; the count;
+                                          the backup drive (`drives`) and its last copy
   /var/lib/bromigos/server/restore.json   the restore running now, or the last one
   /var/lib/bromigos/server/restore-test.json   the same for the test restore
   /var/lib/bromigos/server/restore-test/  the test restore's scratch folder (emptied after)
@@ -157,6 +161,16 @@ def where(to):
     return re.sub(r"//[^/@]*@", "//", to) if to else ""
 
 
+def shown(b):
+    """Where these backups are, for showing: the destination's address, or the backup drive's name."""
+    return b.get("name") or where(b["to"])
+
+
+def soon(b):
+    """When the first backup comes, for a place that has none yet."""
+    return "the first one is made when the drive is next plugged in" if b.get("drive") else "the first one runs tonight"
+
+
 def same_place(to):
     """The destination without a password, the user kept: what backup.json remembers a backup
     went to, to tell the same place from another account's."""
@@ -237,14 +251,15 @@ def _problem(pid, subject, severity, title, detail, commands, touches, note=""):
 READ_FIRST = "Read why it failed first: a destination that can't be reached and a full disk are common."
 
 
-def health(to, st, now, dest=None, restore=None):
+def health(to, st, now, dest=None, restore=None, drives=None):
     """Are this server's backups healthy? Pure: `to` is [backup] to, `st` is backup.json,
-    `now` is Unix seconds, `dest` is destination()'s answer and `restore` is job_record()'s
-    (its "unfinished": a restore in place that stopped part-way).
+    `now` is Unix seconds, `dest` is destination()'s answer, `restore` is job_record()'s
+    (its "unfinished": a restore in place that stopped part-way) and `drives` is the backup
+    drive as bromigos_backup_drive.view() has it (none: no drive is set up).
 
     Returns {"state": "ok" | "attention" | "waiting" | "off", "verdict": one or two plain
     sentences, "problems": [...], and what it was judged from: "backup", "success", "check",
-    "read_back", "test", "test_passed", "snapshots"}. Each problem has an id, a severity
+    "read_back", "test", "test_passed", "snapshots", "drives"}. Each problem has an id, a severity
     (bromigos alerts' words), a title, a detail and the commands that look into it."""
     st = st if isinstance(st, dict) else {}
     dest = dest or destination(to)
@@ -263,15 +278,17 @@ def health(to, st, now, dest=None, restore=None):
     inv = st.get("snapshots") if isinstance(st.get("snapshots"), dict) else None
     doc = {"state": "off", "verdict": "", "problems": [], "backup": backup, "success": success, "check": check,
            "check_passed": check_ok, "read_back": read_back, "test": test, "test_passed": test_ok,
-           "snapshots": inv if inv and isinstance(inv.get("count"), int) else None}
+           "snapshots": inv if inv and isinstance(inv.get("count"), int) else None, "drives": list(drives or [])}
     problems = doc["problems"]
+    # the backup drive (the Go Bag): one more destination, judged with the rest
+    carried, carried_said = drive_lib().judge(doc["drives"], now) if doc["drives"] else ([], "")
     # a restore in place that didn't finish: the files there are a mix, whatever the backups do
     left = restore.get("unfinished") if isinstance(restore, dict) else None
     mix = None
     if isinstance(left, dict):
         paths = ", ".join(left.get("paths") or []) or "everything"
         again = "bromigos lab backups restore " + " ".join([str(left.get("snapshot", "")), *(left.get("paths") or [])]).strip() \
-            + " --in-place --apply"
+            + " --in-place --apply" + (drive_lib().FLAG if left.get("source") == "drive" else "")
         mix = _problem(
             "restore-interrupted", "server-restore", "needs_you", "A restore stopped part-way",
             f"Putting {paths} back from the backup of {left.get('snapshot_at', '?')} stopped on "
@@ -280,10 +297,17 @@ def health(to, st, now, dest=None, restore=None):
             ["bromigos lab backups", again], [f"replaces files ({paths}) with the backup's"])
     mixed = " A restore stopped part-way: some files are from the backup and some aren't." if mix else ""
     if not to:
-        doc["verdict"] = ("Backups are off: nothing on this server is backed up. To turn them on, say where "
-                          "they go: [backup] to in /etc/bromigos/server.toml.") + mixed
+        if doc["drives"]:
+            doc["verdict"] = (f"No nightly backup is set up: the {drive_lib().NAME} drive is this server's only "
+                              f"backup. {carried_said}") + mixed
+            problems.extend(carried)
+            doc["state"] = "ok"
+        else:
+            doc["verdict"] = ("Backups are off: nothing on this server is backed up. To turn them on, say where "
+                              "they go: [backup] to in /etc/bromigos/server.toml.") + mixed
         if mix:
             problems.append(mix)
+        if any(p["severity"] != "info" for p in problems):
             doc["state"] = "attention"
         return doc
     look = ["bromigos lab backups", "journalctl -u bromigos-server-backup.service -n 50 --no-pager"]
@@ -336,6 +360,7 @@ def health(to, st, now, dest=None, restore=None):
                 "been off, or its timer stopped. Until one passes, nobody knows the backup can be restored.",
                 ["bromigos lab backups", "systemctl list-timers bromigos-server-backup-test.timer",
                  "sudo bromigos lab backups test"], ["nothing on the server (it restores to a scratch folder, then removes it)"]))
+    problems.extend(carried)
     if mix:
         problems.append(mix)
     # the verdict: a sentence or two a person can act on, and never quieter than the problems
@@ -366,10 +391,17 @@ def health(to, st, now, dest=None, restore=None):
         line += f" Last test restore: {ago(test_ok['ts'], now)}, passed."
     elif last:
         line += " Last test restore: none yet."
-    doc["verdict"] = line + mixed
+    doc["verdict"] = line + (" " + carried_said if carried_said else "") + mixed
     if any(p["severity"] != "info" for p in problems):
         doc["state"] = "attention"
     return doc
+
+
+def drive_lib():
+    """lib/bromigos_backup_drive.py: the backup on a USB drive you carry away (the Go Bag). It
+    imports this module, so this one reaches it only when a drive is asked about."""
+    import bromigos_backup_drive
+    return bromigos_backup_drive
 
 
 # ------------------------------------------------------------------ files
@@ -393,26 +425,33 @@ def write_json(path, doc, mode=0o644):
     os.replace(tmp, at(path))
 
 
-def update_state(**records):
-    """Merge records into backup.json under a lock: the nightly backup, its check and a test
-    restore each keep their own keys, and none loses another's when they overlap. A value of
-    None removes the key."""
+def change_state(change):
+    """backup.json read, changed by change(st) and written, all under a lock: the nightly
+    backup, its check, a test restore and a copy to the backup drive each keep their own
+    keys, and none loses another's when they overlap."""
     os.makedirs(os.path.dirname(at(STATE)), mode=0o755, exist_ok=True)
     with open(at(STATE) + ".lock", "a") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         st = read_json(STATE)
+        change(st)
+        write_json(STATE, st)
+    return st
+
+
+def update_state(**records):
+    """Merge records into backup.json (change_state). A value of None removes the key."""
+    def merge(st):
         for k, v in records.items():
             if v is None:
                 st.pop(k, None)
             else:
                 st[k] = v
-        write_json(STATE, st)
-    return st
+    return change_state(merge)
 
 
 def settings():
-    """[backup] of /etc/bromigos/server.toml, as far as restoring needs it: to and env_file.
-    Raises Problem when the file is there and can't be read."""
+    """[backup] of /etc/bromigos/server.toml, as far as restoring needs it: to and env_file,
+    and drive_remind_days for the status. Raises Problem when the file is there and can't be read."""
     try:
         with open(at(CONFIG), "rb") as f:
             c = tomllib.load(f)
@@ -421,7 +460,8 @@ def settings():
     except (OSError, tomllib.TOMLDecodeError) as e:
         raise Problem("settings", f"{CONFIG} can't be read ({e}).")
     b = c.get("backup") if isinstance(c.get("backup"), dict) else {}
-    return {"to": str(b.get("to") or ""), "env_file": str(b.get("env_file") or ENV_FILE)}
+    return {"to": str(b.get("to") or ""), "env_file": str(b.get("env_file") or ENV_FILE),
+            "drive_remind_days": drive_lib().days(b)}
 
 
 def is_server():
@@ -478,7 +518,7 @@ def job_record(path=JOURNAL, doc=None):
     j["interrupted"] = j.get("state") == "interrupted" or (j.get("state") == "running" and not running)
     j["running"] = running
     if (j["interrupted"] or j.get("state") == "incomplete") and j.get("mode") == "in-place" and j.get("writing"):
-        j["unfinished"] = {k: j.get(k) for k in ("snapshot", "snapshot_at", "paths", "started", "snapshots_taken")}
+        j["unfinished"] = {k: j.get(k) for k in ("snapshot", "snapshot_at", "paths", "started", "snapshots_taken", "source")}
     return j
 
 
@@ -495,7 +535,8 @@ def status_doc(now=None):
     rec, test_run = job_record(), job_record(TEST_JOURNAL)
     running = next(({k: j.get(k) for k in ("kind", "mode", "step", "steps", "percent", "started", "snapshot")}
                     for j in (rec, test_run) if j and j["running"]), None)
-    h = health(b["to"], st, now, dest, rec)
+    D = drive_lib()
+    h = health(b["to"], st, now, dest, rec, D.view(st, now, b["drive_remind_days"], busy=D.running()))
     return {"schema": SCHEMA, "ok": h["state"] != "attention", "server": True, "configured": bool(b["to"]),
             "to": where(b["to"]), "destination": dest,
             "timers": {k: unit_state(u) for k, u in TIMERS.items()} if b["to"] else {},
@@ -503,19 +544,28 @@ def status_doc(now=None):
             "last_backup": h["backup"], "last_success": h["success"], "last_check": h["check"],
             "last_check_passed": h["check_passed"], "last_read_back": h["read_back"],
             "last_test": h["test"], "last_test_passed": h["test_passed"],
-            "snapshots": h["snapshots"], "restore": rec, "running": running, "checked_at": iso(now), "now": int(now)}
+            "snapshots": h["snapshots"], "drives": h["drives"], "restore": rec, "running": running,
+            "checked_at": iso(now), "now": int(now)}
 
 
 def print_status(d):
     now, h = d["now"], d["health"]
     print(h["verdict"])
-    if not d["configured"]:
+    drives = d.get("drives") or []                   # (a document from before the backup drive has none)
+    if not d["configured"] and not drives:
         return
     print()
 
     def row(label, text):
         print(f"  {label:<13} {text}")
 
+    if not d["configured"]:
+        drive_lib().print_rows(drives, now, row)
+        for p in h["problems"]:
+            if p["severity"] != "info":
+                print(f"\n  {p['title']}. {p['detail']}")
+        print(f"\nGet files back: bromigos lab backups restore   ·   the nightly backup: [backup] to in {CONFIG}")
+        return
     dest = d["destination"]
     row("Destination", d["to"] + (" (not connected)" if dest["present"] is False and dest["kind"] == "folder" else ""))
     lb, ok = d["last_backup"], d["last_success"]
@@ -571,6 +621,7 @@ def print_status(d):
              "refused": "didn't start (nothing was changed)"}.get(r.get("state"), r.get("state"))
         row("Last restore", f"{state}, started {r.get('started', '?')}: backup {r.get('snapshot', '?')} "
             + ("put back in place" if r.get("mode") == "in-place" else f"into {r.get('work') if r['interrupted'] else r.get('target')}"))
+    drive_lib().print_rows(drives, now, row)
     if dest["present"] is False:
         print(f"\n  Connect the drive that holds {dest['path']}. The nightly backup carries on by itself, or run one "
               "now: bromigos lab backups run")
@@ -670,14 +721,14 @@ def unreachable(b, rc, err):
     if dest["present"] is False:
         return Problem("unreachable", f"The backup can't be reached: the drive at {dest['path']} is not connected.")
     if rc == 10:
-        return Problem("unreachable", f"There is no backup at {where(b['to'])} yet: the first one runs tonight.")
+        return Problem("unreachable", f"There is no backup at {shown(b)} yet: {soon(b)}.")
     if rc == 11:
         return Problem("locked", "The backup is in use by another job (the nightly backup, its check or another "
                        "restore). Try again when that has finished.")
     if rc == 12:
         return Problem("wrong-key", f"The key in {KEY} doesn't open this backup. Put the key you kept for it back "
                        "in that file.")
-    return Problem("unreachable", f"The backup at {where(b['to'])} can't be read: {last or 'restic failed'}")
+    return Problem("unreachable", f"The backup at {shown(b)} can't be read: {last or 'restic failed'}")
 
 
 def snapshot_row(s):
@@ -710,10 +761,11 @@ def inventory(rows, now=None):
             "ts": time.time() if now is None else now}
 
 
-def pick(rows, spec):
+def pick(rows, spec, b=None):
     """The backup a person named: "latest" (the newest nightly one), or the start of an id."""
+    flag = (b or {}).get("flag", "")
     if not rows:
-        raise Problem("no-such-backup", "There are no backups yet: the first one runs tonight.")
+        raise Problem("no-such-backup", f"There are no backups yet: {soon(b or {})}.")
     if not spec or spec == "latest":
         ours = [r for r in rows if r["nightly"]] or rows
         return ours[-1]
@@ -721,7 +773,7 @@ def pick(rows, spec):
     if len(hits) == 1:
         return hits[0]
     raise Problem("no-such-backup", (f"More than one backup starts with {spec}: give more of the id." if hits else
-                                     f"There is no backup {spec}.") + " `bromigos lab backups list` shows them.", exit=2)
+                                     f"There is no backup {spec}.") + f" `bromigos lab backups list{flag}` shows them.", exit=2)
 
 
 def nodes(env, snap, paths, recursive=False):
@@ -795,7 +847,7 @@ def snapref(snap):
     return snap["id"] if ROOT == "/" else f"{snap['id']}:{ROOT.rstrip('/')}"
 
 
-def in_backup(env, snap, paths):
+def in_backup(env, snap, paths, flag=""):
     """Each path must be in the backup: say which isn't, and where to look."""
     if not paths:
         return
@@ -803,7 +855,7 @@ def in_backup(env, snap, paths):
     for p in paths:
         if p not in have:
             raise Problem("not-in-backup", f"{p} isn't in the backup of {when(snap['ts'])} ({snap['short_id']}). See what "
-                          f"is: bromigos lab backups show {snap['short_id']} {os.path.dirname(p) or '/'}", exit=2)
+                          f"is: bromigos lab backups show {snap['short_id']} {os.path.dirname(p) or '/'}{flag}", exit=2)
 
 
 def free_bytes(path):
@@ -961,26 +1013,29 @@ def confirm(question):
 def cmd_list(a, b):
     env = restic_env(b)
     rows = snapshots(b, env)
-    doc = {"schema": SCHEMA, "ok": True, "to": where(b["to"]), "snapshots": [{k: v for k, v in r.items() if k != "raw_paths"} for r in rows]}
+    flag = b.get("flag", "")
+    doc = {"schema": SCHEMA, "ok": True, "to": shown(b), "snapshots": [{k: v for k, v in r.items() if k != "raw_paths"} for r in rows]}
     if a.json:
         print(json.dumps(doc, indent=1))
         return 0
     if not rows:
-        print(f"No backups yet at {where(b['to'])}: the first one runs tonight.")
+        print(f"No backups yet {'on' if b.get('drive') else 'at'} {shown(b)}: {soon(b)}.")
         return 0
-    print(f"{count(len(rows), 'backup')} at {where(b['to'])}, newest first:\n")
+    print(f"{count(len(rows), 'backup')} {'on' if b.get('drive') else 'at'} {shown(b)}, newest first:\n")
     for r in reversed(rows):
         files = count(r["files"], "file") if r["files"] is not None else "files not counted"
         print(f"  {r['short_id']}  {when(r['ts']) if r['ts'] else '?':<16}  {size(r['bytes']):>10}  {files:>14}  "
               + ", ".join(r["paths"]) + ("" if r["nightly"] else f"  (not the nightly backup: from {r['host'] or '?'})"))
-    print("\nLook inside one: bromigos lab backups show ID   ·   get files back: bromigos lab backups restore ID [PATH…]")
+    print(f"\nLook inside one: bromigos lab backups show ID{flag}   ·   get files back: bromigos lab backups "
+          f"restore ID [PATH…]{flag}")
     return 0
 
 
 def cmd_show(a, b):
     env = restic_env(b)
     spec, where_in = (None, a.snapshot) if (a.snapshot or "").startswith("/") and not a.path else (a.snapshot, a.path)
-    snap = pick(snapshots(b, env), spec)
+    snap = pick(snapshots(b, env), spec, b)
+    flag = b.get("flag", "")
     path = clean_paths([where_in])[0] if where_in else None
     if path is None:
         tops = snap["paths"]
@@ -990,7 +1045,7 @@ def cmd_show(a, b):
         got = nodes(env, snap, [path])
         if not any(sysp(n.get("path", "")) == path for n in got):
             raise Problem("not-in-backup", f"{path} isn't in the backup of {when(snap['ts'])} ({snap['short_id']}). "
-                          f"`bromigos lab backups show {snap['short_id']}` lists what is.", exit=2)
+                          f"`bromigos lab backups show {snap['short_id']}{flag}` lists what is.", exit=2)
         entries = [entry(n) for n in got if sysp(n.get("path", "")) != path] or [entry(n) for n in got]
     doc = {"schema": SCHEMA, "ok": True, "snapshot": {k: v for k, v in snap.items() if k != "raw_paths"}, "path": path,
            "entries": entries}
@@ -1005,8 +1060,8 @@ def cmd_show(a, b):
               + ("/" if e["type"] == "dir" else ""))
     if not entries:
         print("  (empty)")
-    print(f"\nGo deeper: bromigos lab backups show {snap['short_id']} PATH   ·   get it back: "
-          f"bromigos lab backups restore {snap['short_id']} PATH")
+    print(f"\nGo deeper: bromigos lab backups show {snap['short_id']} PATH{flag}   ·   get it back: "
+          f"bromigos lab backups restore {snap['short_id']} PATH{flag}")
     return 0
 
 
@@ -1092,8 +1147,8 @@ def cmd_restore(a, b):
     steps = [("find", "Finding the backup"), ("size", "Working out what to restore"), ("space", "Checking free space"),
              ("restore", "Restoring the files" + ("" if a.no_verify else ", then reading each one back")),
              ("finish", "Finishing")]
-    snap = pick(snapshots(b, env), spec)
-    in_backup(env, snap, paths)
+    snap = pick(snapshots(b, env), spec, b)
+    in_backup(env, snap, paths, b.get("flag", ""))
     final, work = new_folder(a, snap)
     resumed = os.path.lexists(work)
     if resumed:
@@ -1373,13 +1428,13 @@ def restore_in_place(a, b, env, spec, paths):
     steps = [("find", "Finding the backup"), ("plan", "Working out what would change"), ("space", "Checking free space"),
              ("snapshot", "Taking a snapshot of the files as they are now"),
              ("restore", "Putting the files back" + ("" if a.no_verify else ", then reading each one back")), ("finish", "Finishing")]
-    snap = pick(snapshots(b, env), spec)
-    in_backup(env, snap, paths)
+    snap = pick(snapshots(b, env), spec, b)
+    in_backup(env, snap, paths, b.get("flag", ""))
     plan = plan_in_place(env, snap, paths)
     doc = {"schema": SCHEMA, "ok": True, "state": "planned", "mode": "in-place", "applied": False,
            "snapshot": {k: v for k, v in snap.items() if k != "raw_paths"}, "paths": paths or snap["paths"], **plan}
     todo = len(plan["replace"]) + len(plan["add"])
-    again = "bromigos lab backups restore " + " ".join([snap["short_id"], *paths]) + " --in-place --apply"
+    again = "bromigos lab backups restore " + " ".join([snap["short_id"], *paths]) + " --in-place --apply" + b.get("flag", "")
     if not todo:
         settle(paths)
     if not a.apply or not todo:
@@ -1413,7 +1468,7 @@ def restore_in_place(a, b, env, spec, paths):
             print("Nothing was changed.")
             return 3
     job = Job("restore", steps, a.json, mode="in-place", snapshot=snap["short_id"], snapshot_at=snap["at"],
-              paths=paths, target="/", work="/", plan=plan["digest"])
+              paths=paths, target="/", work="/", plan=plan["digest"], source=b.get("source", "nightly"))
     taken, writing = [], False
     includes = [x for p in paths for x in ("--include", literal(p))]
     try:
@@ -1558,7 +1613,7 @@ def run_test(a, b, job, home):
     # an empty cache of its own: on the day the server is gone there is no cache, so the test
     # must get everything, the lists of files too, from the destination alone
     env = dict(restic_env(b), RESTIC_CACHE_DIR=os.path.join(scratch, "cache"))
-    snap = pick(snapshots(b, env), None)
+    snap = pick(snapshots(b, env), None, b)
     job.record.update(snapshot=snap["short_id"], snapshot_at=snap["at"])
     job.note(f"the backup of {when(snap['ts'])} ({snap['short_id']})")
     job.step("pick")
@@ -1646,7 +1701,10 @@ def cmd_test(a, b):
             shutil.rmtree(job.record["work"], ignore_errors=True)
     rec = {"phase": "failed" if reason else "ok", "at": iso(), "ts": time.time(), "mode": mode, "files": files, "bytes": total,
            "snapshot": job.record.get("snapshot", ""), "seconds": round(time.time() - started, 1), "reason": reason}
-    update_state(test=rec, **({} if reason else {"test_ok": rec}))
+    if b.get("drive"):                               # a test restore from the backup drive is the drive's, never the nightly's
+        drive_lib().update_drive(b["drive"], test=rec, **({} if reason else {"test_ok": rec}))
+    else:
+        update_state(test=rec, **({} if reason else {"test_ok": rec}))
     job.finish("failed" if reason else "done", **rec)
     release_signals()
     doc = {"schema": SCHEMA, "ok": not reason, "state": "failed" if reason else "passed", "test": rec,
@@ -1657,7 +1715,8 @@ def cmd_test(a, b):
         print(json.dumps(doc, indent=1))
     elif reason:
         print(f"\nThe test restore failed: {sentence(reason)}.\nUntil one passes, don't count on this backup to give "
-              "your files back. `bromigos lab backups` has the rest, and `bromigos alerts` raises it.", file=sys.stderr)
+              "your files back. `bromigos lab backups` has the rest" + ("." if b.get("drive") else ", and `bromigos alerts` raises it."),
+              file=sys.stderr)
     elif not a.quiet:
         print(f"\nThe test restore passed: {count(files, 'file')} ({size(total)}) came back from the backup of "
               f"{when(snap['ts'])} ({snap['short_id']}) and match it. "
@@ -1695,6 +1754,13 @@ USAGE = """bromigos lab backups: this server's backups, and getting files back (
                                              restored to a scratch folder, read back, removed
       --scratch DIR                          the scratch folder's place (default: bromigOS's state)
   bromigos lab backups run | check [--data]  a backup now | a check now (bromigos server backup …)
+  bromigos lab backups {verb} [status]       the {name}: a copy of the backup on a USB drive you
+                                             unplug and keep somewhere else
+      {verb} setup [DRIVE] [--erase]         make a USB drive the {name}, then copy to it
+      {verb} drives | run | forget           the drives it could be | copy now | stop using it
+      list | show | restore | test --from {verb}
+                                             the commands above, reading the {name} drive
+                                             (`bromigos lab backups {verb} --help` has the rest)
 
 Every one takes --json. list, show, restore and test read the backup's key, so they ask for the
 administrator's password when you aren't root.
@@ -1708,6 +1774,10 @@ def parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true")
     sub.add_parser("status", parents=[common], add_help=False)
+    # list, show, restore and test read the nightly backup, or with --from the backup drive
+    source = argparse.ArgumentParser(add_help=False, parents=[common])
+    source.add_argument("--from", dest="source", metavar="WHERE")
+    common = source
     sub.add_parser("list", parents=[common], add_help=False)
     p = sub.add_parser("show", parents=[common], add_help=False)
     p.add_argument("snapshot", nargs="?")
@@ -1765,14 +1835,18 @@ def main(argv, reexec=None):
         ap = parser()
         if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
             argv = ["status", *argv]                            # `backups --json`
+        D = drive_lib()
+        usage = USAGE.format(verb=D.VERB, name=D.NAME)
+        if argv[0] == D.VERB:                                   # the backup drive's own commands
+            return D.main(argv[1:], argv, reexec)
         try:
             a = ap.parse_args(argv)
         except SystemExit as e:
             if e.code:
-                print(f"\n{USAGE}", file=sys.stderr)
+                print(f"\n{usage}", file=sys.stderr)
             return 2 if e.code else 0
         if a.help:
-            print(USAGE.strip() if shutil.which("bromigos") else USAGE.strip().replace("bromigos lab", "bromigos-lab"))
+            print(usage.strip() if shutil.which("bromigos") else usage.strip().replace("bromigos lab", "bromigos-lab"))
             return 0
         verb = a.verb or "status"
         if verb == "status":
@@ -1799,11 +1873,17 @@ def main(argv, reexec=None):
                                   said=(r.stderr.strip() or r.stdout.strip()).splitlines()[-1:]), indent=1))
             return r.returncode
         b = settings()
-        if not b["to"]:
+        # the nightly backup, or the backup drive: named with --from, or by itself when it is the only backup
+        from_drive = D.wanted(a.source, b)
+        if not b["to"] and not from_drive:
             raise Problem("off", "Backups are off, so there is nothing to restore from: no destination is set "
                           "([backup] to in /etc/bromigos/server.toml).", exit=3)
         as_root(argv, reexec, as_json)
-        return {"list": cmd_list, "show": cmd_show, "restore": cmd_restore, "test": cmd_test}[verb](a, b)
+        run = {"list": cmd_list, "show": cmd_show, "restore": cmd_restore, "test": cmd_test}[verb]
+        if from_drive:
+            with D.source(b, quiet=as_json) as on_drive:
+                return run(a, on_drive)
+        return run(a, b)
     except Problem as e:
         if as_json:
             print(json.dumps({"schema": SCHEMA, "ok": False, "error": dict(e.more, code=e.code, message=e.message)}, indent=1))
@@ -1821,4 +1901,5 @@ def main(argv, reexec=None):
 
 
 if __name__ == "__main__":
+    sys.modules.setdefault("bromigos_backups", sys.modules[__name__])       # one module, whoever imports it next
     sys.exit(main(sys.argv[1:], [os.path.realpath(__file__)]))

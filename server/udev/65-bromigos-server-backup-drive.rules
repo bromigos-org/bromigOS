@@ -1,0 +1,20 @@
+# bromigOS Server (docs/server.md, "The Go Bag"): when a USB drive's filesystem appears, its
+# unit starts: bromigos-server-backup-drive@<the filesystem's UUID>.service. The unit asks
+# `bromigos-server backup plugged` whether that UUID is the backup drive this server remembers.
+# For any other drive it does nothing; for the backup drive, the copy starts.
+#
+# A device with a USB parent (SUBSYSTEMS: a stick, a disk in a USB enclosure), with a
+# filesystem that has a UUID (60-persistent-storage.rules reads both). systemd starts a wanted
+# unit once per plugging in, not again when the device changes.
+#
+# The USB parent is matched on the last line, positively. Negated (SUBSYSTEMS!="usb" with a
+# GOTO) it would be true for the first device on the way up that isn't USB, which is the
+# block device itself, and every drive would be skipped.
+#
+# To turn it off: sudo ln -s /dev/null /etc/udev/rules.d/65-bromigos-server-backup-drive.rules
+ACTION=="remove", GOTO="bromigos_backup_drive_end"
+SUBSYSTEM!="block", GOTO="bromigos_backup_drive_end"
+ENV{ID_FS_USAGE}!="filesystem", GOTO="bromigos_backup_drive_end"
+ENV{ID_FS_UUID}!="?*", GOTO="bromigos_backup_drive_end"
+SUBSYSTEMS=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="bromigos-server-backup-drive@$env{ID_FS_UUID}.service"
+LABEL="bromigos_backup_drive_end"

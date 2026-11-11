@@ -21,6 +21,9 @@ monitor. Never a window, never the host's network or disks.
   iso/fieldkit/test.py type [--name N] TEXT  types TEXT (letters, digits, space, -._/)
   iso/fieldkit/test.py shot [--name N] NAME  the screen as shots/NAME.png
   iso/fieldkit/test.py wait-serial [--name N] TEXT [--timeout S]   until the serial log says TEXT
+  iso/fieldkit/test.py plug [--name N] FILE  a USB drive plugged into the running VM: FILE (raw
+                          or .qcow2) as a removable USB disk, through QEMU's control socket
+  iso/fieldkit/test.py unplug [--name N] FILE   … and pulled out again
   iso/fieldkit/test.py down [--name N]
 
 The VM runs through test/vm/vm-keeper.py like every test VM (it stops with whoever started
@@ -299,6 +302,46 @@ def wait_serial(name, text, timeout):
     return 1
 
 
+def usb_id(path):
+    """The names QEMU knows a plugged-in file by: its block node and its USB device."""
+    tag = re.sub(r"[^a-z0-9]", "", os.path.basename(path).lower())[:20] or "drive"
+    return f"plug-{tag}", f"plug-{tag}-usb"
+
+
+def failed(replies):
+    return next((r["error"].get("desc", "QEMU refused") for r in replies[1:] if "error" in r), None)
+
+
+def plug(name, path):
+    """Hot-plug FILE as a removable USB disk on the VM's USB controller (qemu-xhci): what a
+    person does with a USB drive. The guest's kernel and udev see a real plug-in."""
+    node, dev = usb_id(path)
+    fmt = "qcow2" if path.endswith(".qcow2") else "raw"
+    why = failed(qmp(name, {"execute": "blockdev-add", "arguments": {
+        "driver": fmt, "node-name": node, "file": {"driver": "file", "filename": os.path.abspath(path)}}}))
+    why = why or failed(qmp(name, {"execute": "device_add", "arguments": {
+        "driver": "usb-storage", "id": dev, "drive": node, "removable": True}}))
+    if why:
+        sys.exit(f"test.py: the drive couldn't be plugged in: {why}")
+    print(f"plugged in: {path}")
+
+
+def unplug(name, path):
+    """Pull the USB drive out, the way a hand does: without asking the guest."""
+    node, dev = usb_id(path)
+    why = failed(qmp(name, {"execute": "device_del", "arguments": {"id": dev}}))
+    if why:
+        sys.exit(f"test.py: the drive couldn't be unplugged: {why}")
+    for _ in range(20):                              # the device lets go of its file a moment later
+        time.sleep(0.5)
+        why = failed(qmp(name, {"execute": "blockdev-del", "arguments": {"node-name": node}}))
+        if not why:
+            break
+    else:
+        sys.exit(f"test.py: the unplugged drive's file is still held: {why}")
+    print(f"unplugged: {path}")
+
+
 def down(name):
     try:
         qmp(name, {"execute": "quit"})
@@ -326,14 +369,14 @@ def main(argv=None):
     p.add_argument("--direct", action="store_true")
     p.add_argument("--entry", default="Start Field Kit")
     p.add_argument("--append", default="")
-    for v in ("run", "login", "keys", "type", "shot", "wait-serial", "down"):
+    for v in ("run", "login", "keys", "type", "shot", "wait-serial", "plug", "unplug", "down"):
         q = sub.add_parser(v)
         q.add_argument("--timeout", type=int, default=600)
         if v == "run":
             q.add_argument("command", nargs=argparse.REMAINDER)
         elif v == "keys":
             q.add_argument("keys", nargs="+")
-        elif v in ("type", "shot", "wait-serial"):
+        elif v in ("type", "shot", "wait-serial", "plug", "unplug"):
             q.add_argument("text")
         elif v == "login":
             q.add_argument("--user", default="root")
@@ -357,6 +400,10 @@ def main(argv=None):
         shot(a.name, a.text)
     elif a.verb == "wait-serial":
         return wait_serial(a.name, a.text, a.timeout)
+    elif a.verb == "plug":
+        plug(a.name, a.text)
+    elif a.verb == "unplug":
+        unplug(a.name, a.text)
     elif a.verb == "down":
         down(a.name)
     return 0

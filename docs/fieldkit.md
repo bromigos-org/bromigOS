@@ -723,7 +723,10 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   and nothing of the stick's own left (its live hooks, its autologin, the installer, the
   store, archinstall). On that Server it then runs the restore drill
   (`iso/fieldkit/restore-drill.sh`, [server.md](server.md#tests)): a real backup, restore
-  and test restore. Then `iso/fieldkit/activity-checks.sh`:
+  and test restore. Then the Go Bag drill (`iso/fieldkit/backup-drive-drill.sh`): a disk
+  image plugged into the running VM as a USB drive is set up as the backup drive, pulled
+  out, and plugged in again, when its copy must start by itself and end "Safe to unplug".
+  Then `iso/fieldkit/activity-checks.sh`:
   `bromigos activity` under real systemd ([activity.md](activity.md)). A job in a transient
   unit ends done. A job that fails names its step. A detached job outlives the session that
   started it. The Server tour's apply runs through `sudo` as the signed-in user. A job that

@@ -24,6 +24,11 @@
 #                           checked weekly, a test restore monthly; off until [backup] to is
 #                           set. Getting files back: bromigos lab backups (bromigos-core's
 #                           lib/bromigos_backups.py)
+#   the backup drive        the Go Bag: a USB drive that gets a copy of the backup when it is
+#                           plugged in (65-bromigos-server-backup-drive.rules starts
+#                           bromigos-server-backup-drive@.service), then is unmounted: "Safe
+#                           to unplug" (bromigos lab backups go-bag; bromigos-core's
+#                           lib/bromigos_backup_drive.py)
 #   containers              Podman, with the docker command and compose; Quadlet for services
 #                           (/etc/containers/systemd), podman-auto-update.timer after the update
 #   the apps' data          /srv/apps: on the data disks when the server has them (the
@@ -119,6 +124,7 @@ package() {
   done
   install -Dm0644 "$s/10-bromigos-server.conf" "$pkgdir/etc/ssh/sshd_config.d/10-bromigos-server.conf"
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$s"/systemd/*.service "$s"/systemd/*.timer
+  install -Dm0644 -t "$pkgdir/usr/lib/udev/rules.d/" "$s"/udev/*.rules
   local unit
   for unit in prometheus-node-exporter.service sshguard.service smartd.service podman-auto-update.timer; do
     install -Dm0644 "$s/systemd/${unit%.*}-bromigos.conf" "$pkgdir/usr/lib/systemd/system/$unit.d/bromigos-server.conf"

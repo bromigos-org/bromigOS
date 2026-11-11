@@ -383,7 +383,10 @@ first, and VECTOR's terminal will refuse all of them.
   the user allows it. It will never restart the voice service while VECTOR is speaking.
 - `lab backups` lists and restores bromigOS Server's own backups, and runs a test restore
   ([server.md](server.md#backups)). A restore in place asks first and shows what it
-  replaces. Backups of the rest of a lab, through its repository, will come later.
+  replaces. `lab backups go-bag` keeps a copy on a USB drive you carry away: plugged in,
+  the copy starts by itself and ends "Safe to unplug" ([server.md](server.md#the-go-bag)).
+  Two drives that take turns, and the Go Bag on a phone, will come later. Backups of the
+  rest of a lab, through its repository, will come later.
 - `lab power` reads configured PDU outlets and follows reviewed Ansible outlet plans.
   Wake-on-LAN and GPU power limits remain planned.
 - `lab models add|remove|replace` will change the lab's models. `replace` is also how the

@@ -367,6 +367,48 @@ class Checks(Machine):
         # backups turned off: what an old state file says no longer counts
         self.assertEqual(self.server_backup(cases["none for nine days"], to=""), {})
 
+    def test_the_go_bag_reminder(self):
+        """The backup drive you carry away (docs/server.md, "The Go Bag"): no good copy for
+        [backup] drive_remind_days raises the reminder, in words for a person."""
+        self.m.write("backup-units", "")
+        day, uuid = 86400, "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
+        good = {"phase": "ok", "at": "2026-10-30T06:10:00-07:00", "ts": NOW / 1000 - 6 * 3600}
+        copy = {"phase": "ok", "at": "2026-09-29T18:02:00-07:00", "ts": NOW / 1000 - 31 * day - 3600, "snapshot": "1a2b3c4d"}
+        entry = {"label": "CARRY", "model": "Portable SSD", "added_at": "2026-09-01T10:00:00-07:00", "added_ts": NOW / 1000 - 60 * day,
+                 "run": copy, "run_ok": copy}
+        st = {"run": good, "run_ok": good, "test_ok": dict(good, ts=NOW / 1000 - 2 * day), "drives": {uuid: entry}}
+        (a,) = self.server_backup(st).values()
+        self.assertEqual((a["id"], a["severity"]), ("backup.restic:server-drive", "needs_you"))
+        self.assertEqual(a["title"], "Your Go Bag drive hasn't been updated in 31 days")
+        self.assertTrue(a["detail"].startswith("Plug it in. The copy starts by itself, and says when the drive is safe to unplug."), a["detail"])
+        self.assertIn("bromigos lab backups go-bag run", a["fix"]["commands"])
+        self.assertEqual(a["evidence"]["lines"][0], "Backed up 6 hours ago. Last test restore: 2 days ago, passed. "
+                         "Your Go Bag drive hasn't been updated in 31 days. Plug it in.")
+        # plugged in and still stale (a drive that never leaves): other words, the same alert
+        link = self.m.rootfile(f"/dev/disk/by-uuid/{uuid}", "")
+        (a,) = self.server_backup(st).values()
+        self.assertTrue(a["detail"].startswith("It is plugged in, and a copy starts only when the drive is plugged in."), a["detail"])
+        link.unlink()
+        # the setting: a longer wait raises nothing, and 0 never reminds
+        for days, raised in ((60, False), (0, False), (7, True)):
+            self.m.rootfile("/var/lib/bromigos/server/backup.json", json.dumps(st))
+            self.m.rootfile("/etc/bromigos/server.toml", f'[backup]\nto = "s3:https://s3.example/backups/box"\ndrive_remind_days = {days}\n')
+            got = [x["id"] for x in self.m.run()["alerts"] if x["check"] == "backup.restic"]
+            self.assertEqual(got, ["backup.restic:server-drive"] if raised else [], days)
+        # a copy that failed: its alert is the copy job's own (activity.job), so the backup check
+        # doesn't raise a second one. The verdict still says it
+        entry["run"] = {"phase": "failed", "at": "x", "ts": NOW / 1000 - 3600, "reason": "Unable to save snapshot: no space left on device."}
+        got = self.server_backup(st)
+        self.assertEqual(sorted(got), ["backup.restic:server-drive"])
+        self.assertIn("The last copy to your Go Bag drive failed (1 hour ago): unable to save snapshot: no space left on device.",
+                      got["backup.restic:server-drive"]["evidence"]["lines"][0])
+        # a copy someone stopped is no failure
+        entry["run"] = {"phase": "stopped", "at": "x", "ts": NOW / 1000 - 3600, "reason": "It was stopped before it finished."}
+        self.assertNotIn("failed", self.server_backup(st)["backup.restic:server-drive"]["evidence"]["lines"][0])
+        # a fresh copy: nothing
+        entry["run"] = entry["run_ok"] = dict(copy, ts=NOW / 1000 - 3 * day)
+        self.assertEqual(self.server_backup(st), {})
+
     def test_a_backup_drive_that_is_not_connected(self):
         self.m.write("backup-units", "")
         ok = {"phase": "ok", "at": "2026-10-21T06:10:00-07:00", "ts": NOW / 1000 - 9 * 86400}
