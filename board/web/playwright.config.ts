@@ -7,6 +7,8 @@ const port = Number(process.env.PORT ?? 4317);
 export default defineConfig({
   testDir: "tests",
   fullyParallel: true,
+  // the hologram draws on a software renderer in headless Chromium: a few workers at a time
+  workers: process.env.CI ? 2 : 6,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",

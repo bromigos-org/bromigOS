@@ -1,0 +1,98 @@
+{
+ "name": "rack",
+ "title": "THE RACK",
+ "height": 1.0,
+ "radius": 0.2897,
+ "parts": [
+  {
+   "id": "switch",
+   "label": "SWITCH",
+   "hint": "Patch panel and switch: gateway, clients, ingress requests",
+   "explode": [
+    0.0,
+    0.1342,
+    0.2683
+   ],
+   "anchor": [
+    -0.0888,
+    0.9558,
+    0.0859
+   ]
+  },
+  {
+   "id": "nodes",
+   "label": "NODES",
+   "hint": "Cluster nodes: ready of total, busiest node",
+   "explode": [
+    0.0,
+    0.0504,
+    0.3362
+   ],
+   "anchor": [
+    -0.0923,
+    0.7776,
+    0.0861
+   ]
+  },
+  {
+   "id": "gpu",
+   "label": "GPU SERVER",
+   "hint": "GPU server: model serving load, VRAM, temperature, power",
+   "explode": [
+    0.0,
+    0.0,
+    0.42
+   ],
+   "anchor": [
+    -0.0764,
+    0.4652,
+    0.0842
+   ]
+  },
+  {
+   "id": "storage",
+   "label": "STORAGE",
+   "hint": "Storage: NAS pool and the fullest node disk",
+   "explode": [
+    0.0,
+    -0.0358,
+    0.3582
+   ],
+   "anchor": [
+    0.093,
+    0.2747,
+    0.0828
+   ]
+  },
+  {
+   "id": "ups",
+   "label": "POWER",
+   "hint": "UPS shelf: PoE and GPU power draw",
+   "explode": [
+    0.0,
+    -0.1114,
+    0.2785
+   ],
+   "anchor": [
+    -0.0968,
+    0.122,
+    0.0869
+   ]
+  },
+  {
+   "id": "frame",
+   "label": "FRAME",
+   "hint": "The cabinet: Argo CD apps healthy and alerts firing",
+   "explode": [
+    0.0,
+    0.0,
+    -0.14
+   ],
+   "anchor": [
+    0.0998,
+    0.5319,
+    -0.0917
+   ]
+  }
+ ]
+}

@@ -6,7 +6,7 @@
 // In a fixture build (BOARD_FIXTURES=1, never the package's) `?fixture=NAME` swaps the API
 // for fixtures/NAME.json, so pages can be built and tested before the service answers.
 
-import type { ActivityEvent, ApiErrorDoc, Board, Door, JobRecord, Session } from "./types";
+import type { ActivityEvent, ApiErrorDoc, Board, Door, JobRecord, Session, Vitals, VitalsRange } from "./types";
 import { fixtureApi, fixtureName } from "./fixtures";
 import { ApiError, cleanCode } from "./errors";
 
@@ -20,6 +20,8 @@ export interface Api {
   signOut(): Promise<Session>;
   signOutBrowser(id: string): Promise<Session>;
   board(): Promise<Board>;
+  /** One machine's trends; ApiError 404 while the server keeps none. */
+  vitals(machine: string, range: VitalsRange): Promise<Vitals>;
   /** Opens the activity stream; returns a function that closes it. */
   activity(on: (ev: ActivityEvent) => void, connected: (up: boolean) => void): () => void;
   answer(job: string, choice: string): Promise<void>;
@@ -62,6 +64,7 @@ const realApi: Api = {
   signOut: () => send<Session>("DELETE", "/api/session"),
   signOutBrowser: (id) => send<Session>("DELETE", `/api/session/${encodeURIComponent(id)}`),
   board: () => call<Board>("/api/board"),
+  vitals: (machine, range) => call<Vitals>(`/api/vitals?machine=${encodeURIComponent(machine)}&range=${range}`),
   activity(on, connected) {
     const es = new EventSource("/api/activity");
     const pass = (event: ActivityEvent["event"]) => (m: MessageEvent) => {

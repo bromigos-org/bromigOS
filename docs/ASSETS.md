@@ -44,6 +44,7 @@ the models used.
 | Tidewell actors and loops | Generated with nolgia, matted locally | **yes** (operator, 2026-10-08) | The Choir is an original creature |
 | Craft overhead in Mire and Tidewell | Generated with nolgia, cut locally | **yes** (operator, 2026-10-08) | Original designs |
 | 3D holograms: the workstation, the Wick and the rack | nolgia concepts, image-to-3D | **yes** (operator, 2026-10-08) | On bromigos.org, without live readings |
+| The Lab board's machine holograms (`board/web/public/holo/rack.bin` and `workstation.bin`, with their part lists) | The same rack and workstation as bromigos.org, in its `bromigos-holo-web/1` format | yes | Lit by the server's own readings. The storage, node, router, battery, phone and dish meshes (Pixal3D, DINOv3 licence not cleared) are **not** shipped: those machines show their kind's glyph |
 | 3D holograms made on the homelab: the worlds' posts, creatures and craft | Open models on the homelab, no credits | **yes** (operator, 2026-10-08) | Research and community licences. See [the notes](#3d-holograms) |
 | 3D burn-in emblem | Extruded from the Wick's emblem | yes, as a brand asset | In `bromigos-vector` |
 | The Drift map's lore catalogue (`live/lore/catalog.json`) | bromigos.org's public lore export, copied by `tools/lore/sync-catalog.py` | yes, as a brand asset | In `bromigos-live`. A user's `[driftmap] catalog` replaces it |
