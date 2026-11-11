@@ -500,10 +500,16 @@ for something else.
 
 The lab's private network ([lab-network.md](lab-network.md)) hands out addresses from
 `100.64.0.0/10`. Some internet providers give their customers addresses from the same range.
-So that range is let in only while this server is on the lab's network, which is while the
-network's interface, `tailscale0`, is there. Caddy asks the API each time
-(`GET /api/local`), and the firewall follows the same rule
-([server.md](server.md#the-firewall)).
+So an address from that range says nothing by itself: it is let in only when the request came
+in on the lab network's own interface, `tailscale0`.
+
+- Caddy tells the API which of this server's addresses the connection came in at
+  (`X-Bromigos-Local`, set by Caddy whatever the browser sent), and asks it each time
+  (`GET /api/local`). The API says yes only when that is one of `tailscale0`'s addresses,
+  which it asks the kernel for (rtnetlink). A neighbour in the provider's range comes in at
+  the uplink's address, and is refused even while the lab network is up.
+- The firewall decides by the interface too: the range is let in only on `tailscale0`
+  ([server.md](server.md#the-firewall)).
 
 The roles that set the board up open the web ports to the local network only (the
 `web-lan` rule set). The page answers one more name, `home-<server>.local`, the old start
@@ -575,14 +581,20 @@ Each command takes `--json`. `sessions` exits 1 when `--end` names no session.
   when it runs out. Signing in deletes the file, so a code works once even when two browsers
   send it at the same moment.
 - Wrong codes are slowed, and nobody is locked out by someone else's:
-  - one address may send five wrong codes a minute. Its sixth try waits a minute (429),
-    right or wrong;
-  - wrong codes are answered at most one every 200 ms, whoever sends them. A wrong answer
-    waits its turn, a second at most;
-  - a right code is never refused or held up because of another device's wrong ones.
+  - one address may try five codes a minute. A try counts from the moment it is made, so
+    five sent at once are five, and the sixth waits a minute (429), right or wrong. A right
+    code doesn't count. An IPv6 address counts with the rest of its `/64`, since one device
+    can take any address in it;
+  - codes are checked one at a time, and after a wrong one the next check waits 200 ms. So
+    at most five wrong codes a second are checked, from everyone together;
+  - a right code is never refused because of another device's wrong ones. Under a flood of
+    them it waits its turn: ten seconds at most, then the answer is 503 `busy`, and the door
+    says "The server is busy: many codes are being tried at once. Your code wasn't used. Try
+    it again in a moment." That try counts for nothing, and the code is still good.
 
-  A code is 40 bits and lives ten minutes. At five guesses a second for all ten minutes, the
-  chance of hitting one is about 3 in a billion.
+  The same holds for a code typed to delete an app's data, or to answer a job's question
+  that can't be undone. A code is 40 bits and lives ten minutes. At five guesses a second for
+  all ten minutes, the chance of hitting one is about 3 in a billion.
 - A session is a random 256-bit token. The browser keeps it in the cookie
   `__Host-bromigos-board`, which is `HttpOnly`, `Secure`, `SameSite=Strict` and lasts 30
   days. The server keeps only its SHA-256, in `/var/lib/bromigos-board/sessions/<id>.json`,
@@ -679,7 +691,10 @@ filters what it writes, a failed command's error line included:
 - in text, a `user:password@` part of an address is cut, and `NAME=value`, a secret in a
   link's query, an option such as `--password` with the word after it, and tokens with a
   known shape are masked. The activity records' own filter does most of this
-  (`bromigos_activity.redact`).
+  (`bromigos_activity.redact`);
+- under any name and in any text, a PEM private key (`-----BEGIN … PRIVATE KEY-----` to its
+  end line) and a JSON Web Token are masked. `pin_code` is a code that lets someone in, like
+  `join_code`.
 
 It can't recognise a secret written out in a sentence, or under a name that says nothing.
 
@@ -724,6 +739,7 @@ The status codes:
 | 415 | `not-json` | The body isn't JSON |
 | 429 | `too-many` | Too many wrong codes from this address. `Retry-After` says when to try again |
 | 503 | `gathering` | The first reading isn't there yet. `Retry-After: 5` |
+| 503 | `busy` | (signing in) Many codes were being checked at once, and this one waited ten seconds without its turn. `Retry-After: 5` |
 
 `GET /api/door`:
 

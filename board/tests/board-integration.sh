@@ -226,16 +226,23 @@ head -c 1048576 /dev/zero | tr '\0' ' ' > /tmp/big
 [[ $(api POST /api/session "${page[@]}" -H "Transfer-Encoding: chunked" --data-binary @/tmp/big) == 413 ]] || fail "a 1 MB body with no length: $(cat /tmp/body)"
 [[ $(api GET /api/door) == 200 ]] || fail "the API didn't survive the big bodies"
 
-section "who is local: private addresses; the lab network's only while this server is on it"
+section "who is local: private addresses; the lab network's range only when it came in on the lab network's interface"
 [[ $(from=203.0.113.5 api GET /api/door) == 403 ]] || fail "a public address got in"
 [[ $(from=2001:db8::5 api GET /api/door) == 403 ]] || fail "a public IPv6 address got in"
 if [[ ! -e /sys/class/net/tailscale0 ]]; then
-    [[ $(from=100.64.0.7 api GET /api/local) == 403 ]] || fail "the lab network's range is local with no lab network here"
-    if ip link add tailscale0 type dummy 2>/dev/null; then
-        [[ $(from=100.64.0.7 api GET /api/local) == 204 ]] || fail "on the lab network, its range isn't local"
-        ip link del tailscale0
-        [[ $(from=100.64.0.7 api GET /api/local) == 403 ]] || fail "off the lab network again, its range stayed local"
+    [[ $(from=100.64.0.7 api GET /api/local -H "X-Bromigos-Local: 100.100.1.1") == 403 ]] || fail "the lab network's range is local with no lab network here"
+    if ip link add tailscale0 type dummy 2>/dev/null && ip link add bromigos-uplink type dummy 2>/dev/null; then
+        # the lab interface's address, and an uplink inside the provider's carrier-grade NAT
+        ip addr add 100.100.1.1/32 dev tailscale0 && ip addr add 100.72.9.9/32 dev bromigos-uplink
+        ip link set tailscale0 up; ip link set bromigos-uplink up
+        # (the API asks the kernel over rtnetlink, from inside its sandbox)
+        [[ $(from=100.64.0.7 api GET /api/local -H "X-Bromigos-Local: 100.100.1.1") == 204 ]] || { journalctl -u bromigos-board.service --no-pager -n 20; fail "came in on the lab interface: its range isn't local"; }
+        [[ $(from=100.64.0.7 api GET /api/local -H "X-Bromigos-Local: 100.72.9.9") == 403 ]] || fail "a neighbour in the provider's range, on the uplink, got in"
+        [[ $(from=100.64.0.7 api GET /api/local) == 403 ]] || fail "the lab range got in with nobody saying where it came in"
+        ip link del tailscale0; ip link del bromigos-uplink
+        [[ $(from=100.64.0.7 api GET /api/local -H "X-Bromigos-Local: 100.100.1.1") == 403 ]] || fail "off the lab network again, its range stayed local"
     else
+        ip link del tailscale0 2>/dev/null || true
         echo "(no dummy interface here: the lab network half isn't tried)"
     fi
 fi

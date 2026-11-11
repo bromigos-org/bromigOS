@@ -68,10 +68,15 @@ SECRET_FORMS = frozenset("""value values hash plain plaintext text string str ra
 # (`bromigos alerts --json`: a channel's "key": "set")
 SAYS_WHETHER = ("set", "not set")
 # "code" is a secret after one of these (join_code), and not otherwise (exit_code, an error's code)
-CODE_OF = frozenset("join recovery pairing pair auth device user unseal backup otp invite access signin sign".split())
+CODE_OF = frozenset("join recovery pairing pair auth device user unseal backup otp invite access signin sign pin".split())
 USERINFO = re.compile(r"\b([a-z][a-z0-9+.-]*://)[^/@\s]+@", re.I)
 OPTION = re.compile(r"(?<![\w-])(--?[\w-]*)(\s+)(?!-)(\S+)")
 WORD = re.compile(r"[A-Z]+(?![a-z])|[A-Za-z][a-z]*|[0-9]+")        # DB_PASSWORD, dbPassword, HTTPToken2
+# secrets by their shape, under any name and inside any text: a PEM private key (to its END line,
+# or to the end of the text when it was cut short), and a JSON Web Token (three base64url parts,
+# the first a JSON object's, "eyJ")
+PEM_KEY = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\Z)", re.S)
+JWT = re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*")
 DRIVE_KEY = re.compile(r"[a-z0-9][a-z0-9._:-]{0,95}\Z")
 
 
@@ -100,6 +105,8 @@ def _redact():
 
 
 def scrub_text(text, redact=None):
+    text = PEM_KEY.sub("***", text)
+    text = JWT.sub("***", text)
     text = USERINFO.sub(r"\1", text)
     text = OPTION.sub(lambda m: f"{m.group(1)}{m.group(2)}***" if secret_name(m.group(1)) else m.group(0), text)
     return (redact or _redact())(text)

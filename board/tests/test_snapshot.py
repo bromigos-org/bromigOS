@@ -256,6 +256,26 @@ class FilterTests(Root):
         self.assertEqual(snapshot.scrub({"channels": [ch]}, "alerts"), {"channels": [ch]})
         self.assertEqual(snapshot.scrub({"key": "set ", "token": "unset", "secret": ["set"]}), {})
 
+    def test_secrets_by_their_shape_under_any_name(self):
+        """The second review's M5 leftovers: a PEM private key and a JWT are dropped whatever
+        name they are under, and in a sentence; `pin_code` is a code that lets someone in."""
+        pem = ("-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmU\nAAAAC3NzaC1lZDI1NTE5\n"
+               "-----END OPENSSH PRIVATE KEY-----\n")
+        jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
+        doc = {"note": pem, "detail": f"sent Authorization {jwt} to the hook", "cut": "-----BEGIN RSA PRIVATE KEY-----\nMIIE",
+               "list": [jwt], "pin_code": 482913, "pinCode": "1234", "name": "kept", "public": "-----BEGIN PUBLIC KEY-----\nMIIB"}
+        out = snapshot.scrub(doc, redact=lambda t: t)       # (without the activity records' filter: these rules alone)
+        text = json.dumps(out)
+        for secret in ("b3BlbnNzaC1rZXk", "MIIE", "c2lnbmF0dXJl", "eyJzdWIi", "482913", "1234"):
+            self.assertNotIn(secret, text, secret)
+        self.assertEqual(out["note"], "***\n")
+        self.assertEqual(out["detail"], "sent Authorization *** to the hook")
+        self.assertEqual((out["name"], out["public"]), ("kept", "-----BEGIN PUBLIC KEY-----\nMIIB"), "a public key isn't a secret")
+        self.assertNotIn("pin_code", out)
+        # nothing else that merely looks alike
+        for text in ("eyJ is how a JSON object starts", "v1.2.3", "a.b.c", "BEGIN PRIVATE notes"):
+            self.assertEqual(snapshot.scrub_text(text, lambda t: t), text)
+
     def test_the_shapes_the_review_named(self):
         doc = {
             "key": "restic-repository-key", "authkey": "tskey-auth-kABCDEF", "psk": "wireguard-preshared", "pin": "482913",

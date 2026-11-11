@@ -85,8 +85,9 @@ class LocalOnly:
             await send(message)
 
         peer = (scope.get("client") or (None,))[0]
-        scope[SOURCE] = src = net.source(scope.get("headers") or [], peer)
-        if not net.is_private(src):
+        headers = scope.get("headers") or []
+        scope[SOURCE] = src = net.source(headers, peer)
+        if not net.is_private(src, net.arrived_at(headers)):
             return await error(403, NOT_LOCAL)(scope, receive, with_headers)
         return await self.app(scope, receive, with_headers)
 
@@ -137,6 +138,38 @@ def session_of(request):
 def source_of(request):
     """The request's source address, as LocalOnly worked it out."""
     return request.scope.get(SOURCE) or ""
+
+
+# said on the door, as it is: the code wasn't checked, so it is still good
+BUSY = ("busy", "The server is busy: many codes are being tried at once. Your code wasn't used. Try it again in a moment.")
+
+
+async def try_code(st, src, check, wrong):
+    """One code checked, as every code is (auth.py, "wrong codes"): the try counts for src from
+    now (429 when src has made five in a minute), it waits its turn at the gate, it is checked
+    (`check`, awaited), and when it was wrong (`wrong(result)`) the next check waits 200 ms more.
+    A right code, or one never checked, doesn't count. Returns (result, None), or (None, the
+    error answer)."""
+    why = st.tries.begin(src)
+    if why:
+        return None, error(429, ("too-many", why), headers={"Retry-After": "60"})
+    try:
+        await asyncio.wait_for(st.gate.acquire(), auth.GATE_WAIT_S)
+    except asyncio.TimeoutError:
+        st.tries.undo(src)
+        return None, error(503, BUSY, headers={"Retry-After": "5"})
+    try:
+        result = await check()
+        if wrong(result):
+            await st.sleep(auth.WRONG_EVERY_S)          # the gate stays shut a while after a wrong code
+        else:
+            st.tries.undo(src)
+        return result, None
+    except BaseException:
+        st.tries.undo(src)
+        raise
+    finally:
+        st.gate.release()
 
 
 def csrf_ok(request):
@@ -222,14 +255,11 @@ async def post_session(request):
     if bad:
         return bad
     src = source_of(request)
-    tries = request.app.state.tries
-    why = tries.blocked(src)
-    if why:
-        return error(429, ("too-many", why), headers={"Retry-After": "60"})
-    result = await run_in_threadpool(auth.use_code, doc.get("code"))
+    result, refused = await try_code(request.app.state, src, lambda: run_in_threadpool(auth.use_code, doc.get("code")),
+                                     lambda r: r is not True)
+    if refused:
+        return refused
     if result is not True:
-        # a wrong code's answer waits its turn (auth.Tries): never a right one's
-        await request.app.state.sleep(tries.wrong(src))
         return error(401, EXPIRED if result == "expired" else BAD_CODE)
     value, rec = await run_in_threadpool(auth.new_session, request.headers.get("user-agent", ""))
     r = JSONResponse(session_doc(rec))
@@ -359,27 +389,30 @@ async def post_actions(request):
     st = request.app.state
     src = source_of(request)
     deleting = bool(doc.get("delete_data"))
-    if deleting:
-        why = st.tries.blocked(src)             # its code is counted like one at sign-in
-        if why:
-            return error(429, ("too-many", why), headers={"Retry-After": "60"})
-    try:
+
+    async def ask_and_wait():
         rid = await run_in_threadpool(actions.ask, doc.get("verb"), doc.get("app"), rec, None,
                                       doc.get("delete_data", False), doc.get("code"))
+        if st.after_ask:
+            await run_in_threadpool(st.after_ask, rid)      # (the tests' stand-in for the helper's unit)
+        return rid, await run_in_threadpool(actions.wait, rid, st.action_wait_s)
+    try:
+        if deleting:                            # its code is a try, as at sign-in
+            got, refused = await try_code(st, src, ask_and_wait, lambda r: bool(r[1]) and r[1].get("code") == "needs-code")
+            if refused:
+                return refused
+            rid, out = got
+        else:
+            rid, out = await ask_and_wait()
     except actions.Refused as e:
         return error(400, (e.code, e.words))
     except OSError:
         return error(503, ("no-actions", "Actions aren't set up on this server."))
-    if st.after_ask:
-        await run_in_threadpool(st.after_ask, rid)          # (the tests' stand-in for the helper's unit)
-    out = await run_in_threadpool(actions.wait, rid, st.action_wait_s)
     if out is None:
         return JSONResponse({"schema": SCHEMA, "ok": True, "job": None, "request": rid,
                              "words": "Asked. It shows in Activity when it starts."}, status_code=202)
     if not out.get("ok"):
         code = out.get("code") if out.get("code") in actions.REFUSALS else "bad-request"
-        if code == "needs-code":
-            await st.sleep(st.tries.wrong(src))
         return error(403, (code, actions.REFUSALS[code]))
     return JSONResponse({"schema": SCHEMA, "ok": True, "job": out.get("job"), "request": rid, "words": out.get("words")},
                         status_code=202)
@@ -405,27 +438,31 @@ async def post_job_action(request):
     st = request.app.state
     src = source_of(request)
     job, verb = request.path_params["job"], request.path_params["verb"]
-    if doc.get("code") is not None:
-        why = st.tries.blocked(src)             # its code is counted like one at sign-in
-        if why:
-            return error(429, ("too-many", why), headers={"Retry-After": "60"})
-    try:
+
+    async def ask_and_wait():
         rid = await run_in_threadpool(actions.ask_job, verb, job, rec, None, doc.get("question"), doc.get("choice"),
                                       doc.get("code"))
+        if st.after_ask:
+            await run_in_threadpool(st.after_ask, rid)      # (the tests' stand-in for the helper's unit)
+        return rid, await run_in_threadpool(actions.wait, rid, st.action_wait_s)
+    try:
+        if doc.get("code") is not None:         # its code is a try, as at sign-in
+            got, refused = await try_code(st, src, ask_and_wait,
+                                          lambda r: bool(r[1]) and r[1].get("code") == "danger-needs-code")
+            if refused:
+                return refused
+            rid, out = got
+        else:
+            rid, out = await ask_and_wait()
     except actions.Refused as e:
         return error(JOB_STATUS.get(e.code, 400), (e.code, e.words))
     except OSError:
         return error(503, ("no-actions", "Actions aren't set up on this server."))
-    if st.after_ask:
-        await run_in_threadpool(st.after_ask, rid)          # (the tests' stand-in for the helper's unit)
-    out = await run_in_threadpool(actions.wait, rid, st.action_wait_s)
     if out is None:
         return JSONResponse({"schema": SCHEMA, "ok": True, "job": None if verb == "retry" else job, "request": rid,
                              "words": "Asked. The job's card shows what became of it."}, status_code=202)
     if not out.get("ok"):
         code = out.get("code") if out.get("code") in actions.REFUSALS else "bad-request"
-        if code == "danger-needs-code" and doc.get("code") is not None:
-            await st.sleep(st.tries.wrong(src))
         return error(JOB_STATUS.get(code, 403), (code, actions.REFUSALS[code]))
     return JSONResponse({"schema": SCHEMA, "ok": True, "job": out.get("job"), "request": rid, "words": out.get("words")},
                         status_code=202)
@@ -455,6 +492,7 @@ def make_app(tries=None, poll=1.0, stream_s=None, sleep=asyncio.sleep, after_ask
     app.state.after_ask = after_ask
     app.state.action_wait_s = action_wait_s
     app.state.tries = tries or auth.Tries()
+    app.state.gate = asyncio.Lock()             # one code checked at a time (try_code)
     app.state.sleep = sleep
     app.state.door_asked = None
     app.state.poll = poll

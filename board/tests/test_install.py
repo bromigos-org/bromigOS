@@ -123,7 +123,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(svc["ExecStart"], "/usr/lib/bromigos/board/bromigos-board serve")
         self.assertEqual(svc["NoNewPrivileges"], "yes")
         self.assertEqual(svc["CapabilityBoundingSet"], "")
-        self.assertEqual(svc["RestrictAddressFamilies"], "AF_UNIX")
+        self.assertEqual(svc["RestrictAddressFamilies"], "AF_UNIX AF_NETLINK")     # netlink: the lab interface's addresses
         self.assertEqual(svc["ProtectSystem"], "strict")
 
     def test_the_api_writes_only_its_own_folder_and_the_two_files_it_marks(self):
@@ -423,6 +423,10 @@ class CaddyTests(unittest.TestCase):
                                          "root * /usr/share/bromigos-board/placeholder", "file_server")]
         self.assertEqual(order, sorted(order))
         self.assertIn("uri /api/local", body)
+        # both tell the API which of this server's addresses the connection came in at (net.is_private)
+        for block in ("forward_auth @bromigos_board_lab_network", "reverse_proxy /api/*"):
+            inner = body.split(block, 1)[1].split("\n\t}", 1)[0]
+            self.assertIn("header_up X-Bromigos-Local {http.request.local.host}", inner, block)
         # a default: the API's own, stricter policy isn't replaced
         self.assertIn("?Content-Security-Policy \"default-src 'self';", body)
         self.assertIn("header @bromigos_board_home Strict-Transport-Security", body)

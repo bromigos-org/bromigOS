@@ -14,9 +14,9 @@
 # Always local: private (RFC 1918), link-local and loopback addresses, and IPv6's unique-local,
 # link-local and loopback. The carrier-grade NAT range (RFC 6598) is last in the list: the lab's
 # private network uses it, and so do some internet providers for their customers. It is let
-# past this first rule, and the next one asks the API, which says yes only while this server is
-# on the lab's network (GET /api/local; net.lab_network_up). Any other answer, and no answer,
-# is what the client gets.
+# past this first rule, and the next one asks the API, which says yes only when the request came
+# in at an address of the lab network's own interface (GET /api/local; net.is_private). Any
+# other answer, and no answer, is what the client gets.
 @bromigos_board_outside not remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 127.0.0.0/8 fc00::/7 fe80::/10 ::1/128 100.64.0.0/10
 @bromigos_board_lab_network remote_ip 100.64.0.0/10
 # home-<server>.local serves the board and nothing else, on no other port
@@ -41,10 +41,15 @@ route {
 	request_body {
 		max_size 8KB
 	}
+	# Both say which of this server's addresses the connection came in at (X-Bromigos-Local,
+	# set here whatever the browser sent): for the lab network's range, that must be one of the
+	# lab network's own interface's (net.is_private).
 	forward_auth @bromigos_board_lab_network unix//run/bromigos-board.sock {
 		uri /api/local
+		header_up X-Bromigos-Local {http.request.local.host}
 	}
 	reverse_proxy /api/* unix//run/bromigos-board.sock {
+		header_up X-Bromigos-Local {http.request.local.host}
 		flush_interval -1
 	}
 	# the page (bromigos-board-web); until it's installed, the placeholder that lists the door's
