@@ -39,3 +39,30 @@ jobs:
           useradd -m builder
           chown -R builder "$GITHUB_WORKSPACE"
           su builder -c "cd '$GITHUB_WORKSPACE/homelab' && PYTHONPATH=lib python -m unittest discover -s tests"
+
+  apps:
+    name: Apps on a Server (Podman)
+    # `bromigos lab apps` for real: Podman, Quadlet and systemd on a throwaway VM, as root. A
+    # tiny recipe (BusyBox's web server, homelab/tests/fixtures/apps-integration) is added,
+    # listed, removed keeping its data, added again (it finds the data), and removed with it.
+    # Each add and remove is an activity job in a unit of its own. GitHub's runner, never the
+    # lab's: this repo is public
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: podman and quadlet
+        run: |
+          podman --version
+          ls /usr/lib/systemd/system-generators/ | grep -i podman
+      - name: add, list, remove keeping data, add again, delete
+        run: sudo CI=true bash homelab/tests/apps-integration.sh
+      - name: what happened
+        if: failure()
+        run: |
+          sudo python3 bin/bromigos-activity list --all || true
+          for j in $(sudo ls /var/lib/bromigos/activity/jobs/ 2>/dev/null | grep '\.log$'); do
+            echo "== $j"; sudo cat "/var/lib/bromigos/activity/jobs/$j"
+          done
+          sudo journalctl -u hello.service --no-pager -n 80 || true
+          sudo cat /etc/containers/systemd/hello.container || true

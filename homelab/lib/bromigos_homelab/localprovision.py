@@ -1338,7 +1338,10 @@ class Runner:
             self.save()
             return
         self.item(i, "done")
-        self.state["items"][i] = {"state": "done", "fingerprint": fp}
+        # the recipe's revision and the app's version, as installed (bromigos lab apps shows them)
+        from .labapps import app_version
+        self.state["items"][i] = {"state": "done", "fingerprint": fp, "recipe": it["version"],
+                                  "app_version": app_version(it, host.run)}
         self.save()
 
     def pending(self):
@@ -1520,7 +1523,14 @@ def main(argv):
         if os.geteuid() != 0 and ROOT == "/":
             raise ProvisionError("applying needs root: sudo bromigos lab provision --local --apply …")
         host = Host(plan, hw=hw)
-        code = Runner(host, wait=0 if a.no_wait else a.wait).run()
+        runner = Runner(host, wait=0 if a.no_wait else a.wait)
+        code = runner.run()
+        # what is set up now is what this server is meant to run (bromigos lab apps: apps.toml)
+        from . import labapps
+        try:
+            labapps.note_applied([i for i, st in runner.status.items() if st == "done"])
+        except (labapps.AppsError, OSError) as e:
+            print(f"bromigos lab provision: what this server runs wasn't saved to /{labapps.DESIRED}: {e}", file=sys.stderr)
         if a.json:
             print(json.dumps({"result": code, "keys": where_keys_live(host.store)}))
         return code

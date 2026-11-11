@@ -1,0 +1,16 @@
+[Unit]
+Description=Hello (BusyBox's web server): the app manager's CI test (homelab-tests.yml)
+
+[Container]
+Image={{image:hello}}
+ContainerName=hello
+Network=bromigos-lab.network
+PublishPort=127.0.0.1:18080:8080
+Volume={{data}}/notes:/data:Z
+Exec=sh -c "mkdir -p /site && echo hello > /site/index.html && exec httpd -f -p 8080 -h /site"
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -571,6 +571,34 @@ today, and what is planned.
 For power users: Podman's own docs are `man podman-systemd.unit` and
 `man podman-auto-update`. Compose files still work; they just aren't services systemd knows.
 
+### Add and remove apps
+
+`bromigos lab apps` manages the catalogue's apps on a running server: the ones chosen at
+install and any added later.
+
+```bash
+bromigos lab apps                       # each app: running or not, memory, data, its page
+bromigos lab apps list --all            # and what can be added
+sudo bromigos lab apps add photos       # add one, with what it needs
+sudo bromigos lab apps remove photos    # remove it; its data stays in /srv/apps/photos
+sudo bromigos lab apps restart photos
+bromigos lab apps logs photos -f
+```
+
+- **Remove keeps the data.** The app's folder in `/srv/apps` and its keys stay, and adding
+  the app again picks them up. Only `--delete-data` deletes the folder. It asks you to type
+  the app's id first.
+- **An app others need can't be removed.** Remove those first. Items set up by a step that
+  changes more than one service, such as Caddy or ad blocking, can't be removed yet.
+- **Adding and removing are jobs.** Each runs in a unit of its own, with named steps, so it
+  finishes with the terminal closed. `bromigos activity` shows it. Two app jobs queue.
+- On a Server, `bromigos lab deploy`, `restart` and `logs` are these commands.
+  `bromigos lab update` says updating apps is planned.
+
+What the server is meant to run is `/etc/bromigos/lab/apps.toml`, seeded once from the
+install answers. Every command takes `--json`. [lab.md](lab.md#apps-on-a-server) has the
+details: where each reading comes from, the steps, the tile JSON, the exit codes.
+
 ## Where the apps keep their data
 
 Every app that runs as a container keeps its data in a folder of its own under
