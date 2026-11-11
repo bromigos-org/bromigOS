@@ -26,12 +26,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: tools
-        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD),
+        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD,
+        # python-tomlkit for the catalog review's edits),
         # and rsync and restic, bromigos-lab's: the app data move's tests copy with the real
         # rsync, and test_lab_backups.py restores from a real repository
         run: >-
           pacman -Syu --noconfirm --needed git python python-textual desktop-file-utils
-          python-cairo python-gobject pango python-psutil python-zeroconf rsync restic >/dev/null
+          python-cairo python-gobject pango python-psutil python-zeroconf python-tomlkit rsync restic >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
         # as a normal user, like makepkg's check()

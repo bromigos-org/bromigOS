@@ -87,18 +87,62 @@ commercial = "no"
 conditions = "non-commercial, share-alike"
 
 [licence.dinov3]
-hub = ["mit"]
-name = "MIT + DINOv3 licence (encoder)"
+hub = ["dinov3", "other"]
+name = "DINOv3 License (Meta)"
 url = "https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md"
 commercial = "yes"
-conditions = "the DINOv3 encoder's licence: no military/ITAR uses, trade controls"
+conditions = "redistributed copies and derivatives carry the licence; no military, weapons, nuclear, espionage or ITAR uses; trade controls; no reverse engineering; Meta may change it"
+tier = "conditional"
+tier_reason = "use restrictions that pass to derivatives (no military, ITAR, weapons, espionage or nuclear uses; trade controls), Meta may change the terms (s. 8), and it says nothing about outputs; a copy travels with redistributed weights"
 
-[licence.dinov3-mit]
-hub = ["mit"]
-name = "MIT (TRELLIS.2 native path)"
-url = "https://github.com/microsoft/TRELLIS.2/blob/main/LICENSE"
+[licence.nvidia-sc-nc]
+hub = ["other"]
+name = "NVIDIA Source Code License (non-commercial)"
+url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
+commercial = "no"
+conditions = "research and evaluation only"
+
+# ---- APIs used through nolgia: their output terms ([api.*] below; docs/ASSETS.md "Provenance")
+[licence.openai-api]
+name = "OpenAI services agreement"
+url = "https://openai.com/policies/services-agreement/"
 commercial = "yes"
-conditions = "the native ComfyUI path avoids the official repo's non-commercial nvdiffrast and RMBG-2.0"
+conditions = "an API service's output terms: usage and sharing policies"
+tier = "conditional"
+tier_reason = "an API service's output terms (OpenAI's services agreement and sharing policy)"
+
+[licence.minimax-api]
+name = "MiniMax Open Platform terms"
+url = "https://platform.minimax.io/protocol/terms-of-service"
+commercial = "yes"
+conditions = "an API service's output terms"
+tier = "conditional"
+tier_reason = "an API service's output terms (MiniMax Open Platform)"
+
+[licence.byteplus-api]
+name = "BytePlus service terms (through OpenRouter or SeeGen)"
+url = "https://docs.byteplus.com/en/legal/docs/service-specific-terms"
+commercial = "yes"
+conditions = "an API service's output terms, and the router's"
+tier = "conditional"
+tier_reason = "an API service's output terms (BytePlus, and OpenRouter's or SeeGen's)"
+
+[licence.bria-api]
+name = "Bria background removal terms (through fal)"
+url = "https://fal.ai/legal/terms-of-service"
+commercial = "yes"
+conditions = "an API service's output terms (fal's, and Bria's background-removal terms)"
+tier = "conditional"
+tier_reason = "an API service's output terms (fal, and Bria's)"
+
+[licence.tencent-hy3d-api]
+name = "Tencent Cloud HY 3D Global API terms (through fal)"
+url = "https://www.tencentcloud.com/document/product/301/78149"
+commercial = "conditional"
+conditions = "Tencent's terms (2026-03-10): published output marked as AI-generated (6.4(f); AI Service Terms 301/74049 s. 4.2), never presented as human-made (5.4(g)), no competing-model training (5.4(c)), no commercial exploitation of the Services without consent (5.4(d)); fal lists the endpoint for commercial use"
+tier = "conditional"
+tier_reason = "an API service's output terms: Tencent's require published output to be labelled AI-generated, and fal resells the endpoint under its own"
+decision = "label the meshes made with it as AI-generated where they're published, or remake them with a clean 3D model; whether Tencent's terms reach a call through fal and nolgia isn't certain"
 
 [licence.fish-research]
 hub = ["other"]
@@ -419,6 +463,157 @@ unit = "tok/s"
 scale = "bandwidth"
 notes = "'Look at my screen': describe, read and point at UI. A natively multimodal LLM serves it with no extra VRAM."
 quality_basis = "OSWorld-Verified, ScreenSpot-Pro and MMMU-Pro, relative"
+
+# ---------------------------------------------------------------- the art pipeline's finer jobs
+# Declared here alone: a [capability] table is all a new capability needs (no code change).
+# `parent` is the service-level capability it refines; `hub`/`hub_name` are what the weekly
+# refresh watches on Hugging Face for it. A model in the parent and here keeps one score per
+# capability; where no comparison of the finer job exists yet, the parent's score is copied
+# and its quality_note says so.
+[capability.matting]
+title = "Matting (soft alpha: hair, glass, smoke)"
+parent = "cutout"
+residency = "demand"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+order = 141
+notes = "A cutout whose edges keep partial transparency: hair, fur, glass. Light on VRAM."
+quality_basis = "hair and soft-edge MAE in Lucida's 203-image benchmark, BiRefNet's matting model zoo"
+hub = ["image-segmentation", "image-to-image"]
+hub_name = "matt|alpha"
+
+[capability.depth]
+title = "Depth and geometry from one image"
+residency = "demand"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+order = 142
+notes = "Depth maps, normals and point maps from a still: splitting a painting into layers, and the geometry step inside Pixal3D."
+quality_basis = "relative, from each model's published comparisons (no neutral leaderboard)"
+hub = ["depth-estimation"]
+
+[capability.mesh]
+title = "3D meshes (image or text to 3D)"
+parent = "3d"
+residency = "demand"
+unit = "s/mesh"
+better = "lower"
+scale = "compute"
+order = 143
+notes = "Image or text to a mesh. `pick mesh --parts` keeps only models that make separate, named parts (part-aware 3D), for rigid-part rigs."
+quality_basis = "as 3d: Comfy Org's and community comparisons, textured PBR first"
+hub = ["image-to-3d", "text-to-3d"]
+
+[capability.video-i2v]
+title = "Image to video"
+parent = "video"
+residency = "demand"
+unit = "min/clip"
+better = "lower"
+scale = "compute"
+order = 144
+notes = "A clip that starts from a still."
+quality_basis = "as video: the AA video arena and loop tests; image-to-video input required"
+hub = ["image-to-video"]
+
+[capability.video-flf]
+title = "First and last frame to video"
+parent = "video"
+residency = "demand"
+unit = "min/clip"
+better = "lower"
+scale = "compute"
+order = 145
+notes = "A clip between a start frame and an end frame: seamless loops (the same frame at both ends) and transformations."
+quality_basis = "as video, among models with a native end-frame input"
+hub = ["image-to-video"]
+hub_name = "flf|first.?last|inp|keyframe|fl2v"
+
+[capability.upscale-image]
+title = "Image upscaling and restoration"
+parent = "upscale"
+residency = "demand"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+order = 146
+notes = "Larger, sharper stills."
+quality_basis = "as upscale: Comfy Org's upscaling handbook and community comparisons"
+hub = ["image-to-image"]
+hub_name = "upscal|super.?res|esrgan|seedvr|\\bsr\\b"
+
+[capability.upscale-video]
+title = "Video upscaling and restoration"
+parent = "upscale"
+residency = "demand"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+order = 147
+notes = "Larger, sharper clips, steady from frame to frame. Speeds are per frame of about one megapixel."
+quality_basis = "as upscale, among models with temporal consistency (video-native)"
+hub = ["video-to-video"]
+hub_name = "vsr|upscal|super.?res|seedvr|restor"
+
+[capability.interpolate]
+title = "Frame interpolation"
+residency = "demand"
+unit = "ms/frame"
+better = "lower"
+scale = "compute"
+order = 148
+speed_span = [2.0, 500.0]
+notes = "More frames between the ones a clip has: smoother motion, double the frame rate."
+quality_basis = "relative, community comparisons (no neutral benchmark): RIFE is fast and strong on small motion, FILM handles large motion"
+hub = ["video-to-video", "image-to-image"]
+hub_name = "rife|film|interp|vfi"
+
+# ---------------------------------------------------------------- models used through an API (nolgia routes)
+# Not open weights, so never a pick: here so `bromigos lab models check` knows the terms of
+# what made a shipped asset (docs/ASSETS.md, "Provenance").
+[api."gpt-image-2.5-flare"]
+name = "gpt-image-2.5-flare (OpenAI)"
+licence = "openai-api"
+route = "nolgia"
+cite = "https://openai.com/policies/sharing-publication-policy/"
+
+[api."minimax-h3"]
+name = "MiniMax H3 (API)"
+licence = "minimax-api"
+route = "nolgia"
+cite = "https://platform.minimax.io/protocol/terms-of-service"
+
+[api."seedream-4.5"]
+name = "Seedream 4.5 (BytePlus, through OpenRouter)"
+licence = "byteplus-api"
+route = "nolgia"
+cite = "https://openrouter.ai/terms"
+
+[api."seedance-1-5-pro"]
+name = "Seedance 1.5 Pro (BytePlus, through OpenRouter)"
+licence = "byteplus-api"
+route = "nolgia"
+cite = "https://openrouter.ai/terms"
+
+[api."seedance-2.5"]
+name = "Seedance 2.5 (through SeeGen)"
+licence = "byteplus-api"
+route = "nolgia"
+cite = "https://seegen.ai/terms-of-use"
+
+[api."remove-background"]
+name = "Bria background removal (through fal)"
+licence = "bria-api"
+route = "nolgia"
+cite = "https://fal.ai/legal/terms-of-service"
+
+[api."hunyuan3d-v3"]
+name = "Hunyuan3D v3 (Tencent, through fal)"
+licence = "tencent-hy3d-api"
+route = "nolgia"
+cite = "https://www.tencentcloud.com/document/product/301/78149"
 
 [gpu."RTX 3060"]
 vram_gib = 11.76
@@ -3611,7 +3806,17 @@ released = "2026-09"
 licence = "qwen-research"
 quality = { image = 94.6, image-edit = 94.8, cutout = 78 }
 quality_note = "image: #1 open-weight model on every board checked: LMArena T2I 1223 (#19 overall, 2026-10-07), AA T2I 1035. 7.1B single-stream block-causal DiT + Qwen3-VL-8B encoder; native 2048 px, RGBA alpha output, strong typography. Same checkpoint does editing (see image-edit). 40 steps, no CFG. | image-edit: #1 open editor: LMArena single-image edit 1369 (#18 overall, ahead of every other open model by ~65), AA edit 1074. Up to 10 reference images, colour-mark/painted-region edits, masks via alpha, RGBA output, strong identity keeping. No multi-image LMArena entry yet."
+in_use = [
+  { where = "docs/art.md", what = "only when a job names it (non-commercial)" },
+  { where = "bromigOS:themes/*/holo/generations.jsonl", what = "the worlds' hologram concepts, 2026-10-08" },
+]
 cite = ["https://huggingface.co/Qwen/Qwen-Image-2.1", "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE", "https://huggingface.co/Comfy-Org/Qwen-Image-2.1", "https://docs.comfy.org/tutorials/image/qwen/qwen-image-2-1.md", "https://blog.comfy.org/p/qwen-image-21-in-comfyui-open-weight", "https://huggingface.co/BennyDaBall/Qwen-Image-2.1-NVFP4", "https://huggingface.co/unsloth/Qwen-Image-2.1-GGUF", "https://huggingface.co/unsloth/Qwen-Image-2.1-FP8"]
+built_on = [
+  { name = "Qwen3-VL-8B-Instruct", part = "text encoder", licence = "apache-2", cite = "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct" },
+  { name = "Qwen-Image 2.1 VAE", part = "vae", licence = "qwen-research", cite = "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE" },
+]
+aliases = ["qwen-image-2.1"]
+
   [[model.variant]]
   id = "int8"
   runtime = "comfyui"
@@ -3953,7 +4158,18 @@ released = "2025-12"
 licence = "apache-2"
 quality = { image = 75 }
 quality_note = "image: Best Apache-2.0 generator: LMArena 1125 (#44), AA 999 (ties FLUX.2 dev). 20B MMDiT + Qwen2.5-VL-7B; excellent EN/ZH text. 50 steps true-CFG 4, or 4/8-step Lightning LoRA."
+in_use = [
+  { where = "docs/art.md", what = "image.generate default (qwen-image-2512, -lightning)" },
+  { where = "bromigos-lab-holograms/ASSETS.md", what = "concept stills for the Pixal3D meshes" },
+]
 cite = ["https://huggingface.co/Qwen/Qwen-Image-2512", "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI", "https://docs.comfy.org/tutorials/image/qwen/qwen-image-2512.md", "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning", "https://huggingface.co/unsloth/Qwen-Image-2512-GGUF", "https://huggingface.co/QuantFunc/Nunchaku-Qwen-Image-2512", "https://arena.ai/leaderboard/text-to-image"]
+built_on = [
+  { name = "Qwen2.5-VL-7B-Instruct", part = "text encoder", licence = "apache-2", cite = "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct" },
+  { name = "Qwen-Image VAE", part = "vae", licence = "apache-2", cite = "https://huggingface.co/Qwen/Qwen-Image" },
+  { name = "Qwen-Image-2512-Lightning LoRA", part = "lora", licence = "apache-2", cite = "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning" },
+]
+aliases = ["qwen-image-2512-lightning"]
+
   [[model.variant]]
   id = "fp8"
   runtime = "comfyui"
@@ -4781,7 +4997,18 @@ released = "2025-12"
 licence = "apache-2"
 quality = { image-edit = 72.3 }
 quality_note = "image-edit: Best Apache-2.0 editor: LMArena single 1234 (multi-image 1175), AA 1021 (#3 open). 20B, multi-image (1-3 refs), identity/multi-person consistency. No newer Qwen-Image-Edit released; 2.1 supersedes it under a research licence. No native mask input: inpaint via InstantX inpaint / Fun ControlNet Union."
+in_use = [
+  { where = "docs/art.md", what = "image.edit default (qwen-image-edit-2511, -lightning)" },
+  { where = "bromigOS:mascot/provenance.jsonl", what = "STATIC's scene boards" },
+]
 cite = ["https://huggingface.co/Qwen/Qwen-Image-Edit-2511", "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI", "https://docs.comfy.org/tutorials/image/qwen/qwen-image-edit-2511.md", "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning", "https://huggingface.co/unsloth/Qwen-Image-Edit-2511-GGUF", "https://arena.ai/leaderboard/image/image-edit/single-image", "https://arena.ai/leaderboard/image/image-edit/multi-image"]
+built_on = [
+  { name = "Qwen2.5-VL-7B-Instruct", part = "text encoder", licence = "apache-2", cite = "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct" },
+  { name = "Qwen-Image VAE", part = "vae", licence = "apache-2", cite = "https://huggingface.co/Qwen/Qwen-Image" },
+  { name = "Qwen-Image-Edit-2511-Lightning LoRA", part = "lora", licence = "apache-2", cite = "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning" },
+]
+aliases = ["qwen-image-edit-2511-lightning"]
+
   [[model.variant]]
   id = "fp8mixed"
   runtime = "comfyui"
@@ -5007,14 +5234,22 @@ cite = ["https://huggingface.co/nunchaku-ai/nunchaku-flux.1-kontext-dev"]
 [[model]]
 id = "lucida"
 name = "Lucida"
-capabilities = ["cutout"]
+capabilities = ["cutout", "matting"]
 repo = "egeorcun/lucida"
 url = "https://huggingface.co/egeorcun/lucida"
 released = "2026-07"
 licence = "mit"
-quality = { cutout = 90 }
-quality_note = "Lucida (BiRefNet_HR fine-tune). cutout: Author benchmark (203 imgs, MAE): overall 0.0257 vs BiRefNet_HR 0.0346, RMBG-2.0 0.0401, InSPyReNet 0.0295; best on camouflage, text/logo, illustration, design; worse than BiRefNet_HR/RMBG-2.0 on hair. Self-reported. v13 was pulled (regressed); current weights v7."
+quality = { cutout = 90, matting = 80 }
+quality_note = "Lucida (BiRefNet_HR fine-tune). cutout: Author benchmark (203 imgs, MAE): overall 0.0257 vs BiRefNet_HR 0.0346, RMBG-2.0 0.0401, InSPyReNet 0.0295; best on camouflage, text/logo, illustration, design; worse than BiRefNet_HR/RMBG-2.0 on hair. Self-reported. v13 was pulled (regressed); current weights v7. | matting: behind BiRefNet_HR and RMBG-2.0 on hair (its own benchmark)"
+in_use = [
+  { where = "docs/art.md", what = "image.cutout default; inside the pixal3d workflow" },
+  { where = "bromigos-lab-holograms/ASSETS.md", what = "cutouts before Pixal3D" },
+]
 cite = ["https://huggingface.co/egeorcun/lucida", "https://github.com/egeorcun/lucida", "https://huggingface.co/Comfy-Org/BiRefNet", "https://github.com/1038lab/ComfyUI-RMBG", "https://huggingface.co/mlx-community/Lucida-fp16"]
+built_on = [
+  { name = "BiRefNet_HR", part = "base model", model = "birefnet-hr", cite = "https://huggingface.co/egeorcun/lucida" },
+]
+
   [[model.variant]]
   id = "native-fp16"
   runtime = "comfyui"
@@ -5077,17 +5312,22 @@ cite = ["https://huggingface.co/egeorcun/lucida", "https://github.com/egeorcun/l
 [[model]]
 id = "birefnet-hr"
 name = "BiRefNet_HR / HR-matting / dynamic"
-capabilities = ["cutout"]
+capabilities = ["cutout", "matting"]
 family = "birefnet"
 repo = "ZhengPeng7/BiRefNet_HR"
 url = "https://huggingface.co/ZhengPeng7/BiRefNet_HR"
 released = "2025-02"
 licence = "mit"
-quality = { cutout = 88 }
-quality_note = "cutout: Trained at 2048 (HR, HR-matting) or 256-2304 (dynamic, 2025-03). Model-zoo DIS-VD S 0.927 for the 2048 general row. Best of the open models on hair in Lucida's benchmark (MAE 0.0048); community says it can over-correct."
+quality = { cutout = 88, matting = 88 }
+quality_note = "cutout: Trained at 2048 (HR, HR-matting) or 256-2304 (dynamic, 2025-03). Model-zoo DIS-VD S 0.927 for the 2048 general row. Best of the open models on hair in Lucida's benchmark (MAE 0.0048); community says it can over-correct. | matting: the HR-matting weights; best of the open models on hair in Lucida's benchmark (MAE 0.0048)"
 cite = ["https://github.com/ZhengPeng7/BiRefNet", "https://huggingface.co/ZhengPeng7/BiRefNet_HR", "https://github.com/1038lab/ComfyUI-RMBG", "https://github.com/egeorcun/lucida"]
+built_on = [
+  { name = "Swin-L", part = "backbone", licence = "mit", cite = "https://github.com/ZhengPeng7/BiRefNet/blob/main/LICENSE" },
+]
+
   [[model.variant]]
   id = "hr-fp16"
+  capabilities = ["cutout"]
   runtime = "comfyui"
   quant = "FP16"
   weights = "model.safetensors 0.41 GiB"
@@ -5102,6 +5342,7 @@ cite = ["https://github.com/ZhengPeng7/BiRefNet", "https://huggingface.co/ZhengP
   notes = "lower process_res to 1024-1536 to fit 8 GB; AMD: ROCm via PyTorch (unverified); Apple: MPS via ComfyUI-RMBG v3.2.0"
   [[model.variant]]
   id = "hr-matting-fp16"
+  capabilities = ["cutout", "matting"]
   runtime = "comfyui"
   quant = "FP16"
   weights = "ZhengPeng7/BiRefNet_HR-matting model.safetensors 0.41 GiB"
@@ -5116,6 +5357,7 @@ cite = ["https://github.com/ZhengPeng7/BiRefNet", "https://huggingface.co/ZhengP
   notes = "as hr-fp16; AMD: as hr-fp16; Apple: as hr-fp16"
   [[model.variant]]
   id = "dynamic-fp16"
+  capabilities = ["cutout"]
   runtime = "comfyui"
   quant = "FP16"
   weights = "ZhengPeng7/BiRefNet_dynamic 0.41 GiB"
@@ -5140,7 +5382,15 @@ released = "2024-07"
 licence = "mit"
 quality = { cutout = 84 }
 quality_note = "BiRefNet (general, 1024). cutout: Default open choice; what the lab runs now. Native in ComfyUI core since PR #12747 (merged 2026-05-08) and used inside the TRELLIS.2/Pixal3D templates."
+in_use = [
+  { where = "docs/art.md", what = "image.cutout fallback" },
+  { where = "bromigOS:themes/*/holo/generations.jsonl", what = "the worlds' hologram cutouts" },
+]
 cite = ["https://docs.comfy.org/tutorials/utility/remove-background-birefnet", "https://github.com/Comfy-Org/ComfyUI/pull/12747", "https://github.com/ZhengPeng7/BiRefNet", "https://github.com/danielgatis/rembg", "https://www.creativeainews.com/articles/rembg-background-removal-models-tested-2026/"]
+built_on = [
+  { name = "Swin-L", part = "backbone", licence = "mit", cite = "https://github.com/ZhengPeng7/BiRefNet/blob/main/LICENSE" },
+]
+
   [[model.variant]]
   id = "native-fp16"
   runtime = "comfyui"
@@ -5307,13 +5557,13 @@ cite = ["https://huggingface.co/blog/feyninc/feynobg", "https://huggingface.co/f
 [[model]]
 id = "rmbg-2-0"
 name = "BRIA RMBG-2.0"
-capabilities = ["cutout"]
+capabilities = ["cutout", "matting"]
 repo = "briaai/RMBG-2.0"
 url = "https://huggingface.co/briaai/RMBG-2.0"
 released = "2024-10"
 licence = "bria-nc"
-quality = { cutout = 82 }
-quality_note = "cutout: BiRefNet arch + proprietary data; best on hair in Lucida's benchmark (MAE 0.0045) but weaker overall (0.0401). Vendor claims 90% vs BiRefNet 85%."
+quality = { cutout = 82, matting = 84 }
+quality_note = "cutout: BiRefNet arch + proprietary data; best on hair in Lucida's benchmark (MAE 0.0045) but weaker overall (0.0401). Vendor claims 90% vs BiRefNet 85%. | matting: ahead of Lucida on hair in Lucida's benchmark"
 cite = ["https://huggingface.co/briaai/RMBG-2.0", "https://github.com/danielgatis/rembg", "https://www.creativeainews.com/articles/rembg-background-removal-models-tested-2026/"]
   [[model.variant]]
   id = "comfyui-rmbg"
@@ -5400,15 +5650,24 @@ cite = ["https://huggingface.co/briaai/Fibo-Edit-RMBG"]
 [[model]]
 id = "seedvr2-7b"
 name = "SeedVR2 7B"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image", "upscale-video"]
 family = "seedvr2"
 repo = "ByteDance-Seed/SeedVR2-7B"
 url = "https://huggingface.co/ByteDance-Seed/SeedVR2-7B"
 released = "2025-06"
 licence = "apache-2"
-quality = { upscale = 90 }
-quality_note = "SeedVR2 7B (and 7B sharp). upscale: One-step diffusion restoration for images and video; Comfy Org's upscaling handbook (Feb 2026) rates it top for conservative/realistic, archival and CGI video. Can oversharpen lightly degraded input; for images downscale to ~0.35 MP first."
+quality = { upscale = 90, upscale-image = 90, upscale-video = 90 }
+quality_note = "SeedVR2 7B (and 7B sharp). upscale: One-step diffusion restoration for images and video; Comfy Org's upscaling handbook (Feb 2026) rates it top for conservative/realistic, archival and CGI video. Can oversharpen lightly degraded input; for images downscale to ~0.35 MP first. | upscale-image, upscale-video: copied from upscale until a comparison of this job exists"
+in_use = [
+  { where = "docs/art.md", what = "image.upscale and video.upscale (seedvr2-7b, seedvr2-7b-video)" },
+  { where = "bromigOS:mascot/provenance.jsonl", what = "STATIC's clips to 1248x720" },
+]
 cite = ["https://docs.comfy.org/tutorials/utility/seedvr2", "https://huggingface.co/Comfy-Org/SeedVR2", "https://github.com/Comfy-Org/ComfyUI/pull/14424", "https://github.com/Comfy-Org/ComfyUI/pull/16530", "https://docs.comfy.org/tutorials/utility/video-upscale", "https://blog.comfy.org/p/upscaling-in-comfyui", "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler", "https://github.com/ByteDance-Seed/SeedVR"]
+built_on = [
+  { name = "SeedVR2 EMA VAE", part = "vae", licence = "apache-2", cite = "https://huggingface.co/ByteDance-Seed/SeedVR2-7B" },
+]
+aliases = ["seedvr2-7b-video"]
+
   [[model.variant]]
   id = "native-fp16"
   runtime = "comfyui"
@@ -5528,14 +5787,14 @@ cite = ["https://docs.comfy.org/tutorials/utility/seedvr2", "https://huggingface
 [[model]]
 id = "seedvr2-3b"
 name = "SeedVR2 3B"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image", "upscale-video"]
 family = "seedvr2"
 repo = "ByteDance-Seed/SeedVR2-3B"
 url = "https://huggingface.co/ByteDance-Seed/SeedVR2-3B"
 released = "2025-06"
 licence = "apache-2"
-quality = { upscale = 82 }
-quality_note = "upscale: Lower quality than 7B, much lighter; Comfy's default image/video templates use 3B INT8."
+quality = { upscale = 82, upscale-image = 82, upscale-video = 82 }
+quality_note = "upscale: Lower quality than 7B, much lighter; Comfy's default image/video templates use 3B INT8. | upscale-image, upscale-video: copied from upscale until a comparison of this job exists"
 cite = ["https://huggingface.co/Comfy-Org/SeedVR2", "https://docs.comfy.org/tutorials/utility/seedvr2", "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler", "https://seedvr2.net/blog/comparisons/best-ai-upscaler-comparison-topaz-flashvsr-seedvr2-supir-2026"]
   [[model.variant]]
   id = "native-int8"
@@ -5583,13 +5842,13 @@ cite = ["https://huggingface.co/Comfy-Org/SeedVR2", "https://docs.comfy.org/tuto
 [[model]]
 id = "seedvr2-1-4b"
 name = "SeedVR2-1.4B"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image", "upscale-video"]
 repo = "lvladikov/SeedVR2-1.4B"
 url = "https://huggingface.co/lvladikov/SeedVR2-1.4B"
 released = "2026-07"
 licence = "apache-2"
-quality = { upscale = 84 }
-quality_note = "SeedVR2-1.4B (community distilled from 7B sharp). upscale: 6-layer student; author says close to 7B at 4x with sharper edges; no metrics. Single-author community model."
+quality = { upscale = 84, upscale-image = 84, upscale-video = 84 }
+quality_note = "SeedVR2-1.4B (community distilled from 7B sharp). upscale: 6-layer student; author says close to 7B at 4x with sharper edges; no metrics. Single-author community model. | upscale-image, upscale-video: copied from upscale until a comparison of this job exists"
 cite = ["https://huggingface.co/lvladikov/SeedVR2-1.4B", "https://comfyui-wiki.com/es/news/2026-07-29-seedvr2-1-4b-distilled-upscaler"]
   [[model.variant]]
   id = "dropin-fp16"
@@ -5623,13 +5882,13 @@ cite = ["https://huggingface.co/lvladikov/SeedVR2-1.4B", "https://comfyui-wiki.c
 [[model]]
 id = "supir"
 name = "SUPIR"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image"]
 repo = "Kijai/SUPIR_pruned"
 url = "https://github.com/Fanghua-Yu/SUPIR"
 released = "2024-01"
 licence = "supir"
-quality = { upscale = 85 }
-quality_note = "SUPIR (SDXL restoration). upscale: Strong on severely degraded photos with prompt guidance; reviewers find it slightly below SeedVR2 on realism/consistency and prone to over-processing noise."
+quality = { upscale = 85, upscale-image = 85 }
+quality_note = "SUPIR (SDXL restoration). upscale: Strong on severely degraded photos with prompt guidance; reviewers find it slightly below SeedVR2 on realism/consistency and prone to over-processing noise. | upscale-image: copied from upscale until a comparison of this job exists"
 cite = ["https://github.com/Comfy-Org/ComfyUI/pull/13250", "https://github.com/Fanghua-Yu/SUPIR/blob/master/LICENSE", "https://huggingface.co/Kijai/SUPIR_pruned", "https://github.com/Comfy-Org/workflow_templates"]
   [[model.variant]]
   id = "native-fp16"
@@ -5649,13 +5908,13 @@ cite = ["https://github.com/Comfy-Org/ComfyUI/pull/13250", "https://github.com/F
 [[model]]
 id = "flashvsr"
 name = "FlashVSR v1.1"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-video"]
 repo = "JunhaoZhuang/FlashVSR-v1.1"
 url = "https://github.com/OpenImagingLab/FlashVSR"
 released = "2025-11"
 licence = "apache-2"
-quality = { upscale = 78 }
-quality_note = "FlashVSR v1.1 (video). upscale: Fast one-step streaming 4x VSR on Wan2.1 components; Comfy handbook: best when speed matters. Dense-attention fallbacks in some nodes lose quality at high res."
+quality = { upscale = 78, upscale-video = 78 }
+quality_note = "FlashVSR v1.1 (video). upscale: Fast one-step streaming 4x VSR on Wan2.1 components; Comfy handbook: best when speed matters. Dense-attention fallbacks in some nodes lose quality at high res. | upscale-video: copied from upscale until a comparison of this job exists"
 cite = ["https://github.com/OpenImagingLab/FlashVSR", "https://huggingface.co/JunhaoZhuang/FlashVSR-v1.1", "https://docs.comfy.org/tutorials/utility/video-upscale", "https://github.com/smthemex/ComfyUI_FlashVSR"]
   [[model.variant]]
   id = "comfyui-flashvsr"
@@ -5677,13 +5936,13 @@ cite = ["https://github.com/OpenImagingLab/FlashVSR", "https://huggingface.co/Ju
 [[model]]
 id = "ultrasharp-v2"
 name = "4x-UltraSharpV2 / Lite"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image"]
 repo = "Kim2091/UltraSharpV2"
 url = "https://openmodeldb.info/models/4x-UltraSharpV2"
 released = "2025-05"
 licence = "cc-by-nc-sa-4"
-quality = { upscale = 72 }
-quality_note = "4x-UltraSharpV2 (DAT2) / Lite (RealPLKSR). upscale: Widely used general GAN upscaler (photos, anime, art, JPEG); author self-assessment only. Deterministic, no hallucinated content."
+quality = { upscale = 72, upscale-image = 72 }
+quality_note = "4x-UltraSharpV2 (DAT2) / Lite (RealPLKSR). upscale: Widely used general GAN upscaler (photos, anime, art, JPEG); author self-assessment only. Deterministic, no hallucinated content. | upscale-image: copied from upscale until a comparison of this job exists"
 cite = ["https://openmodeldb.info/models/4x-UltraSharpV2", "https://github.com/OpenModelDB/open-model-database", "https://docs.comfy.org/tutorials/basic/upscale"]
   [[model.variant]]
   id = "dat2-fp16"
@@ -5703,13 +5962,13 @@ cite = ["https://openmodeldb.info/models/4x-UltraSharpV2", "https://github.com/O
 [[model]]
 id = "nomos2-hq-dat2"
 name = "4x-Nomos2-hq-dat2"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image"]
 repo = "Phhofm/models"
 url = "https://openmodeldb.info/models/4x-Nomos2-hq-dat2"
 released = "2024-08"
 licence = "cc-by-4"
-quality = { upscale = 70 }
-quality_note = "upscale: Photo-oriented general upscaler; best commercial-clean DAT2 option in OpenModelDB (also ATD/DRCT-L siblings, same licence)."
+quality = { upscale = 70, upscale-image = 70 }
+quality_note = "upscale: Photo-oriented general upscaler; best commercial-clean DAT2 option in OpenModelDB (also ATD/DRCT-L siblings, same licence). | upscale-image: copied from upscale until a comparison of this job exists"
 cite = ["https://github.com/OpenModelDB/open-model-database"]
   [[model.variant]]
   id = "dat2-fp16"
@@ -5729,13 +5988,13 @@ cite = ["https://github.com/OpenModelDB/open-model-database"]
 [[model]]
 id = "realesrgan-x4plus"
 name = "Real-ESRGAN x4plus"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image"]
 repo = "xinntao/Real-ESRGAN"
 url = "https://github.com/xinntao/Real-ESRGAN"
 released = "2021-07"
 licence = "bsd-3"
-quality = { upscale = 58 }
-quality_note = "upscale: Old baseline; fast, predictable; used frame-by-frame for quick video upscales."
+quality = { upscale = 58, upscale-image = 58 }
+quality_note = "upscale: Old baseline; fast, predictable; used frame-by-frame for quick video upscales. | upscale-image: copied from upscale until a comparison of this job exists"
 cite = ["https://docs.comfy.org/tutorials/utility/image-upscale", "https://github.com/xinntao/Real-ESRGAN"]
   [[model.variant]]
   id = "core-fp16"
@@ -5769,13 +6028,13 @@ cite = ["https://docs.comfy.org/tutorials/utility/image-upscale", "https://githu
 [[model]]
 id = "z-image-turbo-upscale"
 name = "Z-Image-Turbo 2K creative upscale"
-capabilities = ["upscale"]
+capabilities = ["upscale", "upscale-image"]
 repo = "Comfy-Org/z_image_turbo"
 url = "https://huggingface.co/Comfy-Org/z_image_turbo"
 released = "2026-02"
 licence = "apache-2"
-quality = { upscale = 76 }
-quality_note = "upscale: Creative (re-imagines detail); 2K ceiling. Use for AI art, not for fidelity-critical photos."
+quality = { upscale = 76, upscale-image = 76 }
+quality_note = "upscale: Creative (re-imagines detail); 2K ceiling. Use for AI art, not for fidelity-critical photos. | upscale-image: copied from upscale until a comparison of this job exists"
 cite = ["https://github.com/Comfy-Org/workflow_templates", "https://docs.comfy.org/tutorials/utility/image-upscale"]
   [[model.variant]]
   id = "native-bf16"
@@ -5796,16 +6055,25 @@ cite = ["https://github.com/Comfy-Org/workflow_templates", "https://docs.comfy.o
 [[model]]
 id = "wan2.2-i2v-a14b"
 name = "Wan 2.2 I2V A14B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v", "video-flf"]
 family = "wan2.2-i2v"
 repo = "Wan-AI/Wan2.2-I2V-A14B"
 url = "https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B"
 released = "2025-07"
 licence = "apache-2"
-quality = { video = 84 }
+quality = { video = 84, video-i2v = 84, video-flf = 84 }
 features = ["i2v", "flf2v"]
-quality_note = "Wan 2.2 I2V A14B (MoE, high/low-noise experts). video: Strongest proven open loop path today. Core ComfyUI FLF2V template (WanFirstLastFrameToVideo) uses these I2V weights. Stable motion with a fixed camera, somewhat soft (zenn 5090 A/B vs LTX-2.3). Same image at both ends: loops close but motion is restrained; reported contrast/colour creep toward the "
+quality_note = "Wan 2.2 I2V A14B (MoE, high/low-noise experts). video: Strongest proven open loop path today. Core ComfyUI FLF2V template (WanFirstLastFrameToVideo) uses these I2V weights. Stable motion with a fixed camera, somewhat soft (zenn 5090 A/B vs LTX-2.3). Same image at both ends: loops close but motion is restrained; reported contrast/colour creep toward the  | video-i2v, video-flf: copied from video until a comparison of this job exists"
+in_use = [
+  { where = "docs/art.md", what = "video.loop default" },
+  { where = "bromigOS:mascot/provenance.jsonl", what = "STATIC's loops and first-last-frame bumps" },
+]
 cite = ["https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B", "https://docs.comfy.org/tutorials/video/wan/wan2_2", "https://huggingface.co/api/models/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/tree/main/split_files/diffusion_models", "https://docs.comfy.org/tutorials/video/wan/wan2-2-fun-inp", "https://huggingface.co/lightx2v/Wan2.2-Lightning", "https://huggingface.co/lightx2v/Wan2.2-Distill-Models", "https://huggingface.co/lightx2v/LightWan2.2-A14B", "https://github.com/Wan-Video/Wan2.2/issues/49"]
+built_on = [
+  { name = "UMT5-XXL", part = "text encoder", licence = "apache-2", cite = "https://huggingface.co/google/umt5-xxl" },
+  { name = "Wan 2.1 VAE", part = "vae", licence = "apache-2", cite = "https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B/blob/main/LICENSE.txt" },
+]
+
   [[model.variant]]
   id = "fp16"
   runtime = "comfyui"
@@ -5985,16 +6253,24 @@ cite = ["https://huggingface.co/api/models/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/
 [[model]]
 id = "wan2.2-ti2v-5b"
 name = "Wan 2.2 TI2V 5B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v"]
 family = "wan2.2-ti2v"
 repo = "Wan-AI/Wan2.2-TI2V-5B"
 url = "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B"
 released = "2025-07"
 licence = "apache-2"
-quality = { video = 63 }
+quality = { video = 63, video-i2v = 63 }
 features = ["t2v", "i2v"]
-quality_note = "video: Clearly below 14B on motion and detail, but 720p at 24 fps. No native end-frame input, so loops need wan2.2-fun-inp-5b or a crossfade. Already installed in the lab."
+quality_note = "video: Clearly below 14B on motion and detail, but 720p at 24 fps. No native end-frame input, so loops need wan2.2-fun-inp-5b or a crossfade. Already installed in the lab. | video-i2v: copied from video until a comparison of this job exists"
+in_use = [
+  { where = "docs/art.md", what = "video.loop, the second choice" },
+]
 cite = ["https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B", "https://docs.comfy.org/tutorials/video/wan/wan2_2", "https://rapidmlx.com/docs/models/families/video"]
+built_on = [
+  { name = "UMT5-XXL", part = "text encoder", licence = "apache-2", cite = "https://huggingface.co/google/umt5-xxl" },
+  { name = "Wan 2.2 VAE", part = "vae", licence = "apache-2", cite = "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B" },
+]
+
   [[model.variant]]
   id = "fp16"
   runtime = "comfyui"
@@ -6029,14 +6305,14 @@ cite = ["https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B", "https://docs.comfy.org/
 [[model]]
 id = "wan2.2-fun-inp-5b"
 name = "Wan 2.2 Fun 5B InP"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v", "video-flf"]
 repo = "alibaba-pai/Wan2.2-Fun-5B-InP"
 url = "https://huggingface.co/alibaba-pai/Wan2.2-Fun-5B-InP"
 released = "2025-08"
 licence = "apache-2"
-quality = { video = 68 }
+quality = { video = 68, video-i2v = 68, video-flf = 68 }
 features = ["i2v", "flf2v"]
-quality_note = "Wan 2.2 Fun 5B InP (start+end frame). video: Cheapest real first+last-frame model: start=end gives a closed loop on 8-12 GB. Quality is 5B-class. Loop seam quality is not benchmarked (untested)."
+quality_note = "Wan 2.2 Fun 5B InP (start+end frame). video: Cheapest real first+last-frame model: start=end gives a closed loop on 8-12 GB. Quality is 5B-class. Loop seam quality is not benchmarked (untested). | video-i2v, video-flf: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/alibaba-pai/Wan2.2-Fun-5B-InP", "https://comfy.org/templates/video_wan2_2_5B_fun_inpaint", "https://huggingface.co/api/models/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/tree/main/split_files/diffusion_models"]
   [[model.variant]]
   id = "bf16"
@@ -6056,14 +6332,14 @@ cite = ["https://huggingface.co/alibaba-pai/Wan2.2-Fun-5B-InP", "https://comfy.o
 [[model]]
 id = "wan2.2-fun-inp-a14b"
 name = "Wan 2.2 Fun A14B InP"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v", "video-flf"]
 repo = "alibaba-pai/Wan2.2-Fun-A14B-InP"
 url = "https://huggingface.co/alibaba-pai/Wan2.2-Fun-A14B-InP"
 released = "2025-08"
 licence = "apache-2"
-quality = { video = 83 }
+quality = { video = 83, video-i2v = 83, video-flf = 83 }
 features = ["i2v", "flf2v"]
-quality_note = "Wan 2.2 Fun A14B InP (start+end frame). video: Alternative 14B loop path. One loop-maker reported less colour/contrast drift with WanFunInpaintToVideo than with the wrapper's I2V loop, but motion was less lively and renders were slower (WanVideoWrapper #1541)."
+quality_note = "Wan 2.2 Fun A14B InP (start+end frame). video: Alternative 14B loop path. One loop-maker reported less colour/contrast drift with WanFunInpaintToVideo than with the wrapper's I2V loop, but motion was less lively and renders were slower (WanVideoWrapper #1541). | video-i2v, video-flf: copied from video until a comparison of this job exists"
 cite = ["https://docs.comfy.org/tutorials/video/wan/wan2-2-fun-inp", "https://huggingface.co/api/models?author=alibaba-pai"]
   [[model.variant]]
   id = "fp8-scaled"
@@ -6083,15 +6359,15 @@ cite = ["https://docs.comfy.org/tutorials/video/wan/wan2-2-fun-inp", "https://hu
 [[model]]
 id = "ltx-2.5"
 name = "LTX-2.5 22B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v", "video-flf"]
 family = "ltx-2"
 repo = "Lightricks/LTX-2.5"
 url = "https://huggingface.co/Lightricks/LTX-2.5"
 released = "2026-08"
 licence = "ltx-2"
-quality = { video = 82 }
+quality = { video = 82, video-i2v = 82, video-flf = 82 }
 features = ["t2v", "i2v", "flf2v"]
-quality_note = "LTX-2.5 22B (audio+video). video: AA I2V open-weights board: LTX-2.5 Fast 1038 / Pro 1007 Elo (#3-4 behind MiniMax H3 1181 and MAGI-2 1093). Much faster than Wan 14B. Native audio. Core FLF2V template (video_ltx2_5_flf2v). Tends to add camera motion and 'act out' (zenn, 2.3), which is bad for loops unless the Cinemagraph LoRA or loc"
+quality_note = "LTX-2.5 22B (audio+video). video: AA I2V open-weights board: LTX-2.5 Fast 1038 / Pro 1007 Elo (#3-4 behind MiniMax H3 1181 and MAGI-2 1093). Much faster than Wan 14B. Native audio. Core FLF2V template (video_ltx2_5_flf2v). Tends to add camera motion and 'act out' (zenn, 2.3), which is bad for loops unless the Cinemagraph LoRA or loc | video-i2v, video-flf: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/Lightricks/LTX-2.5", "https://docs.comfy.org/tutorials/video/ltx/ltx-2-5", "https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x", "https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Cinemagraph", "https://comfyui-wiki.com/en/news/2026-08-11-ltx-2-5-open-weights-release", "https://runaihome.com/blog/ltx-2-5-local-ai-video-hardware-guide-2026/", "https://huggingface.co/Abiray/LTX-2.5-Distilled-GGUF", "https://github.com/dgrauet/ltx-2-mlx"]
   [[model.variant]]
   id = "int8-distilled"
@@ -6188,15 +6464,15 @@ cite = ["https://huggingface.co/Lightricks/LTX-2.5", "https://docs.comfy.org/tut
 [[model]]
 id = "ltx-2.3"
 name = "LTX-2.3 22B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v", "video-flf"]
 family = "ltx-2"
 repo = "Lightricks/LTX-2.3"
 url = "https://huggingface.co/Lightricks/LTX-2.3"
 released = "2026-03"
 licence = "ltx-2"
-quality = { video = 76 }
+quality = { video = 76, video-i2v = 76, video-flf = 76 }
 features = ["t2v", "i2v", "flf2v"]
-quality_note = "LTX-2.3 22B (audio+video). video: Superseded by 2.5 (AA I2V open ~948 Elo vs 1038). Still useful for official fp8 and NVFP4 builds, a smaller Gemma-3-12B TE, and the 2.3 Cinemagraph LoRA (ltx-2.3-22b-lora-cinemagraph-0.9, 207 MB)."
+quality_note = "LTX-2.3 22B (audio+video). video: Superseded by 2.5 (AA I2V open ~948 Elo vs 1038). Still useful for official fp8 and NVFP4 builds, a smaller Gemma-3-12B TE, and the 2.3 Cinemagraph LoRA (ltx-2.3-22b-lora-cinemagraph-0.9, 207 MB). | video-i2v, video-flf: copied from video until a comparison of this job exists"
 cite = ["https://zenn.dev/toki_mwc/articles/ltx23-vs-wan22-i2v-benchmark-rtx5090?locale=en", "https://huggingface.co/Lightricks/LTX-2.3-22b-LoRA-Cinemagraph", "https://huggingface.co/gajesh/LTX-2.3-mlx-fp16", "https://forums.developer.nvidia.com/t/dgx-spark-comfyui/368179"]
   [[model.variant]]
   id = "fp8"
@@ -6229,15 +6505,15 @@ cite = ["https://zenn.dev/toki_mwc/articles/ltx23-vs-wan22-i2v-benchmark-rtx5090
 [[model]]
 id = "minimax-h3-fl2va"
 name = "MiniMax H3 FL2VA"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v", "video-flf"]
 family = "minimax-h3"
 repo = "MiniMaxAI/MiniMax-H3"
 url = "https://huggingface.co/MiniMaxAI/MiniMax-H3"
 released = "2026-08"
 licence = "minimax-h3"
-quality = { video = 92 }
+quality = { video = 92, video-i2v = 92, video-flf = 92 }
 features = ["t2v", "i2v", "flf2v"]
-quality_note = "MiniMax H3 FL2VA (33B, first/last-frame to audio+video). video: Best open-weights video model on Artificial Analysis: I2V open board #1 at 1181 Elo; T2V v2.0 1137 (#4 overall, only behind closed Wan 3.0, Utopai X, Seedance 2.5). Native stereo audio. True optional first_frame/last_frame inputs on MiniMaxH3ImageToVideo, plus MiniMaxH3AddGuide at any frame index. A"
+quality_note = "MiniMax H3 FL2VA (33B, first/last-frame to audio+video). video: Best open-weights video model on Artificial Analysis: I2V open board #1 at 1181 Elo; T2V v2.0 1137 (#4 overall, only behind closed Wan 3.0, Utopai X, Seedance 2.5). Native stereo audio. True optional first_frame/last_frame inputs on MiniMaxH3ImageToVideo, plus MiniMaxH3AddGuide at any frame index. A | video-i2v, video-flf: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/MiniMaxAI/MiniMax-H3", "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE", "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/QA-about-License.md", "https://huggingface.co/Comfy-Org/MiniMax-H3", "https://docs.comfy.org/tutorials/video/minimax/minimax-h3-native", "https://comfyui-wiki.com/en/tutorial/advanced/video/minimax/minimax-h3", "https://github.com/wildminder/awesome-minimax-H3/blob/main/guides/minimax-h3-performance.md", "https://ai-muninn.com/en/blog/minimax-h3-rtx5090-config-stack"]
   [[model.variant]]
   id = "pruned-int8"
@@ -6331,15 +6607,15 @@ cite = ["https://huggingface.co/MiniMaxAI/MiniMax-H3", "https://huggingface.co/M
 [[model]]
 id = "kandinsky-6-pro"
 name = "Kandinsky 6.0 Video Pro 29B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v"]
 family = "kandinsky"
 repo = "kandinskylab/Kandinsky-6.0-Pro-5s-Diffusers"
 url = "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-5s-Diffusers"
 released = "2026-10"
 licence = "mit"
-quality = { video = 72 }
+quality = { video = 72, video-i2v = 72 }
 features = ["t2v", "i2v"]
-quality_note = "Kandinsky 6.0 Video Pro 29B (audio+video). video: Released 2026-10-06 (3 days old), so there are no arena or VBench results yet. 44 kHz audio with lip-sync. No first+last-frame mode: image is used as a single (masked tail-frame) condition, so loops need a crossfade or ping-pong."
+quality_note = "Kandinsky 6.0 Video Pro 29B (audio+video). video: Released 2026-10-06 (3 days old), so there are no arena or VBench results yet. 44 kHz audio with lip-sync. No first+last-frame mode: image is used as a single (masked tail-frame) condition, so loops need a crossfade or ping-pong. | video-i2v: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-5s-Diffusers", "https://github.com/kandinskylab/kandinsky-6", "https://comfy.icu/extension/kandinskylab__kandinsky-6", "https://comfyui-wiki.com/en/models/kandinsky/kandinsky-6-0", "https://huggingface.co/api/models?author=kandinskylab"]
   [[model.variant]]
   id = "distill-10step"
@@ -6374,15 +6650,15 @@ cite = ["https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-5s-Diffusers", "h
 [[model]]
 id = "kandinsky-6-lite"
 name = "Kandinsky 6.0 Video Lite 3B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v"]
 family = "kandinsky"
 repo = "kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers"
 url = "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers"
 released = "2026-10"
 licence = "mit"
-quality = { video = 56 }
+quality = { video = 56, video-i2v = 56 }
 features = ["t2v", "i2v"]
-quality_note = "video: Small MIT option with audio. Untested. No FLF."
+quality_note = "video: Small MIT option with audio. Untested. No FLF. | video-i2v: copied from video until a comparison of this job exists"
 cite = ["https://github.com/kandinskylab/kandinsky-6"]
   [[model.variant]]
   id = "distill-10step"
@@ -6404,14 +6680,14 @@ cite = ["https://github.com/kandinskylab/kandinsky-6"]
 [[model]]
 id = "hunyuanvideo-1.5"
 name = "HunyuanVideo 1.5 8.3B"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v"]
 repo = "tencent/HunyuanVideo-1.5"
 url = "https://huggingface.co/tencent/HunyuanVideo-1.5"
 released = "2025-11"
 licence = "tencent"
-quality = { video = 66 }
+quality = { video = 66, video-i2v = 66 }
 features = ["t2v", "i2v"]
-quality_note = "video: Efficient mid-size model. Still Tencent's newest open video model as of Oct 2026. No first+last frame, so loops need a crossfade."
+quality_note = "video: Efficient mid-size model. Still Tencent's newest open video model as of Oct 2026. No first+last frame, so loops need a crossfade. | video-i2v: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/tencent/HunyuanVideo-1.5", "https://huggingface.co/tencent/HunyuanVideo-1.5/blob/main/LICENSE", "https://docs.comfy.org/tutorials/video/hunyuan/hunyuan-video-1-5"]
   [[model.variant]]
   id = "fp16-720p"
@@ -6431,14 +6707,14 @@ cite = ["https://huggingface.co/tencent/HunyuanVideo-1.5", "https://huggingface.
 [[model]]
 id = "magi-2-preview"
 name = "MAGI-2 Preview 114B MoE"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v"]
 repo = "sand-ai/MAGI-2-preview"
 url = "https://huggingface.co/sand-ai/MAGI-2-preview"
 released = "2026-08"
 licence = "apache-2"
-quality = { video = 80 }
+quality = { video = 80, video-i2v = 80 }
 features = ["t2v", "i2v"]
-quality_note = "MAGI-2 Preview 114B MoE (6B active, audio+video). video: Largest open video model. AA I2V open board #2 at 1093 Elo. No FLF; fixed 10 s length."
+quality_note = "MAGI-2 Preview 114B MoE (6B active, audio+video). video: Largest open video model. AA I2V open board #2 at 1093 Elo. No FLF; fixed 10 s length. | video-i2v: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/sand-ai/MAGI-2-preview", "https://comfyui-wiki.com/en/news/2026-08-05-magi-2-preview", "https://artificialanalysis.ai/video/leaderboard/image-to-video/open-weights"]
   [[model.variant]]
   id = "bf16-8gpu"
@@ -6458,14 +6734,14 @@ cite = ["https://huggingface.co/sand-ai/MAGI-2-preview", "https://comfyui-wiki.c
 [[model]]
 id = "prism"
 name = "Prism"
-capabilities = ["video"]
+capabilities = ["video", "video-i2v"]
 repo = "FrancisRing/Prism"
 url = "https://huggingface.co/FrancisRing/Prism"
 released = "2026-09"
 licence = "mit"
-quality = { video = 70 }
+quality = { video = 70, video-i2v = 70 }
 features = ["i2v", "t2v"]
-quality_note = "Prism (~15B Wan/MOVA-based video+audio, up to 2K). video: Research release. No arena data. No FLF."
+quality_note = "Prism (~15B Wan/MOVA-based video+audio, up to 2K). video: Research release. No arena data. No FLF. | video-i2v: copied from video until a comparison of this job exists"
 cite = ["https://huggingface.co/FrancisRing/Prism"]
   [[model.variant]]
   id = "bf16"
@@ -6486,15 +6762,25 @@ cite = ["https://huggingface.co/FrancisRing/Prism"]
 [[model]]
 id = "pixal3d"
 name = "Pixal3D"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 family = "pixal3d"
 repo = "TencentARC/Pixal3D"
 url = "https://github.com/TencentARC/Pixal3D"
 released = "2026-05"
-licence = "dinov3"
-quality = { 3d = 92 }
-quality_note = "Pixal3D (TRELLIS.2 backbone, pixel-aligned). 3d: SIGGRAPH 2026. Comfy Org: 'generally performs better' than TRELLIS.2 because geometry aligns 1:1 with the input view; same PBR material set (base colour, metallic, roughness + baked normal/AO). Comfy also says closed Hunyuan 3.x/Tripo/Rodin still beat both."
+licence = "mit"
+quality = { 3d = 92, mesh = 92 }
+quality_note = "Pixal3D (TRELLIS.2 backbone, pixel-aligned). 3d: SIGGRAPH 2026. Comfy Org: 'generally performs better' than TRELLIS.2 because geometry aligns 1:1 with the input view; same PBR material set (base colour, metallic, roughness + baked normal/AO). Comfy also says closed Hunyuan 3.x/Tripo/Rodin still beat both. | mesh: copied from 3d until a comparison of this job exists"
+in_use = [
+  { where = "docs/art.md", what = "model3d.generate default" },
+  { where = "bromigos-lab-holograms/ASSETS.md", what = "the machines' meshes and RECON OWL" },
+]
 cite = ["https://docs.comfy.org/tutorials/3d/pixal3d", "https://blog.comfy.org/p/trellis2-and-pixal3d-are-now-native", "https://github.com/Comfy-Org/ComfyUI/pull/14718", "https://huggingface.co/Comfy-Org/Pixal3D", "https://huggingface.co/TencentARC/Pixal3D", "https://github.com/TencentARC/Pixal3D", "https://www.instasd.com/post/trellis-2-pixal3d-native-comfyui-guide", "https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md"]
+built_on = [
+  { name = "TRELLIS.2", part = "backbone and VAEs", model = "trellis-2", cite = "https://huggingface.co/TencentARC/Pixal3D/blob/main/NOTICE" },
+  { name = "MoGe-2", part = "geometry", model = "moge-2", cite = "https://huggingface.co/TencentARC/Pixal3D/blob/main/NOTICE" },
+  { name = "Lucida", part = "cutout", model = "lucida", cite = "docs/art.md" },
+]
+
   [[model.variant]]
   id = "native-int8"
   runtime = "comfyui"
@@ -6557,15 +6843,19 @@ cite = ["https://docs.comfy.org/tutorials/3d/pixal3d", "https://blog.comfy.org/p
 [[model]]
 id = "trellis-2"
 name = "TRELLIS.2-4B"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 family = "trellis"
 repo = "microsoft/TRELLIS.2-4B"
 url = "https://github.com/microsoft/TRELLIS.2"
 released = "2025-12"
-licence = "dinov3-mit"
-quality = { 3d = 88 }
-quality_note = "3d: 4B sparse-voxel (O-Voxel) model with full PBR; up to 1536^3. Strong open baseline; Pixal3D (same backbone) generally better on input fidelity."
+licence = "mit"
+quality = { 3d = 88, mesh = 88 }
+quality_note = "3d: 4B sparse-voxel (O-Voxel) model with full PBR; up to 1536^3. Strong open baseline; Pixal3D (same backbone) generally better on input fidelity. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/microsoft/TRELLIS.2", "https://huggingface.co/microsoft/TRELLIS.2-4B", "https://docs.comfy.org/tutorials/3d/trellis2", "https://huggingface.co/Comfy-Org/TRELLIS.2", "https://blog.comfy.org/p/trellis2-and-pixal3d-are-now-native", "https://github.com/Comfy-Org/ComfyUI/pull/14718", "https://github.com/visualbruno/ComfyUI-Trellis2", "https://github.com/toastmanAu/trellis-2-rocm-comfyui"]
+built_on = [
+  { name = "DINOv3 ViT-L/16", part = "image encoder", licence = "dinov3", cite = "https://huggingface.co/microsoft/TRELLIS.2-4B/blob/main/pipeline.json" },
+]
+
   [[model.variant]]
   id = "native-int8"
   runtime = "comfyui"
@@ -6599,6 +6889,10 @@ cite = ["https://github.com/microsoft/TRELLIS.2", "https://huggingface.co/micros
   runtime = "dedicated"
   quant = "BF16"
   weights = "microsoft/TRELLIS.2-4B ckpts ~15 GiB"
+  built_on = [
+    { name = "RMBG-2.0", part = "background removal", licence = "bria-nc", cite = "https://huggingface.co/microsoft/TRELLIS.2-4B/blob/main/pipeline.json" },
+    { name = "nvdiffrast", part = "renderer", licence = "nvidia-sc-nc", cite = "https://github.com/microsoft/TRELLIS.2" },
+  ]
   vram_gib = 24.0
   vram_note = "official minimum 24 GB, Linux, verified A100/H100"
   ram_gib = 64.0
@@ -6626,15 +6920,24 @@ cite = ["https://github.com/microsoft/TRELLIS.2", "https://huggingface.co/micros
 [[model]]
 id = "hunyuan3d-2-1"
 name = "Hunyuan3D 2.1"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 family = "hunyuan3d"
 repo = "tencent/Hunyuan3D-2.1"
 url = "https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1"
 released = "2025-06"
 licence = "tencent"
-quality = { 3d = 80 }
-quality_note = "Hunyuan3D 2.1 (shape DiT + PBR paint). 3d: Newest open Hunyuan3D; 2.5/3.0/3.1 are hosted-only (ComfyUI partner nodes). Good PBR paint; geometry generally behind TRELLIS.2-family (community comparisons)."
+quality = { 3d = 80, mesh = 80 }
+quality_note = "Hunyuan3D 2.1 (shape DiT + PBR paint). 3d: Newest open Hunyuan3D; 2.5/3.0/3.1 are hosted-only (ComfyUI partner nodes). Good PBR paint; geometry generally behind TRELLIS.2-family (community comparisons). | mesh: copied from 3d until a comparison of this job exists"
+in_use = [
+  { where = "docs/art.md", what = "model3d.generate fallback" },
+  { where = "bromigOS:themes/*/holo/generations.jsonl", what = "the worlds' hologram shapes" },
+]
 cite = ["https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1", "https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1/blob/main/LICENSE", "https://comfy.org/p/supported-models/hunyuan-3d-v2-1", "https://huggingface.co/Comfy-Org/hunyuan3D_2.1_repackaged", "https://github.com/visualbruno/ComfyUI-Hunyuan3d-2-1", "https://huggingface.co/ddalcu/Hunyuan3D-2.1-MLX-Serve-8bit", "https://app.cinevva.com/guides/ai-3d-model-generation-timeline-2026"]
+built_on = [
+  { name = "DINOv2 ViT-g/14", part = "image encoder", licence = "apache-2", cite = "https://huggingface.co/facebook/dinov2-giant" },
+]
+aliases = ["hunyuan3d-2.1"]
+
   [[model.variant]]
   id = "native-shape-fp16"
   runtime = "comfyui"
@@ -6684,14 +6987,14 @@ cite = ["https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1", "https://github.com/
 [[model]]
 id = "hunyuan3d-2"
 name = "Hunyuan3D 2.0 / 2mini / 2mv"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 family = "hunyuan3d"
 repo = "tencent/Hunyuan3D-2mini"
 url = "https://docs.comfy.org/tutorials/3d/hunyuan3D-2"
 released = "2025-03"
 licence = "tencent"
-quality = { 3d = 62 }
-quality_note = "3d: Older; shape only in core. Low-VRAM option."
+quality = { 3d = 62, mesh = 62 }
+quality_note = "3d: Older; shape only in core. Low-VRAM option. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://docs.comfy.org/tutorials/3d/hunyuan3D-2", "https://huggingface.co/tencent/Hunyuan3D-2mini", "https://github.com/kijai/ComfyUI-Hunyuan3DWrapper"]
   [[model.variant]]
   id = "native-2-0-shape"
@@ -6727,13 +7030,13 @@ cite = ["https://docs.comfy.org/tutorials/3d/hunyuan3D-2", "https://huggingface.
 [[model]]
 id = "sam-3d-objects"
 name = "SAM 3D Objects"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "facebook/sam-3d-objects"
 url = "https://github.com/facebookresearch/sam-3d-objects"
 released = "2025-11"
 licence = "sam"
-quality = { 3d = 80 }
-quality_note = "3d: Best for real-world cluttered/occluded photos (reconstructs shape, texture, layout of masked objects); outputs Gaussian splat + mesh. Human-preference wins vs prior models (Meta). Less clean than asset-style generators on studio inputs."
+quality = { 3d = 80, mesh = 80 }
+quality_note = "3d: Best for real-world cluttered/occluded photos (reconstructs shape, texture, layout of masked objects); outputs Gaussian splat + mesh. Human-preference wins vs prior models (Meta). Less clean than asset-style generators on studio inputs. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/facebookresearch/sam-3d-objects", "https://github.com/PozzettiAndrea/ComfyUI-SAM3DObjects", "https://www.runcomfy.com/comfyui-nodes/ComfyUI-SAM3DObjects/sam3d-mesh-decode"]
   [[model.variant]]
   id = "comfyui-sam3dobjects"
@@ -6753,13 +7056,13 @@ cite = ["https://github.com/facebookresearch/sam-3d-objects", "https://github.co
 [[model]]
 id = "step1x-3d"
 name = "Step1X-3D"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "stepfun-ai/Step1X-3D"
 url = "https://github.com/stepfun-ai/Step1X-3D"
 released = "2025-05"
 licence = "apache-2"
-quality = { 3d = 76 }
-quality_note = "3d: 1.3B geometry + 3.5B texture; textured GLB (PBR not confirmed). No 2026 updates."
+quality = { 3d = 76, mesh = 76 }
+quality_note = "3d: 1.3B geometry + 3.5B texture; textured GLB (PBR not confirmed). No 2026 updates. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/stepfun-ai/Step1X-3D"]
   [[model.variant]]
   id = "official"
@@ -6779,13 +7082,13 @@ cite = ["https://github.com/stepfun-ai/Step1X-3D"]
 [[model]]
 id = "sf3d"
 name = "Stable Fast 3D"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "stabilityai/stable-fast-3d"
 url = "https://github.com/Stability-AI/stable-fast-3d"
 released = "2024-08"
 licence = "stability-community"
-quality = { 3d = 55 }
-quality_note = "3d: Fast feed-forward, UV-unwrapped textured mesh with delit albedo + material params; clearly below TRELLIS.2/Pixal3D in detail. Only real textured option on CPU/8 GB."
+quality = { 3d = 55, mesh = 55 }
+quality_note = "3d: Fast feed-forward, UV-unwrapped textured mesh with delit albedo + material params; clearly below TRELLIS.2/Pixal3D in detail. Only real textured option on CPU/8 GB. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/Stability-AI/stable-fast-3d", "https://huggingface.co/stabilityai/stable-fast-3d"]
   [[model.variant]]
   id = "official-cuda"
@@ -6833,13 +7136,13 @@ cite = ["https://github.com/Stability-AI/stable-fast-3d", "https://huggingface.c
 [[model]]
 id = "spar3d"
 name = "Stable Point-Aware 3D"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "stabilityai/stable-point-aware-3d"
 url = "https://github.com/Stability-AI/stable-point-aware-3d"
 released = "2025-01"
 licence = "stability-community"
-quality = { 3d = 60 }
-quality_note = "3d: Point-cloud-guided successor to SF3D; better backs, still feed-forward quality."
+quality = { 3d = 60, mesh = 60 }
+quality_note = "3d: Point-cloud-guided successor to SF3D; better backs, still feed-forward quality. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/Stability-AI/stable-point-aware-3d"]
   [[model.variant]]
   id = "official"
@@ -6859,13 +7162,13 @@ cite = ["https://github.com/Stability-AI/stable-point-aware-3d"]
 [[model]]
 id = "triposr"
 name = "TripoSR"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "stabilityai/TripoSR"
 url = "https://github.com/VAST-AI-Research/TripoSR"
 released = "2024-03"
 licence = "mit"
-quality = { 3d = 42 }
-quality_note = "3d: Oldest/lowest quality; vertex colours or simple baked texture; CPU-capable."
+quality = { 3d = 42, mesh = 42 }
+quality_note = "3d: Oldest/lowest quality; vertex colours or simple baked texture; CPU-capable. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/VAST-AI-Research/TripoSR"]
   [[model.variant]]
   id = "official-cpu"
@@ -6885,13 +7188,13 @@ cite = ["https://github.com/VAST-AI-Research/TripoSR"]
 [[model]]
 id = "triposg"
 name = "TripoSG / PartCrafter"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "VAST-AI/TripoSG"
 url = "https://github.com/VAST-AI-Research/TripoSG"
 released = "2025-03"
 licence = "mit"
-quality = { 3d = 66 }
-quality_note = "TripoSG (shape) / PartCrafter (parts). 3d: 1.5B rectified-flow shape model, untextured. PartCrafter (MIT, NeurIPS 2025) fine-tunes it to emit separate parts from one image."
+quality = { 3d = 66, mesh = 66 }
+quality_note = "TripoSG (shape) / PartCrafter (parts). 3d: 1.5B rectified-flow shape model, untextured. PartCrafter (MIT, NeurIPS 2025) fine-tunes it to emit separate parts from one image. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://github.com/VAST-AI-Research/TripoSG", "https://github.com/wgsxm/PartCrafter"]
   [[model.variant]]
   id = "official-shape"
@@ -6908,17 +7211,34 @@ cite = ["https://github.com/VAST-AI-Research/TripoSG", "https://github.com/wgsxm
   quality_delta = -8.0
   stack = "needs support: no maintained ComfyUI node"
   notes = "shape only"
+  [[model.variant]]
+  id = "partcrafter"
+  runtime = "dedicated"
+  quant = "FP16"
+  weights = "wgsxm/PartCrafter"
+  vram_gib = 8.0
+  vram_note = "PartCrafter's own minimum (est.)"
+  ram_gib = 16.0
+  vendors = ["nvidia"]
+  speed = 40
+  speed_ref = "RTX 5090"
+  speed_note = "est."
+  quality_delta = -8.0
+  capabilities = ["mesh"]
+  parts = true
+  stack = "needs support: no maintained ComfyUI node for PartCrafter"
+  notes = "separate parts from one image, shape only"
 
 [[model]]
 id = "triposplat"
 name = "TripoSplat"
-capabilities = ["3d"]
+capabilities = ["3d", "mesh"]
 repo = "VAST-AI/TripoSplat"
 url = "https://docs.comfy.org/tutorials/3d/triposplat"
 released = "2026-05"
 licence = "mit"
-quality = { 3d = 58 }
-quality_note = "TripoSplat (image to Gaussian splat). 3d: Feed-forward splats with controllable Gaussian count; SplatToMesh gives a vertex-coloured mesh, not PBR. Good for previews/scenes, not game assets."
+quality = { 3d = 58, mesh = 58 }
+quality_note = "TripoSplat (image to Gaussian splat). 3d: Feed-forward splats with controllable Gaussian count; SplatToMesh gives a vertex-coloured mesh, not PBR. Good for previews/scenes, not game assets. | mesh: copied from 3d until a comparison of this job exists"
 cite = ["https://docs.comfy.org/tutorials/3d/triposplat", "https://huggingface.co/VAST-AI/TripoSplat"]
   [[model.variant]]
   id = "native-fp16"
@@ -7908,6 +8228,7 @@ released = "2026-09"
 licence = "mit"
 quality = { tts = 80 }
 features = ["design", "clone", "speech-edit"]
+built_on = [{ name = "Qwen2.5-Omni-3B", part = "backbone", licence = "qwen-research", cite = "https://huggingface.co/Qwen/Qwen2.5-Omni-3B/blob/main/LICENSE" }]
 quality_note = "tts: 1.5B DiT speech generation + editing foundation model driven by natural-language instructions (zero-shot TTS, instruct/design, word edits, emotion/timbre change). AuK-Flash 4-step distilled. No streaming stated; better for offline voice creation than live speech."
 cite = ["https://huggingface.co/tencent/AuK"]
   [[model.variant]]
@@ -9850,6 +10171,146 @@ cite = ["https://huggingface.co/moonshotai/Kimi-K2.6", "https://huggingface.co/m
   stack = "ready"
   notes = "KTransformers CPU/GPU hybrid possible; AMD: unverified; Apple: n/a"
 
+
+# ---------------------------------------------------------------- depth
+[[model]]
+id = "moge-2"
+name = "MoGe-2 ViT-L (normal)"
+capabilities = ["depth"]
+family = "moge"
+repo = "Ruicheng/moge-2-vitl-normal"
+url = "https://github.com/microsoft/MoGe"
+released = "2025-07"
+licence = "mit"
+quality = { depth = 90 }
+quality_note = "depth: metric point maps and normals from one image; the geometry step inside Pixal3D's ComfyUI workflow. Relative score from the MoGe-2 paper's comparisons."
+params_b = 0.33
+cite = ["https://huggingface.co/Ruicheng/moge-2-vitl-normal", "https://github.com/microsoft/MoGe", "https://huggingface.co/TencentARC/Pixal3D/blob/main/NOTICE"]
+in_use = [
+  { where = "docs/art.md", what = "inside the pixal3d workflow (with DINOv3 and Lucida)" },
+]
+built_on = [
+  { name = "DINOv2 ViT-L/14", part = "encoder", licence = "apache-2", cite = "https://huggingface.co/facebook/dinov2-large" },
+]
+
+  [[model.variant]]
+  id = "comfyui-fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  weights = "Ruicheng/moge-2-vitl-normal model.pt"
+  vram_gib = 2.5
+  vram_note = "est. at about 1 MP"
+  speed = 0.4
+  speed_ref = "RTX 4090"
+  speed_note = "est."
+  stack = "ready"
+  notes = "ComfyUI's native Pixal3D/TRELLIS.2 nodes load it"
+
+[[model]]
+id = "depth-anything-v2-large"
+name = "Depth Anything V2 Large"
+capabilities = ["depth"]
+family = "depth-anything"
+repo = "depth-anything/Depth-Anything-V2-Large"
+url = "https://github.com/DepthAnything/Depth-Anything-V2"
+released = "2024-06"
+licence = "cc-by-nc-4"
+quality = { depth = 85 }
+quality_note = "depth: relative depth, sharp edges; the Large weights are CC BY-NC 4.0 (the Small ones are Apache-2.0)."
+params_b = 0.34
+cite = ["https://huggingface.co/depth-anything/Depth-Anything-V2-Large", "https://github.com/DepthAnything/Depth-Anything-V2"]
+  [[model.variant]]
+  id = "comfyui-fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 2.0
+  vram_note = "est."
+  speed = 0.2
+  speed_ref = "RTX 4090"
+  speed_note = "est."
+  stack = "ready"
+  notes = "ComfyUI: comfyui_controlnet_aux or ComfyUI-DepthAnythingV2"
+
+[[model]]
+id = "depth-anything-v2-small"
+name = "Depth Anything V2 Small"
+capabilities = ["depth"]
+family = "depth-anything"
+repo = "depth-anything/Depth-Anything-V2-Small"
+url = "https://github.com/DepthAnything/Depth-Anything-V2"
+released = "2024-06"
+licence = "apache-2"
+quality = { depth = 74 }
+quality_note = "depth: the Apache-2.0 size; coarser than Large."
+params_b = 0.025
+cite = ["https://huggingface.co/depth-anything/Depth-Anything-V2-Small", "https://github.com/DepthAnything/Depth-Anything-V2"]
+  [[model.variant]]
+  id = "comfyui-fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 1.0
+  vram_note = "est."
+  speed = 0.05
+  speed_ref = "RTX 4090"
+  speed_note = "est."
+  vendors = ["nvidia", "amd"]
+  stack = "ready"
+  notes = "ComfyUI: comfyui_controlnet_aux or ComfyUI-DepthAnythingV2"
+
+# ---------------------------------------------------------------- frame interpolation
+[[model]]
+id = "rife-4.9"
+name = "RIFE 4.9 (Practical-RIFE)"
+capabilities = ["interpolate"]
+family = "rife"
+url = "https://github.com/hzwer/Practical-RIFE"
+released = "2023-11"
+licence = "mit"
+quality = { interpolate = 82 }
+quality_note = "interpolate: fast flow-based interpolation; strong on the small motion of loops. Relative (no neutral benchmark)."
+cite = ["https://github.com/hzwer/Practical-RIFE", "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation"]
+in_use = [
+  { where = "bromigOS:mascot/provenance.jsonl", what = "doubled the frames of STATIC's clips" },
+  { where = "docs/ASSETS.md", what = "STATIC's painted shells and bumps" },
+]
+aliases = ["rife 4.9", "rife"]
+
+  [[model.variant]]
+  id = "comfyui-fp32"
+  runtime = "comfyui"
+  quant = "FP32"
+  weights = "rife49.pth (Practical-RIFE)"
+  vram_gib = 1.5
+  vram_note = "est. at 720p"
+  speed = 12
+  speed_ref = "RTX 4090"
+  speed_note = "est. per generated 720p frame"
+  vendors = ["nvidia", "amd"]
+  stack = "ready"
+  notes = "ComfyUI-Frame-Interpolation's RIFE VFI node"
+
+[[model]]
+id = "film"
+name = "FILM (Frame Interpolation for Large Motion)"
+capabilities = ["interpolate"]
+url = "https://github.com/google-research/frame-interpolation"
+released = "2022-02"
+licence = "apache-2"
+quality = { interpolate = 80 }
+quality_note = "interpolate: slower than RIFE, better on large motion. Relative (no neutral benchmark)."
+cite = ["https://github.com/google-research/frame-interpolation", "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation"]
+  [[model.variant]]
+  id = "comfyui-fp32"
+  runtime = "comfyui"
+  quant = "FP32"
+  vram_gib = 3.0
+  vram_note = "est. at 720p"
+  speed = 90
+  speed_ref = "RTX 4090"
+  speed_note = "est. per generated 720p frame"
+  stack = "ready"
+  notes = "ComfyUI-Frame-Interpolation's FILM VFI node"
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-action-droid"
 kind = "newer in family"
@@ -9864,6 +10325,7 @@ review = true
 found = "2026-10-09"
 state = "dismissed"
 dismissed = "a robot action model (Hub pipeline: robotics), not an image model; FLUX.2 [dev] stays"
+
 
 [[pending]]
 id = "hf:black-forest-labs/flux-3-action-so101"
@@ -9880,6 +10342,7 @@ found = "2026-10-09"
 state = "dismissed"
 dismissed = "a robot action model (Hub pipeline: robotics), not an image model; FLUX.2 [dev] stays"
 
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-action-base"
 kind = "newer in family"
@@ -9895,6 +10358,7 @@ found = "2026-10-09"
 state = "dismissed"
 dismissed = "a robot action model (Hub pipeline: robotics), not an image model; FLUX.2 [dev] stays"
 
+
 [[pending]]
 id = "hf:Aleph-Alpha/Kolibri-1-BF16"
 kind = "new model"
@@ -9908,6 +10372,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:Cactus-Compute/needle3"
@@ -9923,6 +10388,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:NaiveAI/Naive-N0.5-Flash"
 kind = "new model"
@@ -9937,6 +10403,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:TaichuAI/ZDTaichu5.0-9B"
 kind = "new model"
@@ -9949,6 +10416,7 @@ stack = "needs support: no vLLM, llama.cpp, Ollama or MLX support on the Hub yet
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:perplexity-ai/pplx-embed-v2-context-9b-preview"
@@ -9964,6 +10432,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:m-a-p/MERT-v2-FullSong"
 kind = "new model"
@@ -9977,6 +10446,7 @@ licence = "cc-by-nc-4.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:ATH-MaaS/Ovis-VL-Embedding-9B"
@@ -9992,6 +10462,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:SupraLabs/Supra2-IMG"
 kind = "new model"
@@ -10005,6 +10476,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:canberkkkkkk/ema-lightning"
@@ -10020,6 +10492,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:Cactus-Compute/whistle"
 kind = "new model"
@@ -10033,6 +10506,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:moondream/parakeet-redux"
@@ -10048,6 +10522,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:moondream/parakeet-ultra"
 kind = "new model"
@@ -10062,6 +10537,7 @@ review = true
 found = "2026-10-09"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:Edge0/Audio8-ASR-Infinite"
 kind = "new model"
@@ -10075,6 +10551,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 [[pending]]
 id = "hf:AxiomicLabs/GPT-X3-150M"
 kind = "new model"
@@ -10088,6 +10565,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 [[pending]]
 id = "hf:openbmb/MiniCPM5-2B"
 kind = "new model"
@@ -10101,6 +10579,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 [[pending]]
 id = "hf:tencent/Youtu-Parsing-Omni"
 kind = "new model"
@@ -10114,6 +10593,7 @@ licence = "other"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 [[pending]]
 id = "hf:lightonai/LightOnOCR-3-4B"
 kind = "new model"
@@ -10127,6 +10607,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 [[pending]]
 id = "hf:speridlabs/iris-3b"
 kind = "new model"
@@ -10140,6 +10621,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 [[pending]]
 id = "licence:voxtream2:cc-by-nc-4.0"
 kind = "licence changed"
@@ -10153,6 +10635,7 @@ model = "voxtream2"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-image-klein-pup"
 kind = "newer in family"
@@ -10166,6 +10649,7 @@ model = "flux2-dev"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-image-klein-comfy"
 kind = "newer in family"
@@ -10179,6 +10663,7 @@ model = "flux2-dev"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-image-klein"
 kind = "newer in family"
@@ -10192,6 +10677,7 @@ model = "flux2-dev"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-image-klein-base"
 kind = "newer in family"
@@ -10205,6 +10691,7 @@ model = "flux2-dev"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:tencent/Hy-Memory-30B-A3B"
 kind = "new model"
@@ -10218,6 +10705,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:reflection/Beam-1.0-501B-A23B"
 kind = "new model"
@@ -10231,6 +10719,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16"
 kind = "new model"
@@ -10244,6 +10733,7 @@ licence = "other"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:openbmb/MiniCPM-V-4.7-35B-A3B"
 kind = "new model"
@@ -10257,6 +10747,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:meta-models/Muse-Spark-Open-816B-A42B"
 kind = "new model"
@@ -10270,6 +10761,7 @@ licence = "other"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:openbmb/MiniCPM-V-4.7-1B"
 kind = "new model"
@@ -10283,6 +10775,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:OpenMOSS-Team/MOSS-Image-Base"
 kind = "new model"
@@ -10296,6 +10789,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:fishaudio/drama-3"
 kind = "new model"
@@ -10309,6 +10803,7 @@ licence = "other"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:cloud0day3/antalia-mini"
 kind = "new model"
@@ -10322,6 +10817,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 [[pending]]
 id = "hf:RecursiveSI/flint"
 kind = "new model"
@@ -10335,6 +10831,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:InternScience/Sage-A1.5"
 kind = "new model"
@@ -10348,6 +10845,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:KRAFTON/Raon-1-mini-preview"
 kind = "new model"
@@ -10361,6 +10859,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:ornith-ai/Ornith-1.5-122B"
 kind = "new model"
@@ -10374,6 +10873,7 @@ licence = "mit"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:MiniMaxAI/MiniMax-M3.1-Flash"
 kind = "new model"
@@ -10387,6 +10887,7 @@ licence = "other"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:nvidia/Nemotron-3.5-Parse"
 kind = "new model"
@@ -10400,6 +10901,7 @@ licence = "openmdw-1.1"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:briaai/Fibo-2.0-dev"
 kind = "new model"
@@ -10413,6 +10915,7 @@ licence = "other"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:inclusionAI/Ming-3.0-asr-tiny"
 kind = "new model"
@@ -10426,6 +10929,7 @@ licence = "mit"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:AuroraAI-Research/AuroraASR-1M"
 kind = "new model"
@@ -10439,6 +10943,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 [[pending]]
 id = "hf:LiquidAI/LFM3-1.7B-Base"
 kind = "new model"
@@ -10452,6 +10957,7 @@ licence = "other"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:baidu/Unlimited-OCR-2"
 kind = "new model"
@@ -10465,6 +10971,7 @@ licence = "mit"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:sensenova/SenseNova-Loop-9B-Preview"
 kind = "new model"
@@ -10478,6 +10985,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:sensenova/SenseNova-6.8-Code2Video"
 kind = "new model"
@@ -10491,6 +10999,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:alibaba-pai/MiniMax-H3-Fun-Controlnet-Union-2.0"
 kind = "new model"
@@ -10504,6 +11013,7 @@ licence = "other"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:speridlabs/idol"
 kind = "new model"
@@ -10517,6 +11027,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:third-intelligence/Haas-ja-v1.0"
 kind = "new model"
@@ -10530,6 +11041,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 [[pending]]
 id = "hf:Axion1-0/Axion-1.0-35B"
 kind = "new model"
@@ -10543,6 +11055,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 [[pending]]
 id = "hf:moonshotai/Kimi-K3.1-Pro"
 kind = "new model"
@@ -10556,6 +11069,7 @@ licence = "other"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 [[pending]]
 id = "hf:Cactus-Compute/mirage"
 kind = "new model"
@@ -10569,6 +11083,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 [[pending]]
 id = "hf:maritaca-ai/S5-nano"
 kind = "new model"
@@ -10582,6 +11097,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 [[pending]]
 id = "hf:Linum-AI/pjit-21k"
 kind = "new model"
@@ -10595,6 +11111,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 [[pending]]
 id = "hf:hyz317/HairDeck"
 kind = "new model"
@@ -10608,3 +11125,1711 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+[[pending]]
+id = "survey:hunyuan3d-v3-api"
+kind = "survey"
+capability = "mesh"
+title = "Hunyuan3D v3 (hosted, via nolgia -> fal -> Tencent Cloud): the 2026-11 survey"
+why = "Closed-weights; Comfy says hosted Hunyuan 3.x still beats open models."
+evidence = ["https://www.tencentcloud.com/document/product/301/78149", "https://www.tencentcloud.com/document/product/301/78149", "https://www.tencentcloud.com/document/product/301/78149", "https://www.tencentcloud.com/document/product/301/74049"]
+stack = "needs support: partner API node"
+licence = "tencent-cloud-hy3d"
+licence_name = "Tencent Cloud HY 3D Global API Online Terms of Service (2026-03-10) + Tencent Cloud AI Service Terms (2026-06-17)"
+tier = "conditional"
+tier_reason = "Published Output must be labelled as AI-generated (HY 3D ToS s.6.4(f); AI Service Terms s.4.2) and may not be presented as human-made (s.5.4(g)); no competing-model training (s.5.4(c)); Tencent keeps a perpetual right to use Content (s.6.3(c))."
+in_use = "nolgia (credits): the rack (bromigOS homelab/holo), workstation and Wick (vector assets/holo), 2026-10-04"
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:trellis-image-large"
+kind = "survey"
+capability = "mesh"
+title = "TRELLIS image-large (v1, shape path): the 2026-11 survey"
+why = "would replace pixal3d. 3D Arena: TRELLIS mesh 1303 (5784 votes) and TRELLIS-3DGS 1397, above Pixal3D 1263 and Hunyuan3D-2.1 1272 (textured voting). Also takes several views at once (run_multi_image), the multi-view fallback."
+repo = "microsoft/TRELLIS-image-large"
+evidence = ["https://huggingface.co/microsoft/TRELLIS-image-large", "https://github.com/microsoft/TRELLIS/blob/main/LICENSE", "https://huggingface.co/microsoft/TRELLIS-image-large", "https://github.com/microsoft/TRELLIS", "https://huggingface.co/spaces/3d-arena/3d-arena"]
+stack = "needs support: custom nodes (smthemex/ComfyUI_TRELLIS MIT; if-ai/ComfyUI-IF_Trellis MIT)"
+licence = "mit"
+licence_name = "MIT"
+tier = "clean"
+tier_reason = "MIT weights on DINOv2 (Apache-2.0); clean as long as the shape-only export avoids nvdiffrast (NVIDIA Source Code License, non-commercial), as Hi3DGen's fork did."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "DINOv2 ViT-L/14-reg (pipeline.json image_cond_model dinov2_vitl14_reg)"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
+
+[[pending.built_on]]
+name = "FlexiCubes / kaolin (mesh extraction)"
+licence = "apache-2"
+licence_url = "https://github.com/NVIDIAGameWorks/kaolin/blob/master/LICENSE"
+
+[[pending.built_on]]
+name = "nvdiffrast (only in GLB texture baking / rendering: skip it)"
+licence = "nvidia-nc"
+licence_url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
+[[pending]]
+id = "survey:direct3d-s2"
+kind = "survey"
+capability = "mesh"
+title = "Direct3D-S2 v1.1: the 2026-11 survey"
+why = "1024^3 sparse SDF: the sharpest open geometry of 2025, but 1024 needs ~24 GB (does not fit the 5090's ~15 GiB free); 512 needs 10 GB and the authors say it is noticeably worse."
+repo = "wushuang98/Direct3D-S2"
+evidence = ["https://huggingface.co/wushuang98/Direct3D-S2", "https://github.com/DreamTechAI/Direct3D-S2/blob/main/LICENSE", "https://huggingface.co/wushuang98/Direct3D-S2", "https://github.com/DreamTechAI/Direct3D-S2"]
+stack = "needs support: custom nodes (visualbruno/ComfyUI-Direct3D-S2, no licence file; Yuan-ManX MIT), stale since 2025"
+licence = "mit"
+licence_name = "MIT"
+tier = "clean"
+tier_reason = "MIT on DINOv2 (Apache-2.0) and torchsparse (MIT)."
+memory_gb = 24.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "DINOv2 ViT-L/14-reg (config.yaml DinoEncoder)"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
+
+[[pending.built_on]]
+name = "torchsparse"
+licence = "mit"
+licence_url = "https://github.com/mit-han-lab/torchsparse/blob/master/LICENSE"
+[[pending]]
+id = "survey:holopart"
+kind = "survey"
+capability = "mesh"
+title = "HoloPart (complete segmented parts): the 2026-11 survey"
+why = "Completes hidden geometry of parts cut from a whole mesh."
+repo = "VAST-AI/HoloPart"
+evidence = ["https://huggingface.co/VAST-AI/HoloPart", "https://github.com/VAST-AI-Research/HoloPart/blob/main/LICENSE", "https://huggingface.co/VAST-AI/HoloPart"]
+stack = "needs support: none"
+licence = "mit"
+licence_name = "MIT"
+tier = "clean"
+tier_reason = "MIT; needs a part segmentation as input (check the segmenter's licence: PartField is NVIDIA non-commercial)."
+memory_gb = 10.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:qwen3.5-4b-glb-3d-coder"
+kind = "survey"
+capability = "mesh"
+title = "CCORE GLB-3D-Coder (Qwen3.5-4B fine-tune that writes Three.js/GLB code): the 2026-11 survey"
+why = "Low-poly procedural assets with named objects: a quick route to part-separated simple hardware. Experimental."
+repo = "ccore/Qwen3.5-4B-GLB-3D-Coder"
+evidence = ["https://huggingface.co/ccore/Qwen3.5-4B-GLB-3D-Coder", "https://huggingface.co/ccore/Qwen3.5-4B-3D-Coder/blob/main/LICENSE", "https://huggingface.co/ccore/Qwen3.5-4B-GLB-3D-Coder"]
+stack = "needs support: no (llama.cpp / vLLM)"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0 fine-tune of an Apache-2.0 base. Single independent author; an early preview."
+memory_gb = 4.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen/Qwen3.5-4B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen3.5-4B"
+[[pending]]
+id = "survey:hi3d-1.0"
+kind = "survey"
+capability = "mesh"
+title = "Hi3D 1.0 (formerly Sparc3D): the 2026-11 survey"
+why = "Refines a coarse mesh to 1536; validated only on a 96 GB H20."
+repo = "hi3d-official/Hi3Dv1.0"
+evidence = ["https://huggingface.co/hi3d-official/Hi3Dv1.0", "https://github.com/hi3d-official/Hi3Dv1.0", "https://thakicloud.com/tech-blog/en/owm/hi3d-1-0-open-source-image-to-3d/"]
+stack = "needs support: community (t8star/Hi3d-Comfy)"
+licence = "hi3d-open"
+licence_name = "Hi3D Open License Agreement 1.0"
+tier = "conditional"
+tier_reason = "'Powered by Hi3D 1.0' label required in integrated products; notice above 200k MAU or $1M monthly revenue (per the release write-up; LICENSE not re-read)."
+memory_gb = 96.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:ultrashape-1.0"
+kind = "survey"
+capability = "mesh"
+title = "UltraShape 1.0 refine: the 2026-11 survey"
+why = "listed by the survey"
+repo = "infinith/UltraShape"
+evidence = ["https://huggingface.co/infinith/UltraShape", "https://huggingface.co/infinith/UltraShape", "https://huggingface.co/infinith/UltraShape"]
+stack = "needs support: community"
+licence = "apache-2"
+licence_name = "Apache-2.0 tag, base_model tencent/Hunyuan3D-2.1"
+tier = "conditional"
+tier_reason = "A Model Derivative of Hunyuan3D 2.1 (card base_model), so Tencent's territory terms follow it; the GitHub repo has no clear licence (NOASSERTION)."
+memory_gb = 24.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Hunyuan3D-2.1 (base model; coarse stage)"
+licence = "tencent"
+licence_url = "https://huggingface.co/tencent/Hunyuan3D-2.1/blob/main/LICENSE"
+[[pending]]
+id = "survey:omnipart"
+kind = "survey"
+capability = "mesh"
+title = "OmniPart: the 2026-11 survey"
+why = "listed by the survey"
+repo = "omnipart/OmniPart"
+evidence = ["https://huggingface.co/omnipart/OmniPart", "https://github.com/HKU-MMLab/OmniPart", "https://github.com/HKU-MMLab/OmniPart"]
+stack = "needs support: community, tiny"
+licence = "mit"
+licence_name = "MIT + PartField dependency"
+tier = "conditional"
+tier_reason = "Uses NVIDIA PartField (NVIDIA Source Code License, non-commercial) and needs 2D part masks."
+memory_gb = 16.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "TRELLIS v1 + DINOv2"
+licence = "mit"
+licence_url = "https://github.com/microsoft/TRELLIS/blob/main/LICENSE"
+
+[[pending.built_on]]
+name = "PartField (NVIDIA)"
+licence = "nvidia-nc"
+licence_url = "https://github.com/nv-tlabs/PartField"
+[[pending]]
+id = "survey:hi3dgen"
+kind = "survey"
+capability = "mesh"
+title = "Hi3DGen / Stable3DGen: the 2026-11 survey"
+why = "Community rates its geometry highly."
+repo = "Stable-X/trellis-normal-v0-1"
+evidence = ["https://huggingface.co/Stable-X/trellis-normal-v0-1", "https://github.com/Stable-X/Hi3DGen", "https://github.com/Stable-X/Hi3DGen"]
+stack = "needs support: custom node (Stable-X/ComfyUI-Hi3DGen)"
+licence = "mit"
+licence_name = "MIT + StableNormal (yoso-normal) normal estimator"
+tier = "conditional"
+tier_reason = "Inferred: the normal stage is a Stable Diffusion 2 UNet fine-tune, so SD's OpenRAIL++ use restrictions likely follow it despite the Apache tag. Not verified from a file."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "TRELLIS v1 (NVIDIA deps removed)"
+licence = "mit"
+licence_url = "https://github.com/microsoft/TRELLIS/blob/main/LICENSE"
+
+[[pending.built_on]]
+name = "Stable-X/yoso-normal-v1-8-1 (tagged Apache-2.0; a Stable Diffusion UNet fine-tune)"
+licence = "openrail-m"
+licence_url = "https://huggingface.co/Stable-X/yoso-normal-v1-8-1"
+[[pending]]
+id = "survey:hunyuan3d-part"
+kind = "survey"
+capability = "mesh"
+title = "Hunyuan3D-Part (P3-SAM + X-Part): the 2026-11 survey"
+why = "Best open part segmentation + part generation, but not clean."
+repo = "tencent/Hunyuan3D-Part"
+evidence = ["https://huggingface.co/tencent/Hunyuan3D-Part", "https://huggingface.co/tencent/Hunyuan3D-Part/blob/main/LICENSE.txt", "https://huggingface.co/tencent/Hunyuan3D-Part"]
+stack = "needs support: community"
+licence = "tencent"
+licence_name = "Tencent Hunyuan 3D-Part Community License"
+tier = "conditional"
+tier_reason = "Tencent territory exclusion (EU, UK, KR)."
+memory_gb = 16.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:qwen-image-edit-2511-multiple-angles"
+kind = "survey"
+capability = "image-edit"
+title = "Qwen-Image-Edit-2511 Multiple-Angles LoRA (turnaround views for multi-view reconstruction): the 2026-11 survey"
+why = "1,615 likes; makes side/back views of a concept so TRELLIS v1 multi-image can reconstruct."
+repo = "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA"
+evidence = ["https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA", "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA", "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA"]
+stack = "ready (ComfyUI: yes (LoRA loader))"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0 LoRA on an Apache-2.0 base."
+memory_gb = 15.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen-Image-Edit-2511"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen-Image-Edit-2511"
+[[pending]]
+id = "survey:moss-image"
+kind = "survey"
+capability = "image"
+title = "MOSS-Image: the 2026-11 survey"
+why = "Self-reported long-text and layout lead."
+repo = "OpenMOSS-Team/MOSS-Image-SFT"
+evidence = ["https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT", "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT", "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT"]
+stack = "ready (ComfyUI: yes (native))"
+licence = "apache-2"
+licence_name = "Apache-2.0 (LICENSE read)"
+tier = "clean"
+tier_reason = "Apache-2.0 throughout."
+memory_gb = 13.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen3.5-9B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen3.5-9B"
+
+[[pending.built_on]]
+name = "FLUX.2 VAE"
+licence = "apache-2"
+licence_url = "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/LICENSE.md"
+[[pending]]
+id = "survey:minimax-h3-image"
+kind = "survey"
+capability = "image"
+title = "MiniMax-H3-Image: the 2026-11 survey"
+why = "Unusable for a US operator."
+repo = "MiniMaxAI/MiniMax-H3-Image"
+evidence = ["https://huggingface.co/MiniMaxAI/MiniMax-H3-Image", "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE", "https://huggingface.co/MiniMaxAI/MiniMax-H3-Image"]
+stack = "needs support: no runtime named"
+licence = "minimax-h3"
+licence_name = "MiniMax H3 Community License"
+tier = "no"
+tier_reason = "Excludes the US (and EU, UK, KR); name shown in the UI."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:moge-3-vitl"
+kind = "survey"
+capability = "depth"
+title = "MoGe-3 ViT-L / ViT-G: the 2026-11 survey"
+why = "would replace moge-2. Paper: local delta 55.9 vs 46.6 for MoGe-2 (https://arxiv.org/html/2607.17967)."
+repo = "Ruicheng/moge-3-vitl"
+evidence = ["https://huggingface.co/Ruicheng/moge-3-vitl", "https://github.com/microsoft/MoGe/blob/main/LICENSE", "https://huggingface.co/Ruicheng/moge-3-vitl"]
+stack = "needs support: no node yet"
+licence = "mit"
+licence_name = "MIT"
+tier = "clean"
+tier_reason = "MIT on DINOv2."
+memory_gb = 2.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "DINOv2"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
+[[pending]]
+id = "survey:da3-mono-large"
+kind = "survey"
+capability = "depth"
+title = "Depth Anything 3 MONO-LARGE (and SMALL/BASE/METRIC-LARGE): the 2026-11 survey"
+why = "would replace depth-anything-v2. "
+repo = "depth-anything/DA3MONO-LARGE"
+evidence = ["https://huggingface.co/depth-anything/DA3MONO-LARGE", "https://github.com/ByteDance-Seed/Depth-Anything-3", "https://huggingface.co/depth-anything/DA3MONO-LARGE"]
+stack = "ready (ComfyUI: yes (native, Comfy-Org/Depth-Anything-3))"
+licence = "apache-2"
+licence_name = "Apache-2.0 (these variants only; LARGE/GIANT/Nested are CC-BY-NC)"
+tier = "clean"
+tier_reason = "Apache-2.0 variants only."
+memory_gb = 1.3
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "DINOv2"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
+[[pending]]
+id = "survey:marigold-v2"
+kind = "survey"
+capability = "depth"
+also_capabilities = ["texture"]
+title = "Marigold v2.0 (depth, normals, albedo): the 2026-11 survey"
+why = "NYUv2 AbsRel 3.6 (self-reported). Also albedo: useful for PBR."
+repo = "huawei-bayerlab/marigold-v2-0"
+evidence = ["https://huggingface.co/huawei-bayerlab/marigold-v2-0", "https://huggingface.co/huawei-bayerlab/marigold-v2-0", "https://huggingface.co/huawei-bayerlab/marigold-v2-0"]
+stack = "needs support: no node yet"
+licence = "apache-2"
+licence_name = "Apache-2.0 (LICENSE read)"
+tier = "clean"
+tier_reason = "Apache-2.0 LoRA on an Apache-2.0 base."
+memory_gb = 17.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen-Image-Edit-2509 (LoRA base)"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen-Image-Edit-2509"
+[[pending]]
+id = "survey:depth-pro"
+kind = "survey"
+capability = "depth"
+title = "Apple Depth Pro: the 2026-11 survey"
+why = "listed by the survey"
+repo = "apple/DepthPro"
+evidence = ["https://huggingface.co/apple/DepthPro", "https://huggingface.co/apple/DepthPro", "https://huggingface.co/apple/DepthPro"]
+stack = "needs support: no runtime named"
+licence = "apple-research"
+licence_name = "Apple ML Research license"
+tier = "no"
+tier_reason = "Research purposes only."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:flashvsr-plus"
+kind = "survey"
+capability = "upscale-video"
+title = "FlashVSR+: the 2026-11 survey"
+why = "~41 s vs ~312 s for SeedVR2 on the same clip; weaker on heavy degradation."
+repo = "ruchangyao/FlashVSR_plus"
+evidence = ["https://huggingface.co/ruchangyao/FlashVSR_plus", "https://huggingface.co/ruchangyao/FlashVSR_plus", "https://huggingface.co/ruchangyao/FlashVSR_plus"]
+stack = "needs support: custom node"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0 throughout."
+memory_gb = 5.7
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Wan2.1-T2V-1.3B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B"
+
+[[pending.built_on]]
+name = "Wan 2.1 VAE"
+licence = "apache-2"
+licence_url = "https://github.com/Wan-Video/Wan2.2/blob/main/LICENSE.txt"
+[[pending]]
+id = "survey:relayvsr-x2"
+kind = "survey"
+capability = "upscale-video"
+title = "RelayVSR_X2: the 2026-11 survey"
+why = "Anti-flicker for generated video (own benchmark)."
+repo = "lightx2v/RelayVSR_X2"
+evidence = ["https://huggingface.co/lightx2v/RelayVSR_X2", "https://github.com/kopperx/RelayVSR", "https://huggingface.co/lightx2v/RelayVSR_X2"]
+stack = "ready (ComfyUI: yes (Comfy-Org repackage 2026-11-05))"
+licence = "apache-2"
+licence_name = "GitHub Apache-2.0; HF weight repo has no licence metadata"
+tier = "clean"
+tier_reason = "Clean by inference (Comfy-Org repackage says Apache-2.0)."
+memory_gb = 5.2
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Wan + FlashVSR"
+licence = "apache-2"
+licence_url = "https://www.apache.org/licenses/LICENSE-2.0"
+[[pending]]
+id = "survey:rife-4.26-native"
+kind = "survey"
+capability = "interpolate"
+title = "RIFE 4.26 / 4.25 heavy on ComfyUI's native interpolation node: the 2026-11 survey"
+why = "would replace rife-4.9. Newer weights, no custom node."
+repo = "Comfy-Org/RIFE"
+evidence = ["https://huggingface.co/Comfy-Org/RIFE", "https://github.com/hzwer/Practical-RIFE/blob/main/LICENSE", "https://github.com/Comfy-Org/ComfyUI/pull/13258"]
+stack = "ready (ComfyUI: yes (native, PR #13258))"
+licence = "mit"
+licence_name = "MIT"
+tier = "clean"
+tier_reason = "MIT."
+memory_gb = 1.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:gimm-vfi"
+kind = "survey"
+capability = "interpolate"
+title = "GIMM-VFI: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/GSeanCDAT/GIMM-VFI", "https://github.com/GSeanCDAT/GIMM-VFI/blob/main/LICENSE", "https://github.com/GSeanCDAT/GIMM-VFI"]
+stack = "needs support: custom"
+licence = "s-lab"
+licence_name = "S-Lab License 1.0 (read)"
+tier = "no"
+tier_reason = "Non-commercial."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:ming-3.0-tts-tiny"
+kind = "survey"
+capability = "tts"
+title = "Ming-3.0-tts tiny: the 2026-11 survey"
+why = "AA TTS #24 (Elo 1185), best clean open TTS found; native VOICE_DESIGN."
+repo = "inclusionAI/Ming-3.0-tts-tiny"
+evidence = ["https://huggingface.co/inclusionAI/Ming-3.0-tts-tiny", "https://huggingface.co/inclusionAI", "https://huggingface.co/inclusionAI/Ming-3.0-tts-tiny"]
+stack = "needs support: Comfy-Org int8 repackage"
+licence = "mit"
+licence_name = "MIT (metadata; GitHub MIT)"
+tier = "clean"
+tier_reason = "MIT/Apache throughout."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Ling V3"
+licence = "mit"
+licence_url = "https://huggingface.co/inclusionAI"
+
+[[pending.built_on]]
+name = "CAM++ (3D-Speaker)"
+licence = "apache-2"
+licence_url = "https://github.com/modelscope/3D-Speaker"
+
+[[pending.built_on]]
+name = "Ming-omni-tts tokenizer"
+licence = "mit"
+licence_url = "https://huggingface.co/inclusionAI"
+[[pending]]
+id = "survey:moss-soundeffect-v2"
+kind = "survey"
+capability = "sfx"
+title = "MOSS-SoundEffect v2.0: the 2026-11 survey"
+why = "would replace elevenlabs-sfx. The only clean open SFX model found; up to 30 s at 48 kHz."
+repo = "OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+evidence = ["https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0", "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0", "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"]
+stack = "needs support: unknown"
+licence = "apache-2"
+licence_name = "Apache-2.0 (metadata)"
+tier = "clean"
+tier_reason = "Apache-2.0; VAE origin unstated (clean by inference)."
+memory_gb = 4.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen3-1.7B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen3-1.7B"
+
+[[pending.built_on]]
+name = "DAC-type 48k VAE (origin unstated)"
+licence = "unknown"
+licence_url = ""
+[[pending]]
+id = "survey:ace-step-1.5"
+kind = "survey"
+capability = "music"
+title = "ACE-Step 1.5: the 2026-11 survey"
+why = "Music beds for bumps."
+repo = "ACE-Step/Ace-Step1.5"
+evidence = ["https://huggingface.co/ACE-Step/Ace-Step1.5", "https://github.com/ace-step/ACE-Step-1.5/blob/main/LICENSE", "https://huggingface.co/ACE-Step/Ace-Step1.5"]
+stack = "needs support: unknown"
+licence = "mit"
+licence_name = "MIT (LICENSE read)"
+tier = "clean"
+tier_reason = "MIT; Apache planners."
+memory_gb = 4.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen3 0.6B-4B planners"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen"
+[[pending]]
+id = "survey:magenta-realtime-2"
+kind = "survey"
+capability = "music"
+title = "Magenta RealTime 2: the 2026-11 survey"
+why = "Live steerable music."
+repo = "google/magenta-realtime-2"
+evidence = ["https://huggingface.co/google/magenta-realtime-2", "https://huggingface.co/google/magenta-realtime-2", "https://huggingface.co/google/magenta-realtime-2"]
+stack = "needs support: no"
+licence = "cc-by-4"
+licence_name = "CC-BY-4.0 weights, Apache-2.0 code"
+tier = "clean"
+tier_reason = "CC-BY with simple credit."
+memory_gb = 6.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:rf-detr-m"
+kind = "survey"
+capability = "detect"
+title = "RF-DETR S/M/L (detection): the 2026-11 survey"
+why = "would replace frigate-mobiledet. COCO AP 54.7 (M), 56.5 (L)."
+repo = "roboflow/rf-detr-medium"
+evidence = ["https://huggingface.co/roboflow/rf-detr-medium", "https://github.com/roboflow/rf-detr/blob/develop/LICENSE", "https://huggingface.co/roboflow/rf-detr-medium"]
+stack = "needs support: n/a (Frigate ONNX/OpenVINO detector)"
+licence = "apache-2"
+licence_name = "Apache-2.0 for Nano-Large and all segmentation sizes; Atto/Femto/Pico and XL/2XL are Roboflow PML 1.0"
+tier = "clean"
+tier_reason = "Apache-2.0 sizes only."
+memory_gb = 1.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "DINOv2"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
+[[pending]]
+id = "survey:d-fine"
+kind = "survey"
+capability = "detect"
+title = "D-FINE N-X: the 2026-11 survey"
+why = "COCO AP 42.8-55.8."
+evidence = ["https://github.com/Peterande/D-FINE", "https://github.com/Peterande/D-FINE/blob/master/LICENSE", "https://github.com/Peterande/D-FINE"]
+stack = "needs support: n/a (Frigate dfine)"
+licence = "apache-2"
+licence_name = "Apache-2.0 (LICENSE read); use COCO-only weights"
+tier = "clean"
+tier_reason = "Apache-2.0; Objects365 weights may carry dataset terms."
+memory_gb = 1.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:owlv2"
+kind = "survey"
+capability = "detect"
+title = "OWLv2 base ensemble (open-vocabulary detection): the 2026-11 survey"
+why = "Search recorded events by text."
+repo = "google/owlv2-base-patch16-ensemble"
+evidence = ["https://huggingface.co/google/owlv2-base-patch16-ensemble", "https://huggingface.co/google/owlv2-base-patch16-ensemble", "https://huggingface.co/google/owlv2-base-patch16-ensemble"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 2.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:yunet-sface"
+kind = "survey"
+capability = "face"
+title = "YuNet (face detection) + SFace (recognition): the 2026-11 survey"
+why = "would replace insightface-buffalo_l. Replaces InsightFace buffalo_l (non-commercial research only) in Immich; YuNet also for camera face blur."
+evidence = ["https://github.com/opencv/opencv_zoo", "https://github.com/opencv/opencv_zoo", "https://github.com/opencv/opencv_zoo"]
+stack = "needs support: n/a"
+licence = "mit"
+licence_name = "YuNet MIT, SFace Apache-2.0 (OpenCV Zoo)"
+tier = "clean"
+tier_reason = "MIT / Apache-2.0; training data unnamed."
+memory_gb = 0.1
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:siglip2"
+kind = "survey"
+capability = "embed-image"
+title = "SigLIP2 ViT-B-16 / SO400M-16-384 (webli): the 2026-11 survey"
+why = "Immich recall 85.99% (SO400M) / 84.86% (B-16)."
+repo = "google/siglip2-so400m-patch16-384"
+evidence = ["https://huggingface.co/google/siglip2-so400m-patch16-384", "https://huggingface.co/google/siglip2-so400m-patch16-384", "https://huggingface.co/google/siglip2-so400m-patch16-384"]
+stack = "needs support: n/a (Immich native)"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 3.8
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:minicpm-v-4.6"
+kind = "survey"
+capability = "vision"
+title = "MiniCPM-V 4.6: the 2026-11 survey"
+why = "Phone-side screenshots and photos."
+repo = "openbmb/MiniCPM-V-4.6"
+evidence = ["https://huggingface.co/openbmb/MiniCPM-V-4.6", "https://huggingface.co/openbmb/MiniCPM-V-4.6", "https://huggingface.co/openbmb/MiniCPM-V-4.6"]
+stack = "needs support: n/a (llama.cpp, Ollama)"
+licence = "apache-2"
+licence_name = "Apache-2.0 (metadata)"
+tier = "clean"
+tier_reason = "Apache-2.0 throughout."
+memory_gb = 2.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen3.5-0.8B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen3.5-0.8B"
+
+[[pending.built_on]]
+name = "SigLIP2-400M"
+licence = "apache-2"
+licence_url = "https://huggingface.co/google/siglip2-so400m-patch14-384"
+[[pending]]
+id = "survey:nuextract3"
+kind = "survey"
+capability = "doc-extract"
+title = "NuExtract3: the 2026-11 survey"
+why = "ExtractBench mean 82.35; receipts into Paperless fields."
+repo = "numind/NuExtract3"
+evidence = ["https://huggingface.co/numind/NuExtract3", "https://huggingface.co/numind/NuExtract3", "https://huggingface.co/numind/NuExtract3"]
+stack = "needs support: n/a (vLLM)"
+licence = "apache-2"
+licence_name = "Apache-2.0 (metadata)"
+tier = "clean"
+tier_reason = "Apache-2.0 throughout."
+memory_gb = 5.5
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen3.5-4B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen3.5-4B"
+[[pending]]
+id = "survey:qwen3-reranker-0.6b"
+kind = "survey"
+capability = "rerank"
+title = "Qwen3-Reranker-0.6B: the 2026-11 survey"
+why = "MTEB-R 65.80; pairs with the served Qwen3-Embedding-0.6B."
+repo = "Qwen/Qwen3-Reranker-0.6B"
+evidence = ["https://huggingface.co/Qwen/Qwen3-Reranker-0.6B", "https://huggingface.co/Qwen/Qwen3-Reranker-0.6B", "https://huggingface.co/Qwen/Qwen3-Reranker-0.6B"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 1.5
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:ettin-reranker"
+kind = "survey"
+capability = "rerank"
+title = "Ettin reranker 17M-1B: the 2026-11 survey"
+why = "150M matches Qwen3-Reranker-0.6B; on-device BRODEC search."
+repo = "cross-encoder/ettin-reranker-150m-v1"
+evidence = ["https://huggingface.co/cross-encoder/ettin-reranker-150m-v1", "https://huggingface.co/cross-encoder/ettin-reranker-150m-v1", "https://huggingface.co/cross-encoder/ettin-reranker-150m-v1"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 0.5
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:nemotron-3.5-rerank-8b"
+kind = "survey"
+capability = "rerank"
+title = "Nemotron-3.5-Rerank-8B (text + page images): the 2026-11 survey"
+why = "Reranks document page images (Paperless)."
+repo = "nvidia/Nemotron-3.5-Rerank-8B-BF16"
+evidence = ["https://huggingface.co/nvidia/Nemotron-3.5-Rerank-8B-BF16", "https://openmdw.ai/license/1-1/", "https://huggingface.co/nvidia/Nemotron-3.5-Rerank-8B-BF16"]
+stack = "needs support: n/a"
+licence = "openmdw"
+licence_name = "OpenMDW-1.1 (read)"
+tier = "clean"
+tier_reason = "OpenMDW-1.1: permissive, notices only (between tiers; treated as clean)."
+memory_gb = 9.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Ministral-3-8B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/mistralai"
+[[pending]]
+id = "survey:chronos-2"
+kind = "survey"
+capability = "timeseries"
+title = "Chronos-2: the 2026-11 survey"
+why = "Forecasts with covariates; Vitals and drive trends."
+repo = "amazon/chronos-2"
+evidence = ["https://huggingface.co/amazon/chronos-2", "https://huggingface.co/amazon/chronos-2", "https://huggingface.co/amazon/chronos-2"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 0.5
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:tspulse"
+kind = "survey"
+capability = "timeseries"
+title = "Granite TSPulse r1: the 2026-11 survey"
+why = "Anomaly detection, ICLR 2026."
+repo = "ibm-granite/granite-timeseries-tspulse-r1"
+evidence = ["https://huggingface.co/ibm-granite/granite-timeseries-tspulse-r1", "https://huggingface.co/ibm-granite/granite-timeseries-tspulse-r1", "https://huggingface.co/ibm-granite/granite-timeseries-tspulse-r1"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 0.1
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:toto-open-base"
+kind = "survey"
+capability = "timeseries"
+title = "Toto-Open-Base-1.0: the 2026-11 survey"
+why = "Trained on observability metrics."
+repo = "Datadog/Toto-Open-Base-1.0"
+evidence = ["https://huggingface.co/Datadog/Toto-Open-Base-1.0", "https://huggingface.co/Datadog/Toto-Open-Base-1.0", "https://huggingface.co/Datadog/Toto-Open-Base-1.0"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 0.6
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:shieldstral-1.0-3b"
+kind = "survey"
+capability = "moderation"
+title = "Shieldstral-1.0-3B: the 2026-11 survey"
+why = "Text + images, policy per check."
+repo = "mistralai/Shieldstral-1.0-3B"
+evidence = ["https://huggingface.co/mistralai/Shieldstral-1.0-3B", "https://huggingface.co/mistralai/Shieldstral-1.0-3B", "https://huggingface.co/mistralai/Shieldstral-1.0-3B"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0 (metadata)"
+tier = "clean"
+tier_reason = "Apache-2.0 throughout."
+memory_gb = 4.5
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Ministral-3-3B"
+licence = "apache-2"
+licence_url = "https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512"
+[[pending]]
+id = "survey:qwen3guard-gen-0.6b"
+kind = "survey"
+capability = "moderation"
+title = "Qwen3Guard-Gen-0.6B / 4B (and Stream): the 2026-11 survey"
+why = "119 languages; 0.6B fits on snap."
+repo = "Qwen/Qwen3Guard-Gen-0.6B"
+evidence = ["https://huggingface.co/Qwen/Qwen3Guard-Gen-0.6B", "https://huggingface.co/Qwen/Qwen3Guard-Gen-0.6B", "https://huggingface.co/Qwen/Qwen3Guard-Gen-0.6B"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 1.5
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:granite-guardian-3.3-8b"
+kind = "survey"
+capability = "moderation"
+title = "Granite Guardian 3.3 8B: the 2026-11 survey"
+why = "listed by the survey"
+repo = "ibm-granite/granite-guardian-3.3-8b"
+evidence = ["https://huggingface.co/ibm-granite/granite-guardian-3.3-8b", "https://huggingface.co/ibm-granite/granite-guardian-3.3-8b", "https://huggingface.co/ibm-granite/granite-guardian-3.3-8b"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 9.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:personaplex-7b"
+kind = "survey"
+capability = "s2s"
+title = "NVIDIA PersonaPlex-7B (full duplex): the 2026-11 survey"
+why = "English only; doesn't fit beside the voice stack."
+repo = "nvidia/personaplex-7b-v1"
+evidence = ["https://huggingface.co/nvidia/personaplex-7b-v1", "https://huggingface.co/nvidia/personaplex-7b-v1", "https://huggingface.co/nvidia/personaplex-7b-v1"]
+stack = "needs support: n/a"
+licence = "nvidia-oml"
+licence_name = "NVIDIA Open Model License"
+tier = "conditional"
+tier_reason = "NVIDIA may update the licence; guardrail-bypass termination."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Moshi"
+licence = "cc-by-4"
+licence_url = "https://huggingface.co/kyutai/moshiko-pytorch-bf16"
+[[pending]]
+id = "survey:audioseal"
+kind = "survey"
+capability = "voice-watermark"
+title = "AudioSeal (watermark + detector): the 2026-11 survey"
+why = "Watermark every cloned/designed voice clip."
+repo = "facebook/audioseal"
+evidence = ["https://huggingface.co/facebook/audioseal", "https://github.com/facebookresearch/audioseal/blob/main/LICENSE", "https://huggingface.co/facebook/audioseal"]
+stack = "needs support: n/a"
+licence = "mit"
+licence_name = "MIT (code LICENSE read; weights MIT per card)"
+tier = "clean"
+tier_reason = "MIT."
+memory_gb = 0.2
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:dots-tts-soar"
+kind = "survey"
+capability = "tts"
+title = "dots.tts-soar: the 2026-11 survey"
+why = "48 kHz cloning, 24 languages."
+repo = "rednote-hilab/dots.tts-soar"
+evidence = ["https://huggingface.co/rednote-hilab/dots.tts-soar", "https://huggingface.co/rednote-hilab/dots.tts-soar", "https://huggingface.co/rednote-hilab/dots.tts-soar"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0 (metadata)"
+tier = "clean"
+tier_reason = "Apache-2.0 throughout (inferred bases)."
+memory_gb = 5.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen2.5-1.5B-Base"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B"
+
+[[pending.built_on]]
+name = "CAM++"
+licence = "apache-2"
+licence_url = "https://github.com/modelscope/3D-Speaker"
+[[pending]]
+id = "survey:nemotron-3-diarization"
+kind = "survey"
+capability = "diarize"
+title = "Nemotron-3-Diarization: the 2026-11 survey"
+why = "AMI SDM 11.1 vs 21.4 for Sortformer v2.1."
+repo = "nvidia/Nemotron-3-Diarization"
+evidence = ["https://huggingface.co/nvidia/Nemotron-3-Diarization", "https://openmdw.ai/license/1-1/", "https://huggingface.co/nvidia/Nemotron-3-Diarization"]
+stack = "needs support: n/a"
+licence = "openmdw"
+licence_name = "OpenMDW-1.1 (card tag; no LICENSE file)"
+tier = "clean"
+tier_reason = "OpenMDW-1.1 (between tiers; treated as clean). Avoid the -preview variant (NVIDIA evaluation licence)."
+memory_gb = 0.4
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:pyannote-community-1"
+kind = "survey"
+capability = "diarize"
+title = "pyannote speaker-diarization-community-1: the 2026-11 survey"
+why = "listed by the survey"
+repo = "pyannote/speaker-diarization-community-1"
+evidence = ["https://huggingface.co/pyannote/speaker-diarization-community-1", "https://huggingface.co/pyannote/speaker-diarization-community-1", "https://huggingface.co/pyannote/speaker-diarization-community-1"]
+stack = "needs support: n/a"
+licence = "cc-by-4"
+licence_name = "CC-BY-4.0 (gated)"
+tier = "clean"
+tier_reason = "CC-BY-4.0; gated download (contact info)."
+memory_gb = 1.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:ced-base"
+kind = "survey"
+capability = "audio-tag"
+title = "CED base / tiny (audio tagging): the 2026-11 survey"
+why = "AudioSet mAP 50.0."
+repo = "mispeech/ced-base"
+evidence = ["https://huggingface.co/mispeech/ced-base", "https://huggingface.co/mispeech/ced-base", "https://huggingface.co/mispeech/ced-base"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 0.5
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:clap-music-speech"
+kind = "survey"
+capability = "audio-tag"
+title = "LAION CLAP larger_clap_music_and_speech: the 2026-11 survey"
+why = "Zero-shot library tags."
+repo = "laion/larger_clap_music_and_speech"
+evidence = ["https://huggingface.co/laion/larger_clap_music_and_speech", "https://huggingface.co/laion/larger_clap_music_and_speech", "https://huggingface.co/laion/larger_clap_music_and_speech"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 1.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:moonshine-streaming"
+kind = "survey"
+capability = "stt"
+title = "Moonshine (English streaming) via sherpa-onnx: the 2026-11 survey"
+why = "Watch tap-to-talk."
+repo = "UsefulSensors/moonshine"
+evidence = ["https://huggingface.co/UsefulSensors/moonshine", "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE", "https://huggingface.co/UsefulSensors/moonshine"]
+stack = "needs support: n/a"
+licence = "mit"
+licence_name = "MIT (English models; legacy non-English models are non-commercial)"
+tier = "clean"
+tier_reason = "MIT for English."
+memory_gb = 0.2
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:microwakeword"
+kind = "survey"
+capability = "wake-word"
+title = "microWakeWord: the 2026-11 survey"
+why = "Train a 'VECTOR' wake word."
+evidence = ["https://github.com/kahrendt/microWakeWord", "https://github.com/kahrendt/microWakeWord", "https://github.com/kahrendt/microWakeWord"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0; models have no extra terms"
+tier = "clean"
+tier_reason = "Apache-2.0."
+memory_gb = 0.01
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:gemma-4-e2b"
+kind = "survey"
+capability = "translate"
+title = "Gemma 4 E2B (on device: intent, translation, small VLM): the 2026-11 survey"
+why = "On-device BRODEC translation and intent."
+repo = "google/gemma-4-E2B-it"
+evidence = ["https://huggingface.co/google/gemma-4-E2B-it", "https://huggingface.co/google/gemma-4-E2B-it", "https://huggingface.co/google/gemma-4-E2B-it"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0 per card (Gemma 4 moved to Apache on 2026-04-02); no LICENSE file"
+tier = "clean"
+tier_reason = "Apache-2.0 per card."
+memory_gb = 3.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:seed-x-ppo-7b"
+kind = "survey"
+capability = "translate"
+title = "Seed-X-PPO-7B: the 2026-11 survey"
+why = "28 languages incl. Japanese; for user labs."
+repo = "ByteDance-Seed/Seed-X-PPO-7B"
+evidence = ["https://huggingface.co/ByteDance-Seed/Seed-X-PPO-7B", "https://huggingface.co/ByteDance-Seed/Seed-X-PPO-7B", "https://huggingface.co/ByteDance-Seed/Seed-X-PPO-7B"]
+stack = "needs support: n/a"
+licence = "openmdw"
+licence_name = "OpenMDW-1.0 (read)"
+tier = "clean"
+tier_reason = "OpenMDW (treated as clean)."
+memory_gb = 5.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:pyscenedetect"
+kind = "survey"
+capability = "scene-detect"
+title = "PySceneDetect: the 2026-11 survey"
+why = "Chapters for the media library."
+evidence = ["https://github.com/Breakthrough/PySceneDetect", "https://github.com/Breakthrough/PySceneDetect/blob/main/LICENSE", "https://github.com/Breakthrough/PySceneDetect"]
+stack = "needs support: n/a"
+licence = "bsd-3"
+licence_name = "BSD-3-Clause (read)"
+tier = "clean"
+tier_reason = "BSD-3."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:ettin-encoder-phishing"
+kind = "survey"
+capability = "phishing"
+title = "Ettin encoder 32M/68M fine-tuned for phishing (to train): the 2026-11 survey"
+why = "On-device BRODEC phishing classifier."
+repo = "jhu-clsp/ettin-encoder-32m"
+evidence = ["https://huggingface.co/jhu-clsp/ettin-encoder-32m", "https://huggingface.co/jhu-clsp/ettin-encoder-32m", "https://huggingface.co/jhu-clsp/ettin-encoder-32m"]
+stack = "needs support: n/a"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0 base; train on clean data."
+memory_gb = 0.1
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:isolation-forest-flows"
+kind = "survey"
+capability = "net-anomaly"
+title = "scikit-learn Isolation Forest on UniFi NetFlow (+ TSPulse): the 2026-11 survey"
+why = "No mature open flow model exists."
+evidence = ["https://scikit-learn.org", "https://github.com/scikit-learn/scikit-learn/blob/main/COPYING", "https://scikit-learn.org"]
+stack = "needs support: n/a"
+licence = "bsd-3"
+licence_name = "BSD-3-Clause"
+tier = "clean"
+tier_reason = "BSD-3."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:insightface-buffalo_l"
+kind = "survey"
+capability = "face"
+title = "InsightFace buffalo_l / antelopev2 (Immich default): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/deepinsight/insightface", "https://github.com/deepinsight/insightface", "https://github.com/deepinsight/insightface"]
+stack = "needs support: n/a"
+licence = "insightface-nc"
+licence_name = "InsightFace pretrained models: non-commercial research only"
+tier = "conditional"
+tier_reason = "Non-commercial research only."
+memory_gb = 0.5
+in_use = "bromigOS Server's Immich (photos) ML defaults"
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:blender-projection-bake"
+kind = "survey"
+capability = "texture"
+title = "Blender camera projection + Cycles bake of our own concept paintings (no model): the 2026-11 survey"
+why = "The recommended colour route; optional side/back views from Qwen-Image-Edit-2511 Multiple-Angles LoRA."
+evidence = ["https://www.blender.org", "https://www.blender.org", "https://www.blender.org"]
+stack = "needs support: Blender headless (amd64)"
+licence = "gpl-tool"
+licence_name = "GPL tool; does not bind exported assets"
+tier = "clean"
+tier_reason = "No model; our own paintings (made on Apache-2.0 models)."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:trellis-v1-textured"
+kind = "survey"
+capability = "texture"
+title = "TRELLIS v1 textured GLB path: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/microsoft/TRELLIS", "https://github.com/microsoft/TRELLIS", "https://github.com/microsoft/TRELLIS"]
+stack = "needs support: community ComfyUI nodes"
+licence = "nvidia-nc"
+licence_name = "MIT weights; to_glb uses nvdiffrast and diff_gaussian_rasterization (non-commercial)"
+tier = "conditional"
+tier_reason = "Texture baking depends on non-commercial rasterizers."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "nvdiffrast"
+licence = "nvidia-nc"
+licence_url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
+
+[[pending.built_on]]
+name = "diff-gaussian-rasterization"
+licence = "inria-nc"
+licence_url = "https://github.com/graphdeco-inria/diff-gaussian-rasterization/blob/main/LICENSE.md"
+[[pending]]
+id = "survey:step1x-3d-texture"
+kind = "survey"
+capability = "texture"
+title = "Step1X-3D Texture: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/stepfun-ai/Step1X-3D", "https://github.com/stepfun-ai/Step1X-3D", "https://github.com/stepfun-ai/Step1X-3D"]
+stack = "needs support: none"
+licence = "openrail-m"
+licence_name = "Apache-2.0, but built on SDXL and Hunyuan3D-2 baker code"
+tier = "conditional"
+tier_reason = "SDXL OpenRAIL++ use restrictions; Tencent-derived baker."
+memory_gb = 27.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Stable Diffusion XL base 1.0"
+licence = "openrail-m"
+licence_url = "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md"
+
+[[pending.built_on]]
+name = "Hunyuan3D-2 custom_rasterizer / differentiable_renderer code"
+licence = "tencent"
+licence_url = "https://github.com/Tencent-Hunyuan/Hunyuan3D-2/blob/main/LICENSE"
+[[pending]]
+id = "survey:hunyuan3d-2.1-paint"
+kind = "survey"
+capability = "texture"
+title = "Hunyuan3D-2.1 Paint (PBR): the 2026-11 survey"
+why = "Best open PBR paint, not clean."
+evidence = ["https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1", "https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1", "https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1"]
+stack = "needs support: community ComfyUI node"
+licence = "tencent"
+licence_name = "Tencent Hunyuan 3D 2.1 Community License"
+tier = "conditional"
+tier_reason = "Territory excludes EU/UK/KR; 1M MAU cap."
+memory_gb = 21.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:mv-adapter"
+kind = "survey"
+capability = "texture"
+title = "MV-Adapter (multi-view texture): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/huanngzh/MV-Adapter", "https://github.com/huanngzh/MV-Adapter", "https://github.com/huanngzh/MV-Adapter"]
+stack = "needs support: ComfyUI-MVAdapter"
+licence = "openrail-m"
+licence_name = "Apache-2.0 code on SDXL / SD2.1"
+tier = "conditional"
+tier_reason = "OpenRAIL++ bases."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Stable Diffusion XL base 1.0"
+licence = "openrail-m"
+licence_url = "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md"
+
+[[pending.built_on]]
+name = "Stable Diffusion 2.x"
+licence = "openrail-m"
+licence_url = "https://huggingface.co/stabilityai/stable-diffusion-2-1"
+[[pending]]
+id = "survey:seqtex"
+kind = "survey"
+capability = "texture"
+title = "SeqTex (VAST): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/VAST-AI-Research/SeqTex", "https://github.com/VAST-AI-Research/SeqTex", "https://github.com/VAST-AI-Research/SeqTex"]
+stack = "needs support: none"
+licence = "none"
+licence_name = "no LICENSE file"
+tier = "no"
+tier_reason = "No licence granted; nvdiffrast."
+memory_gb = 80.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Wan 2.1"
+licence = "apache-2"
+licence_url = "https://www.apache.org/licenses/LICENSE-2.0"
+
+[[pending.built_on]]
+name = "nvdiffrast"
+licence = "nvidia-nc"
+licence_url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
+[[pending]]
+id = "survey:marigold-iid"
+kind = "survey"
+capability = "texture"
+title = "Marigold-IID appearance v1-1 (albedo, roughness, metallic): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://huggingface.co/prs-eth/marigold-iid-appearance-v1-1", "https://huggingface.co/prs-eth/marigold-iid-appearance-v1-1", "https://huggingface.co/prs-eth/marigold-iid-appearance-v1-1"]
+stack = "needs support: community"
+licence = "openrail-m"
+licence_name = "Apache-2.0 code; weights OpenRAIL++"
+tier = "conditional"
+tier_reason = "SD2-based weights."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Stable Diffusion 2.x"
+licence = "openrail-m"
+licence_url = "https://huggingface.co/stabilityai/stable-diffusion-2-1"
+[[pending]]
+id = "survey:rgb-x"
+kind = "survey"
+capability = "texture"
+title = "RGB<->X (Adobe): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/zheng95z/rgbx", "https://github.com/zheng95z/rgbx", "https://github.com/zheng95z/rgbx"]
+stack = "needs support: none"
+licence = "adobe-research"
+licence_name = "Adobe Research License"
+tier = "no"
+tier_reason = "Non-commercial."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:materialanything"
+kind = "survey"
+capability = "texture"
+title = "MaterialAnything: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/3DTopia/MaterialAnything", "https://github.com/3DTopia/MaterialAnything", "https://github.com/3DTopia/MaterialAnything"]
+stack = "needs support: none"
+licence = "openrail-m"
+licence_name = "MIT code on a Stable Diffusion base (inferred)"
+tier = "conditional"
+tier_reason = "Stable Diffusion base (inferred)."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Stable Diffusion 2.x"
+licence = "openrail-m"
+licence_url = "https://huggingface.co/stabilityai/stable-diffusion-2-1"
+[[pending]]
+id = "survey:blender-remesh-uv"
+kind = "survey"
+capability = "retopo"
+title = "Blender Decimate / QuadriFlow / Voxel remesh + Smart UV Project (no model): the 2026-11 survey"
+why = "Enough for hard-surface parts."
+evidence = ["https://www.blender.org", "https://www.blender.org", "https://www.blender.org"]
+stack = "needs support: Blender headless"
+licence = "gpl-tool"
+licence_name = "GPL tool"
+tier = "clean"
+tier_reason = "No model."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:instant-meshes"
+kind = "survey"
+capability = "retopo"
+title = "Instant Meshes: the 2026-11 survey"
+why = "CPU quad remesher."
+evidence = ["https://github.com/wjakob/instant-meshes", "https://github.com/wjakob/instant-meshes", "https://github.com/wjakob/instant-meshes"]
+stack = "needs support: CLI"
+licence = "bsd-3"
+licence_name = "BSD-3-Clause (read)"
+tier = "clean"
+tier_reason = "BSD-3."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:autoremesher-1.0"
+kind = "survey"
+capability = "retopo"
+title = "AutoRemesher 1.0: the 2026-11 survey"
+why = "OBJ only, no UVs."
+evidence = ["https://github.com/huxingyi/autoremesher", "https://github.com/huxingyi/autoremesher", "https://github.com/huxingyi/autoremesher"]
+stack = "needs support: CLI / Blender bridge"
+licence = "mit"
+licence_name = "MIT"
+tier = "clean"
+tier_reason = "MIT (its Blender bridge is GPL-3)."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:meshanything-v2"
+kind = "survey"
+capability = "retopo"
+title = "MeshAnything V2: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/buaacyw/MeshAnythingV2", "https://github.com/buaacyw/MeshAnythingV2", "https://github.com/buaacyw/MeshAnythingV2"]
+stack = "needs support: community"
+licence = "s-lab"
+licence_name = "S-Lab License 1.0 (read)"
+tier = "no"
+tier_reason = "Non-commercial."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:fastmesh"
+kind = "survey"
+capability = "retopo"
+title = "FastMesh: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/jhkim0759/FastMesh", "https://github.com/jhkim0759/FastMesh", "https://github.com/jhkim0759/FastMesh"]
+stack = "needs support: none"
+licence = "s-lab"
+licence_name = "S-Lab License 1.0 (read)"
+tier = "no"
+tier_reason = "Non-commercial."
+memory_gb = 12.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:bpt"
+kind = "survey"
+capability = "retopo"
+title = "BPT (Tencent): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/Tencent-Hunyuan/bpt", "https://github.com/Tencent-Hunyuan/bpt", "https://github.com/Tencent-Hunyuan/bpt"]
+stack = "needs support: none"
+licence = "tencent"
+licence_name = "Tencent Hunyuan 3D 2.0 Community License (read)"
+tier = "conditional"
+tier_reason = "Territory excludes EU/UK/KR."
+memory_gb = 12.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:deepmesh"
+kind = "survey"
+capability = "retopo"
+title = "DeepMesh: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/zhaorw02/DeepMesh", "https://github.com/zhaorw02/DeepMesh", "https://github.com/zhaorw02/DeepMesh"]
+stack = "needs support: none"
+licence = "tencent"
+licence_name = "Apache-2.0, built on BPT and Michelangelo (GPL-3)"
+tier = "conditional"
+tier_reason = "Inherits BPT's Tencent terms (inferred)."
+memory_gb = 16.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "BPT"
+licence = "tencent"
+licence_url = "https://github.com/Tencent-Hunyuan/bpt"
+[[pending]]
+id = "survey:partuv"
+kind = "survey"
+capability = "retopo"
+title = "PartUV: the 2026-11 survey"
+why = "Part-aware UV unwrapping."
+evidence = ["https://github.com/EricWang12/PartUV", "https://github.com/EricWang12/PartUV", "https://github.com/EricWang12/PartUV"]
+stack = "needs support: none"
+licence = "nvidia-nc"
+licence_name = "Apache-2.0, bundles PartField"
+tier = "conditional"
+tier_reason = "PartField is NVIDIA non-commercial."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "PartField (NVIDIA)"
+licence = "nvidia-nc"
+licence_url = "https://github.com/nv-tlabs/PartField"
+[[pending]]
+id = "survey:blender-part-split"
+kind = "survey"
+capability = "mesh"
+title = "Blender split by script (rig_owl.py method) + parts.json manifest (no model): the 2026-11 survey"
+why = "What the STATIC cast uses today."
+evidence = ["https://www.blender.org", "https://www.blender.org", "https://www.blender.org"]
+stack = "needs support: Blender headless"
+licence = "gpl-tool"
+licence_name = "GPL tool"
+tier = "clean"
+tier_reason = "No model."
+parts = true
+in_use = "the mascot's static-cast builds (scripts, parts/*.parts.json)"
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:sampart3d"
+kind = "survey"
+capability = "mesh"
+title = "SAMPart3D: the 2026-11 survey"
+why = "Per-object training; heavy."
+evidence = ["https://github.com/Pointcept/SAMPart3D", "https://github.com/Pointcept/SAMPart3D", "https://github.com/Pointcept/SAMPart3D"]
+stack = "needs support: none"
+licence = "mit"
+licence_name = "MIT (read)"
+tier = "clean"
+tier_reason = "MIT on Apache components (inferred)."
+memory_gb = 16.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "DINOv2"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
+
+[[pending.built_on]]
+name = "SAM (v1)"
+licence = "apache-2"
+licence_url = "https://github.com/facebookresearch/segment-anything/blob/main/LICENSE"
+[[pending]]
+id = "survey:find3d"
+kind = "survey"
+capability = "mesh"
+title = "Find3D: the 2026-11 survey"
+why = "Point clouds, text queries."
+evidence = ["https://github.com/ziqi-ma/Find3D", "https://github.com/ziqi-ma/Find3D", "https://github.com/ziqi-ma/Find3D"]
+stack = "needs support: none"
+licence = "mit"
+licence_name = "MIT (read)"
+tier = "clean"
+tier_reason = "MIT."
+memory_gb = 8.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:partllm"
+kind = "survey"
+capability = "mesh"
+title = "PartLLM: the 2026-11 survey"
+why = "listed by the survey"
+repo = "czvvd/PartLLM"
+evidence = ["https://huggingface.co/czvvd/PartLLM", "https://huggingface.co/czvvd/PartLLM", "https://huggingface.co/czvvd/PartLLM"]
+stack = "needs support: none"
+licence = "apache-2"
+licence_name = "Apache-2.0 (card; weights licence unstated)"
+tier = "clean"
+tier_reason = "Likely clean; unverified."
+memory_gb = 12.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Qwen3-VL"
+licence = "apache-2"
+licence_url = "https://huggingface.co/Qwen"
+[[pending]]
+id = "survey:segvigen"
+kind = "survey"
+capability = "mesh"
+title = "SegviGen: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/Nelipot-Lee/SegviGen", "https://github.com/Nelipot-Lee/SegviGen", "https://github.com/Nelipot-Lee/SegviGen"]
+stack = "needs support: none"
+licence = "dinov3"
+licence_name = "MIT on TRELLIS.2 (DINOv3)"
+tier = "conditional"
+tier_reason = "DINOv3 via TRELLIS.2."
+memory_gb = 24.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "TRELLIS.2 / DINOv3"
+licence = "dinov3"
+licence_url = "https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md"
+[[pending]]
+id = "survey:partfield"
+kind = "survey"
+capability = "mesh"
+title = "PartField (NVIDIA): the 2026-11 survey"
+why = "Taints everything that bundles it (OmniPart, PartUV, Puppeteer)."
+evidence = ["https://github.com/nv-tlabs/PartField", "https://github.com/nv-tlabs/PartField", "https://github.com/nv-tlabs/PartField"]
+stack = "needs support: none"
+licence = "nvidia-nc"
+licence_name = "NVIDIA Source Code License (non-commercial)"
+tier = "no"
+tier_reason = "Non-commercial."
+memory_gb = 8.0
+parts = true
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:blender-rigid-rig"
+kind = "survey"
+capability = "rig"
+title = "Blender: one bone or Empty per joint, by script (no model); Rigify for metarigs: the 2026-11 survey"
+why = "glTF exports it as node animation."
+evidence = ["https://www.blender.org", "https://www.blender.org", "https://www.blender.org"]
+stack = "needs support: Blender headless"
+licence = "gpl-tool"
+licence_name = "GPL tool"
+tier = "clean"
+tier_reason = "No model; rigid parts need no skin weights."
+in_use = "static-cast Blender builds (joint Empties)"
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:unirig"
+kind = "survey"
+capability = "rig"
+title = "UniRig (VAST): the 2026-11 survey"
+why = "Skeleton + skin weights for soft characters."
+evidence = ["https://github.com/VAST-AI-Research/UniRig", "https://github.com/VAST-AI-Research/UniRig", "https://github.com/VAST-AI-Research/UniRig"]
+stack = "needs support: community"
+licence = "gpl-3"
+licence_name = "MIT code and weights; vendors Michelangelo (GPL-3)"
+tier = "conditional"
+tier_reason = "Vendored GPL-3 code (inferred)."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "Michelangelo"
+licence = "gpl-3"
+licence_url = "https://github.com/NeuralCarver/Michelangelo"
+[[pending]]
+id = "survey:magicarticulate"
+kind = "survey"
+capability = "rig"
+title = "MagicArticulate: the 2026-11 survey"
+why = "Skeleton only."
+evidence = ["https://github.com/Seed3D/MagicArticulate", "https://github.com/Seed3D/MagicArticulate", "https://github.com/Seed3D/MagicArticulate"]
+stack = "needs support: none"
+licence = "apache-2"
+licence_name = "Apache-2.0 (read)"
+tier = "clean"
+tier_reason = "Apache-2.0 code; lineage below the code unverified."
+memory_gb = 4.6
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:puppeteer"
+kind = "survey"
+capability = "rig"
+title = "Puppeteer: the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/Seed3D/Puppeteer", "https://github.com/Seed3D/Puppeteer", "https://github.com/Seed3D/Puppeteer"]
+stack = "needs support: none"
+licence = "nvidia-nc"
+licence_name = "Apache-2.0; skinning downloads PartField"
+tier = "conditional"
+tier_reason = "PartField dependency."
+memory_gb = 12.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "PartField (NVIDIA)"
+licence = "nvidia-nc"
+licence_url = "https://github.com/nv-tlabs/PartField"
+[[pending]]
+id = "survey:anigen"
+kind = "survey"
+capability = "rig"
+title = "AniGen (VAST): image to rigged asset: the 2026-11 survey"
+why = "Generates a new rigged asset; cannot rig an existing mesh."
+repo = "VAST-AI/AniGen"
+evidence = ["https://huggingface.co/VAST-AI/AniGen", "https://github.com/VAST-AI-Research/AniGen", "https://huggingface.co/VAST-AI/AniGen"]
+stack = "needs support: none"
+licence = "nvidia-nc"
+licence_name = "MIT-style; bundles NVIDIA non-commercial cuBVH code and nvdiffrast"
+tier = "conditional"
+tier_reason = "NVIDIA non-commercial code in the pipeline."
+memory_gb = 18.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "TRELLIS v1 + DINOv2"
+licence = "mit"
+licence_url = "https://github.com/microsoft/TRELLIS/blob/main/LICENSE"
+
+[[pending.built_on]]
+name = "nvdiffrast"
+licence = "nvidia-nc"
+licence_url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
+[[pending]]
+id = "survey:riganything"
+kind = "survey"
+capability = "rig"
+title = "RigAnything (Adobe): the 2026-11 survey"
+why = "listed by the survey"
+evidence = ["https://github.com/Isabella98Liu/RigAnything", "https://github.com/Isabella98Liu/RigAnything", "https://github.com/Isabella98Liu/RigAnything"]
+stack = "needs support: none"
+licence = "adobe-research"
+licence_name = "Adobe research licence"
+tier = "no"
+tier_reason = "Non-commercial."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:procedural-idles"
+kind = "survey"
+capability = "motion"
+title = "Hand keyframes + procedural idles (Blender F-modifiers, three.js / Flutter code) (no model): the 2026-11 survey"
+why = "The recommended route for rigid robots."
+evidence = ["https://threejs.org", "https://threejs.org", "https://threejs.org"]
+stack = "needs support: n/a"
+licence = "mit"
+licence_name = "MIT (three.js)"
+tier = "clean"
+tier_reason = "No model."
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:hy-motion-1.0"
+kind = "survey"
+capability = "motion"
+title = "HY-Motion 1.0: the 2026-11 survey"
+why = "listed by the survey"
+repo = "tencent/HY-Motion-1.0"
+evidence = ["https://huggingface.co/tencent/HY-Motion-1.0", "https://huggingface.co/tencent/HY-Motion-1.0", "https://huggingface.co/tencent/HY-Motion-1.0"]
+stack = "needs support: none"
+licence = "tencent"
+licence_name = "Tencent Hunyuan community licence"
+tier = "conditional"
+tier_reason = "Territory exclusion; humanoid only."
+memory_gb = 26.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:momask"
+kind = "survey"
+capability = "motion"
+title = "MoMask: the 2026-11 survey"
+why = "Humanoid only."
+evidence = ["https://github.com/EricGuo5513/momask-codes", "https://github.com/EricGuo5513/momask-codes", "https://github.com/EricGuo5513/momask-codes"]
+stack = "needs support: none"
+licence = "smpl-nc"
+licence_name = "MIT code; trained on HumanML3D/AMASS (SMPL)"
+tier = "no"
+tier_reason = "SMPL licence bans commercial artefacts."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "SMPL / AMASS / HumanML3D body data"
+licence = "smpl-nc"
+licence_url = "https://smpl.is.tue.mpg.de/modellicense.html"
+[[pending]]
+id = "survey:gvhmr"
+kind = "survey"
+capability = "motion"
+title = "GVHMR (video to motion): the 2026-11 survey"
+why = "Humanoid only."
+evidence = ["https://github.com/zju3dv/GVHMR", "https://github.com/zju3dv/GVHMR", "https://github.com/zju3dv/GVHMR"]
+stack = "needs support: none"
+licence = "zju-nc"
+licence_name = "ZJU non-commercial licence (read)"
+tier = "no"
+tier_reason = "Non-commercial."
+memory_gb = 8.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "SMPL / AMASS / HumanML3D body data"
+licence = "smpl-nc"
+licence_url = "https://smpl.is.tue.mpg.de/modellicense.html"
+[[pending]]
+id = "survey:unimate"
+kind = "survey"
+capability = "motion"
+title = "UniMate (articulated rigid objects): the 2026-11 survey"
+why = "The one non-humanoid text-to-motion; GLB in/out."
+evidence = ["https://huggingface.co/Linzhan/UniMate", "https://huggingface.co/Linzhan/UniMate", "https://huggingface.co/Linzhan/UniMate"]
+stack = "needs support: none"
+licence = "cc-by-nc-4"
+licence_name = "MIT code; checkpoints CC-BY-NC-4.0"
+tier = "conditional"
+tier_reason = "Non-commercial checkpoints."
+memory_gb = 12.0
+found = "2026-11-10"
+state = "pending review"
+[[pending]]
+id = "survey:mocapanything-v2"
+kind = "survey"
+capability = "motion"
+title = "MoCapAnything V2 (video + skeleton to BVH): the 2026-11 survey"
+why = "Non-humanoid."
+evidence = ["https://huggingface.co/kehong/MoCapAnythingV2-weights", "https://huggingface.co/kehong/MoCapAnythingV2-weights", "https://huggingface.co/kehong/MoCapAnythingV2-weights"]
+stack = "needs support: none"
+licence = "bria-nc"
+licence_name = "MIT; RMBG-1.4 preprocessing, Truebones Zoo data"
+tier = "conditional"
+tier_reason = "Non-commercial preprocessing and commercial-pack training data."
+memory_gb = 12.0
+found = "2026-11-10"
+state = "pending review"
+
+[[pending.built_on]]
+name = "BRIA RMBG-1.4"
+licence = "bria-nc"
+licence_url = "https://huggingface.co/briaai/RMBG-1.4"

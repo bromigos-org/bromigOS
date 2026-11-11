@@ -5,7 +5,9 @@ homelab's graphics cards. It can suggest better ones, plan which model goes on w
 card, and tell you when a better model comes out.
 
 The jobs it knows: chat, coding, memory, pictures, picture edits, cutouts, upscaling,
-video, 3D, voice, hearing, reading text in pictures, and reading your screen.
+video, 3D, voice, hearing, reading text in pictures, and reading your screen. For art, it
+also knows the finer steps: soft cutouts for hair and glass, depth, 3D meshes with separate
+parts, video from a first and a last frame, video upscaling and smoother motion.
 
 You need a [connected homelab](homelab.md) for most of this. To ask what fits a card you
 don't have yet, you don't.
@@ -81,6 +83,13 @@ systemctl --user disable --now bromigos-lab-models.timer
 ```bash
 bromigos lab models refresh        # the newest signed list
 bromigos lab models refresh --hf   # also ask Hugging Face now (needs python-huggingface-hub)
+```
+
+The list is checked against Hugging Face every week. What that finds waits for review,
+each with a recommendation: adopt, watch or ignore. To see it:
+
+```bash
+bromigos lab models review         # what the weekly check found, and what to do with each
 ```
 
 The full tables, with every job, every card size and every licence, are in the developer

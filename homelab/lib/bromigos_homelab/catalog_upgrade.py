@@ -38,7 +38,7 @@ def settings(table=None):
     """[lab.upgrade], defaults filled in."""
     if table is None:
         table = dict(C.read_settings().get("upgrade") or {})
-    pol = {C.canon(k): str(v) for k, v in (table.get("policy") or {}).items()}
+    pol = {C.canon(k): str(v) for k, v in (table.get("policy") or {}).items()}   # any declared capability
     for k, v in pol.items():
         if v not in POLICIES:
             raise C.CatalogError(f"[lab.upgrade] policy {k} = {v!r}: off, safe or any")
@@ -118,7 +118,7 @@ def evaluate(cat=None, hw=None, have=None, policy=None, goal="balanced", licence
         if d.vendor == "cpu":
             continue
         here = [h for h in have if C._held_on(h, d)]
-        caps = sorted({c for h in here for c in h["caps"]}, key=lambda c: C.CAPABILITIES.index(c))
+        caps = sorted({c for h in here for c in h["caps"]}, key=lambda c: cat.cap_ids.index(c) if c in cat.cap_ids else 999)
         for cap in caps:
             p = "any" if nudge else pol["policy"].get(cap, "off")
             if p == "off":
@@ -162,7 +162,9 @@ def evaluate(cat=None, hw=None, have=None, policy=None, goal="balanced", licence
                    "speed_text": C.fmt_speed(cat, cap, o.speed), "licence": v.model.licence.name,
                    "licence_plain": v.model.licence.plain(), "licence_changed": lic_changed,
                    "runtime": v.runtime, "workflow": v.workflow, "stack": v.stack,
-                   "voice": cap in ("tts", "stt")}
+                   "voice": cap in ("tts", "stt"), **C._eff(cat, v)}
+            cur_tier = cat.effective(cur)["tier"]
+            row["tier_changed"] = row["effective_tier"] != cur_tier
             row["reason"] = (f"{row['to']} is {k if k != 'better model' else 'a stronger model'} for {cap} "
                              f"(+{gain:.0f} quality, {o.per_gpu:.1f} GiB of {d.give():.0f} on the {d.name})"
                              + (f"; its licence is {v.model.licence.name}: {v.model.licence.plain()}"
@@ -176,6 +178,9 @@ def evaluate(cat=None, hw=None, have=None, policy=None, goal="balanced", licence
             else:
                 row["action"] = "apply (Phase 2: lab models replace)" + (
                     "" if out["in_quiet_hours"] else f", in quiet hours {pol['quiet_hours']}")
+            if row["tier_changed"] or row["effective_tier"] != "clean":
+                row["reason"] += f"; {C._tier_words(row) or 'effective tier clean'}" + (
+                    f" (now {cur_tier})" if row["tier_changed"] else "")
             if row["voice"]:
                 row["reason"] += "; the voice service changes only while VECTOR is quiet"
             out["proposals"].append(row)

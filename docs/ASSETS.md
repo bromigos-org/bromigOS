@@ -9,6 +9,11 @@ reserved. The table gives each asset's answer in a few words. [How each was
 made](#how-each-was-made) has the detail, and [Provenance](#provenance) has the terms of
 the models used.
 
+`bromigos lab models check` reads every provenance log in the repository and fails when a
+model whose effective licence tier isn't clean made an asset whose folder no row here
+names, in backticks, with an explicit decision: **yes** (who, date) or **no**
+([lab-models.md](lab-models.md#shipped-assets-bromigos-lab-models-check)).
+
 ## The checklist
 
 | Asset | Source | Ships? | Notes |
@@ -36,14 +41,14 @@ the models used.
 | Den wallpaper, masked | Made from the likeness art, burn-in over the face | **yes** (operator, 2026-10-08) | The keeper's face is always under the burn-in |
 | Den wallpaper with the operator's likeness | Personal | **no** | The bare face never ships or goes on the site |
 | Mire and Tidewell placeholder art and sounds | Drawn and synthesised by code | yes | Replaced as the real art lands |
-| Mire art: comp, plates and layers | Generated with nolgia | **yes** (operator, 2026-10-08) | On bromigos.org |
+| Mire art: comp, plates and layers | Generated with nolgia; each job in `themes/mire/art.log.jsonl` | **yes** (operator, 2026-10-08) | On bromigos.org |
 | Mire actors | Generated with nolgia, cut out locally | **yes** (operator, 2026-10-08) | No likeness of a real person |
 | Mire loops and clips | Generated with nolgia, looped locally. The Sleeper's clips upscaled with SeedVR2 7B on the lab | **yes** (operator, 2026-10-08) | On bromigos.org |
-| Tidewell art: comp, plates and layers | Generated with nolgia | **yes** (operator, 2026-10-08) | On bromigos.org |
+| Tidewell art: comp, plates and layers | Generated with nolgia; each job in `themes/tidewell/art.log.jsonl` | **yes** (operator, 2026-10-08) | On bromigos.org |
 | Tidewell actors and loops | Generated with nolgia, matted locally | **yes** (operator, 2026-10-08) | The Choir is an original creature |
 | Craft overhead in Mire and Tidewell | Generated with nolgia, cut locally | **yes** (operator, 2026-10-08) | Original designs |
-| 3D holograms: the workstation, the Wick and the rack | nolgia concepts, image-to-3D | **yes** (operator, 2026-10-08) | On bromigos.org, without live readings |
-| 3D holograms made on the homelab: the worlds' posts, creatures and craft | Open models on the homelab, no credits | **yes** (operator, 2026-10-08) | Research and community licences. See [the notes](#3d-holograms) |
+| 3D holograms: the workstation, the Wick and the rack | nolgia concepts, image-to-3D; the rack's job in `homelab/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | On bromigos.org, without live readings |
+| 3D holograms made on the homelab: the worlds' posts, creatures and craft | Open models on the homelab, no credits; each job in `themes/*/holo/generations.jsonl` and `theme/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | Research and community licences. See [the notes](#3d-holograms) |
 | 3D burn-in emblem | Extruded from the Wick's emblem | yes, as a brand asset | In `bromigos-vector` |
 | The Drift map's lore catalogue (`live/lore/catalog.json`) | bromigos.org's public lore export, copied by `tools/lore/sync-catalog.py` | yes, as a brand asset | In `bromigos-live`. A user's `[driftmap] catalog` replaces it |
 | Swarm starship model | Procedural, original design | yes | |

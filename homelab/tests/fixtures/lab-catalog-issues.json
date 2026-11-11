@@ -1,0 +1,9 @@
+[
+ {"number": 96, "title": "Lab catalog: weekly refresh 2026-11-09", "state": "OPEN", "url": "https://example/issues/96"},
+ {"number": 82, "title": "Lab catalog: weekly refresh 2026-11-02", "state": "OPEN", "url": "https://example/issues/82"},
+ {"number": 7, "title": "Lab catalog: weekly refresh 2026-10-26", "state": "OPEN", "url": "https://example/issues/7"},
+ {"number": 5, "title": "Lab catalog: weekly refresh 2026-10-19", "state": "OPEN", "url": "https://example/issues/5"},
+ {"number": 4, "title": "Lab catalog: weekly refresh 2026-10-15", "state": "CLOSED", "url": "https://example/issues/4"},
+ {"number": 3, "title": "Lab catalog: weekly refresh 2026-10-12", "state": "OPEN", "url": "https://example/issues/3"},
+ {"number": 1, "title": "Lab catalog: weekly refresh 2026-10-09", "state": "OPEN", "url": "https://example/issues/1"}
+]
