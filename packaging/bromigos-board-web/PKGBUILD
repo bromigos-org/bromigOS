@@ -1,0 +1,64 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The Lab board's page (board/web/, docs/board.md): a Next.js static export, built here with
+# Node and installed as plain files. The server runs no Node: Caddy serves the folder, and the
+# board's service (bromigos-board) answers /api/. Geist Mono comes from ttf-geist-mono, linked
+# in, so the page fetches nothing from another site.
+#
+#   /usr/share/bromigos-board/web/   index.html, _next/ (scripts and styles), fonts/ (links)
+
+pkgname=bromigos-board-web
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS Lab board: the page the server serves to browsers at home'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=('ttf-geist-mono')
+makedepends=('git' 'nodejs' 'npm' 'rsync')
+options=('!debug' '!strip')
+
+_root="${startdir%/packaging/*}"
+_paths=(board/web packaging/bromigos-board-web LICENSE-MIT LICENSE-APACHE)
+# a new package: nothing of it is in the archived history (packaging/README.md, Versions)
+_archived=0
+_fonts=(Regular SemiBold Bold)
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+build() {
+  # into $srcdir: the checkout is only read
+  rsync -a --delete --exclude node_modules --exclude .next --exclude out --exclude test-results \
+    "$_root/board/web/" "$srcdir/web/"
+  cd "$srcdir/web"
+  export npm_config_cache="$srcdir/npm-cache" NEXT_TELEMETRY_DISABLED=1
+  npm ci --no-audit --no-fund
+  # the real build: it talks to the server's API, never to fixtures (BOARD_FIXTURES unset)
+  env -u BOARD_FIXTURES npm run build
+}
+
+check() {
+  cd "$srcdir/web/out"
+  test -s index.html || { echo "the export has no index.html" >&2; return 1; }
+  test ! -e fixtures || { echo "the export carries test fixtures" >&2; return 1; }
+  # the fixture switch is compiled off
+  ! grep -rlq '/fixtures/' _next/static || { echo "the export can read fixtures" >&2; return 1; }
+}
+
+package() {
+  local web="$pkgdir/usr/share/bromigos-board/web" f
+  install -d "$web/fonts"
+  cp -r --no-preserve=ownership "$srcdir/web/out/." "$web/"
+  find "$web" -type d -exec chmod 0755 {} + -o -type f -exec chmod 0644 {} +
+  for f in "${_fonts[@]}"; do
+    ln -s "/usr/share/fonts/TTF/GeistMono-$f.ttf" "$web/fonts/GeistMono-$f.ttf"
+  done
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}
