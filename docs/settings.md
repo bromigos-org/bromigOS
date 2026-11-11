@@ -606,6 +606,17 @@ VECTOR is the desktop's AI assistant. The page reads his state without starting 
 - **His voice.** His own mute (`bromigos-holo mute`, which never starts him), automatic or
   a pinned voice, and conversation mode. The hints say that pinning a voice or starting a
   conversation starts him.
+- **Local voice.** He speaks in his own voice from your NVIDIA card, and hears on the
+  processor. While you play a game, he steps aside and the lab speaks. The switch writes
+  `bromigos-holo local-voice on|off`. Its subtitle says how the setting applies here. Auto,
+  the default, is on with an NVIDIA card of 8 GB or more and off elsewhere. Reset puts it
+  back to auto.
+- **Speaking from.** Where his voice comes from right now: this computer, the lab, or
+  Kokoro, the stand-in voice on the processor. When the local voice is on but isn't
+  speaking, the row says why, such as a game running or the voice still starting. It's
+  `bromigos-holo local-voice status`, which never starts him. VECTOR's
+  [configuration](https://github.com/bromigos-org/vector/blob/main/docs/configuration.md#the-local-voice)
+  has the details.
 - **His keys**, from `bromigos keys`, each with Change… and Undo.
 - **What he remembers** (`bromigos memory`). Conversation and note counts, Export…, and
   Clear… for each. A clear is archived in `~/.local/state/bromigos/vector-archive/`, so
