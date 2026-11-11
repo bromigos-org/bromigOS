@@ -19,7 +19,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, byNewest } from "./api/client";
 import { ApiError } from "./api/errors";
-import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session } from "./api/types";
+import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session , JobBody, JobVerb } from "./api/types";
 import { parse, type Route } from "./routes";
 import { wearWorld } from "./world";
 
@@ -59,6 +59,8 @@ export interface Lab {
   now(): number;
   /** Add, restart or remove an app, when the server lets the page (board.actions). */
   act(verb: "add" | "restart" | "remove", app: string, more?: { delete_data: true; code: string }): Promise<ActionAnswer>;
+  /** Answer, stop or start again a job, when the server lets the page (board.actions "job.*"). */
+  jobAct(verb: JobVerb, job: string, body: JobBody): Promise<ActionAnswer>;
   drawer: "activity" | "depth" | null;
   setDrawer(d: "activity" | "depth" | null): void;
 }
@@ -286,6 +288,12 @@ export function LabProvider({ children }: { children: ReactNode }) {
       if (!a) throw new ApiError(0, "unreachable", "The server isn't answering.");
       const said = await a.act(verb, app, more);
       pollNow.current();
+      return said;
+    },
+    async jobAct(verb, job, body) {
+      if (!a) throw new ApiError(0, "unreachable", "The server isn't answering.");
+      const said = await a.jobAct(verb, job, body);
+      pollNow.current(); // the stream brings the job's new record; the board's list follows
       return said;
     },
     drawer,

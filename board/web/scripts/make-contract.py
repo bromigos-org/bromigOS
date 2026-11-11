@@ -277,7 +277,9 @@ def apps():
 
 def activity(root, which):
     """Jobs written by the activity library itself into the service's stand-in root: a backup that
-    finished, an update that rolled back, a drive replacement that asks, a backup running now."""
+    finished, an update that rolled back, a drive replacement that asks, a backup running now; and
+    for the page's job controls, a disk that asks with a choice that can't be undone (`[wipe!]`)
+    and a backup that failed and may be started again."""
     import bromigos_activity as A
 
     class Clock(A.Env):
@@ -325,6 +327,18 @@ def activity(root, which):
         made.append(job(NOW - 3 * MIN, "backup.run", "Backing up this server", "backup:myserver:this server", [
             (0, "::cancel safe"), (0, "::step snapshot running Taking a snapshot"), (MIN, "::step snapshot done"),
             (0, "::step copy running Copying what changed"), (MIN, "::stage 40 Copying what changed")], via="board"))
+    if "asks-danger" in which:
+        made.append(job(NOW - 8 * MIN, "storage.add", "Adding a disk: sdc", "drive:sdc:sdc", [
+            (0, "::step look running Looking at sdc"), (MIN, "::step look done"),
+            (0, "::step use running Making sdc ready"),
+            (0, "::ask wipe sdc has a partition with files on it. [wipe!] Wipe sdc and use it [keep] Leave sdc as it is")],
+            via="board"))
+    if "failed-retry" in which:
+        argv = ["bromigos", "backup", "run"]
+        made.append(job(NOW - 2 * HOUR, "backup.run", "Backing up this server", "backup:myserver:this server", [
+            (0, "::step snapshot running Taking a snapshot"), (MIN, "::step snapshot done"),
+            (0, "::step copy running Copying what changed"), (MIN, "::error copy the destination didn't answer")],
+            end={"exit_code": 1}, retry=A.retry_spec(argv, "/")))
     Clock.t = NOW
     env2 = dict(os.environ, BROMIGOS_ROOT=str(root), PYTHONDONTWRITEBYTECODE="1")
     r = subprocess.run([sys.executable, str(REPO / "bin/bromigos-activity"), "list", "--json"], env=env2,
@@ -489,6 +503,7 @@ def build(args):
             "activity_missing": {"missing": ("activity-list.json",)},
             "stale": {"at": NOW - 5 * MIN},
             "hardware_gpu": {"apps_": "gpu"},
+            "jobs_controls": {"jobs": ("done", "running", "asks-danger", "failed-retry")},
             "budget_missing": {"missing": ("apps-budget.json",)},
         }
         for name, kw in cases.items():
@@ -503,6 +518,21 @@ def build(args):
                                                 "body": "".join(s.iter_text())}
             if name == "apps_missing":
                 doors["apps_missing"] = c.get("/api/door").json()
+            if name == "jobs_controls":
+                # a job's actions on these jobs, through the real API and root's real helper: what
+                # each refusal says (the command the helper would run isn't here, so none goes through)
+                ids = {(j["kind"], j["state"]): j["id"] for j in boards[name]["activity"]["jobs"]}
+                ask, run_ = ids[("storage.add", "needs-you")], ids[("backup.run", "running")]
+                done = ids[("backup.run", "succeeded")]
+                for key, (job_id, verb, body) in {
+                    "job_answer_danger_no_code": (ask, "answer", {"question": "wipe", "choice": "wipe"}),
+                    "job_answer_danger_wrong_code": (ask, "answer", {"question": "wipe", "choice": "wipe", "code": "WXYZ-9999"}),
+                    "job_answer_bad_choice": (ask, "answer", {"question": "wipe", "choice": "format"}),
+                    "job_cancel_not_safe": (ask, "cancel", {}),
+                    "job_cancel_ended": (done, "cancel", {}),
+                    "job_retry_cant": (run_, "retry", {}),
+                }.items():
+                    http[key] = exchange(c.post(f"/api/activity/{job_id}/{verb}", json=body, headers=page), body)
         (root / "etc/bromigos/server.toml").write_text("[board]\ndoor = false\nworld = \"tidewell\"\n")
         snap()
         doors["off"] = c.get("/api/door").json()

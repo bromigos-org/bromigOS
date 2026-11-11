@@ -105,6 +105,7 @@ export function fixtureApi(name: string): Api {
         },
       };
     },
+    jobAct: async (verb, job) => readAction({ ok: true, job: verb === "retry" ? null : job, words: `${verb}: a fixture changes no job.` }),
     act: async (verb, app, more) => readAction({ ok: true, job: null, words: `${verb} ${app}${more?.delete_data ? " and delete its data" : ""}: a fixture starts nothing.` }),
   };
 }
