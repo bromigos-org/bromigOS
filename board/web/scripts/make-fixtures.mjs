@@ -48,6 +48,20 @@ const APPS = [
   tile("brodec-machine", "This server on BRODEC", "brodec-machine", "phone", "brodec", null, {}),
 ];
 
+// catalogue items not installed: `list --all` shows them with can ["add"] and no state
+const addable = (id, job, app, holo, group, req) => ({ ...tile(id, job, app, holo, group, null), installed: false, household: null, state: null, state_word: null, since: null,
+  version: null, open: null, update: null, measured: null, requires: req, can: ["add"], machine: undefined });
+const CATALOGUE = [
+  addable("file-sync", "File sync", "Syncthing", "file-sync", "home", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("home-automation", "Home automation", "Home Assistant", "home", "home", { cpu: 1, ram_gb: 1, disk_gb: 2 }),
+  addable("navidrome", "Music", "Navidrome", "music", "media", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("audiobookshelf", "Audiobooks and podcasts", "Audiobookshelf", "books", "media", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("minecraft", "Minecraft server", "Paper", "game-server", "games", { cpu: 2, ram_gb: 4, disk_gb: 5 }),
+  addable("ollama", "Model serving", "Ollama", "model-serving", "ai", { cpu: 4, ram_gb: 8, disk_gb: 20 }),
+  addable("monitoring", "Monitoring", "Prometheus and Grafana", "uptime", "lab-core", { cpu: 1, ram_gb: 1, disk_gb: 5 }),
+  addable("smb-shares", "Windows and Mac shares", "Samba", "shares", "storage", { cpu: 1, ram_gb: 0.25, disk_gb: 0 }),
+];
+
 const doorTiles = (apps) => apps.filter((t) => t.household && t.open).map(({ id, job, app, holo, open }) => ({ id, job, app, holo, open: { url: open.url } }));
 
 const door = (apps = APPS, extra = {}) => ({ schema: 1, lab, server, world: "wick", tiles: doorTiles(apps), signin: { code: true, phone: false, account: false }, ...extra });
@@ -106,7 +120,7 @@ const VITALS = { "myserver/24h": { schema: 1, machine: "myserver", range: "24h",
 const board = (over = {}) => ({
   schema: 1, at: NOW - 20 * SEC, max_age_s: 45, lab, server: { name: "myserver", kind: "server", roles: ["home", "media"] },
   status: { state: "ok", words: "Everything is running.", checked_at: NOW - 20 * SEC },
-  machines: [MYSERVER], needs_you: [], fixed: [], apps: APPS,
+  machines: [MYSERVER], needs_you: [], fixed: [], apps: [...APPS, ...CATALOGUE],
   storage: STORAGE, backups: BACKUPS, updates: UPDATES, ups: null,
   ...over,
 });
@@ -202,7 +216,7 @@ const F = {
     board: board({ machines: [MYSERVER, machine("vault", "storage", { apps: 3 }), machine("node3", "node", { apps: 2, state: "unknown", state_word: "not seen for 2 h", readings: null }), machine("mydesk", "desktop", { updates: { count: 1, security: true } })] }),
     activity: [backupDone] },
   setup: { about: "Signed in to a server with nothing installed yet (first run).", door: door([]), session: signedIn(1),
-    board: board({ status: { state: "setup", words: "Nothing installed yet.", checked_at: NOW - MIN }, apps: [], machines: [{ ...MYSERVER, apps: 0, updates: { count: 0, security: false } }] }),
+    board: board({ status: { state: "setup", words: "Nothing installed yet.", checked_at: NOW - MIN }, apps: CATALOGUE, machines: [{ ...MYSERVER, apps: 0, updates: { count: 0, security: false } }] }),
     activity: [] },
   stale: { about: "Signed in, but the snapshot is 20 minutes old: readings go static grey with their age.", door: door(), session: signedIn(),
     board: board({ at: NOW - 20 * MIN, status: { state: "unknown", words: "Last read 20 min ago.", checked_at: NOW - 20 * MIN },
