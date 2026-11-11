@@ -641,6 +641,31 @@ class DrainTests(Base):
         self.assertEqual(self.left(), [])
         self.assertEqual(os.listdir(victim), ["keep"])
 
+    def test_a_folder_named_like_a_request_is_refused_once_and_removed(self):
+        """A folder (with a file and a link inside) where a request goes: refused like any request
+        that isn't a plain file, then removed, so the helper goes quiet instead of reading it again
+        at every look until it is stopped."""
+        req = self.path(actions.REQUESTS)
+        bad = req / "00000000000000dd.json"
+        bad.mkdir()
+        (bad / "inside").write_text("x")
+        outside = self.path("var/lib/bromigos-board/keep")
+        outside.parent.mkdir(parents=True, exist_ok=True)
+        outside.write_text("kept")
+        (bad / "link").symlink_to(outside)
+        t = [0.0]
+
+        def clock():
+            t[0] += 0.001
+            return t[0]
+        n = actions.drain(run=self.fake_run, cat={}, linger=3.0, sleep=lambda s: None, clock=clock, log=self.logged.append,
+                          run_max=5.0)
+        self.assertEqual(n, 1, "read once")
+        self.assertFalse(os.path.lexists(bad), "and removed")
+        self.assertEqual(self.answer("00000000000000dd")["code"], "bad-request")
+        self.assertEqual(outside.read_text(), "kept", "a link inside it is never followed")
+        self.assertEqual(self.ran, [])
+
     def test_old_answers_are_swept(self):
         self.write("0123456789abcdef")
         self.drain()

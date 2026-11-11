@@ -902,7 +902,8 @@ and its answer back, and each side writes only one of them.
 
 No word of the request reaches a shell, and there is no "run this" request. Anything else
 the helper finds in the folder is removed: a link, a folder, a request left half-written a
-minute ago.
+minute ago. So is anything named like a request that isn't a plain file of the board's user,
+once it has been refused: a folder named `<id>.json` included.
 
 **The helper's sandbox.** It is root, and the unit lets it write five places only: the two
 folders above, the board's own folder and root's (for the codes, below), and the activity

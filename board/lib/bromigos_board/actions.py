@@ -238,6 +238,22 @@ def use_delete_code(text, now=None):
     return bool(there and isinstance(doc.get("expires_at"), int) and now < doc["expires_at"])
 
 
+def _remove(dfd, name):
+    """Whatever is at `name` in the requests folder, gone: a file, a link (never followed), or a
+    folder with all that is in it. A request that couldn't be removed would be read again at the
+    helper's next look, and the next, for as long as it ran."""
+    try:
+        os.unlink(name, dir_fd=dfd)
+    except FileNotFoundError:
+        pass
+    except (IsADirectoryError, PermissionError):
+        # (unlink of a folder: EISDIR on Linux, EPERM elsewhere). rmtree opens through dir_fd and
+        # never follows a link inside it
+        shutil.rmtree(name, dir_fd=dfd, ignore_errors=True)
+    except OSError:
+        pass
+
+
 def read_request(dfd, rid):
     """Request rid, read once and deleted. It must be a plain, small file that the board's user
     wrote: a link is never followed, and a FIFO never waited on."""
@@ -247,8 +263,7 @@ def read_request(dfd, rid):
     except FileNotFoundError:
         raise Refused("no-request") from None
     except OSError:
-        with contextlib.suppress(OSError):
-            os.unlink(name, dir_fd=dfd)
+        _remove(dfd, name)
         raise Refused("bad-request") from None
     try:
         st = os.fstat(fd)
@@ -258,8 +273,7 @@ def read_request(dfd, rid):
         raw = os.read(fd, REQUEST_MAX_BYTES + 1)
     finally:
         os.close(fd)
-        with contextlib.suppress(OSError):
-            os.unlink(name, dir_fd=dfd)
+        _remove(dfd, name)
     try:
         doc = json.loads(raw)
     except ValueError:
@@ -412,13 +426,7 @@ def drain(run=None, cat=None, linger=None, poll=0.1, sleep=time.sleep, clock=tim
                     continue                     # the API is writing it now
                 else:
                     log(f"bromigos-board: removed what isn't a request from the requests folder ({len(name)} letters long)")
-                    try:
-                        os.unlink(name, dir_fd=dfd)
-                    except IsADirectoryError:
-                        shutil.rmtree(name, dir_fd=dfd, ignore_errors=True)
-                    except OSError:
-                        with contextlib.suppress(OSError):
-                            shutil.rmtree(name, dir_fd=dfd, ignore_errors=True)
+                    _remove(dfd, name)
                     busy = True
             sweep_results()
             if busy:
