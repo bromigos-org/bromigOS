@@ -579,7 +579,8 @@ roles = ["storage"]
 requires = { cpu = 1, ram_gb = 1, disk_gb = 5 }
 size_text = "about 80 MB image"
 ports = [9000, 9001]
-web = { name = "s3", port = 9000 }
+# its page is the console (9001); 9000 is the S3 API, which answers a browser with an XML error
+web = { name = "s3", port = 9001 }
 internet = true
 install = { quadlet = "s3" }
 images = { rustfs = "docker.io/rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2" }

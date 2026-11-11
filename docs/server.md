@@ -637,7 +637,11 @@ on the data disks when the server has them. Two files tell the service:
 
 The package's own `/etc/vaultwarden.env` also sets `DATA_FOLDER`. systemd lets a file
 named later win over one named earlier, and any file win over an `Environment=` line, so
-the setting has to come from a file. Your own settings still go in `/etc/vaultwarden.env`.
+the setting has to come from a file. The same goes for the vault's address and its web
+vault, which that file turns off: `/etc/bromigos/lab/vaultwarden.env` turns it on and sets
+the address (`ROCKET_ADDRESS`, `ROCKET_PORT`, `WEB_VAULT_ENABLED`, `WEB_VAULT_FOLDER`,
+`DOMAIN`), read through `vaultwarden.service.d/50-bromigos.conf`. Your own settings still
+go in `/etc/vaultwarden.env`; a setting the engine's file makes wins over yours.
 
 AdGuard Home, Grafana and Prometheus, and OpenBao are packages too, and each keeps its
 state where its package does, on the system disk.

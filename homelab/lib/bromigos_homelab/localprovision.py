@@ -36,6 +36,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 
 from . import appdata as AD, provcatalog as PC, secretstore as S
 
@@ -363,9 +364,21 @@ class Host:
         os.replace(tmp, p)
         return True
 
-    def mkdir(self, rel, mode=0o755, owner=None):
+    def mkdir(self, rel, mode=None, owner=None):
+        """A folder, made with its parents. `mode` is the folder's own, whatever the umask, and
+        set again on one that is there already (a repository's 0700, the SFTP jail's 0755). With
+        no mode, a new folder is 0755 and one that is there keeps its own: an app's database
+        folder (postgres wants 0700) is never opened up by a later apply. A share mounted there
+        that keeps modes of its own (NFS, SMB) is left as the share has it."""
         p = self.path(rel)
+        made = not p.is_dir()
         p.mkdir(parents=True, exist_ok=True)
+        if made or mode is not None:
+            try:
+                os.chmod(p, 0o755 if mode is None else mode)
+            except PermissionError:
+                if made:
+                    raise
         if owner and self.root == "/":
             self.must(["chown", owner, str(p)], "set the folder's owner")
         return p
@@ -607,7 +620,9 @@ def install_quadlet(host, it):
         changed = host.write(QUADLET_DIR + "/" + f.name, text) or changed
         for line in text.splitlines():
             m = re.match(r"^Volume=(/[^:]+):", line)
-            if m and m.group(1).startswith("/" + APPS):
+            # a folder the app keeps data in is made; a file it is given (LiteLLM's config.yaml,
+            # written by its prepare step) is mounted as it is
+            if m and m.group(1).startswith("/" + APPS) and not host.path(m.group(1)).is_file():
                 host.mkdir(m.group(1))
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     for u in units:
@@ -811,6 +826,9 @@ def step_caddy(host, it):
     enable(host, ["caddy.service"], restart=True)
 
 
+VAULT_SETTINGS = "etc/bromigos/lab/vaultwarden.env"
+
+
 def step_passwords(host, it):
     host.apps_folder()
     pacman(host, ["vaultwarden", "vaultwarden-web"])
@@ -825,13 +843,18 @@ def step_passwords(host, it):
             note(host, it, f"Your passwords are in {AD.VAULT_OLD}, on the system disk, and stay there for now. "
                            "sudo bromigos lab app-data move puts them on the data disks, with the other apps' data.")
     else:
-        os.chmod(host.mkdir(AD.VAULT, owner="vaultwarden:vaultwarden"), 0o700)
+        host.mkdir(AD.VAULT, 0o700, owner="vaultwarden:vaultwarden")
         host.write(AD.VAULT_ENV, AD.VAULT_ENV_TEXT)
         host.write(AD.VAULT_DROPIN, AD.VAULT_DROPIN_TEXT)
+    # Its address, its web vault and its name. In a file, as the vault's folder is: the package's
+    # /etc/vaultwarden.env turns the web vault off, and any EnvironmentFile= wins over an
+    # Environment= line, so those lines were never the ones that counted (the page was a 404)
+    host.write(VAULT_SETTINGS, "# bromigos lab provision --local: Vaultwarden's address and its web vault. Read after\n"
+               "# /etc/vaultwarden.env, so these lines are the ones that count; put your own settings there\n"
+               "ROCKET_ADDRESS=127.0.0.1\nROCKET_PORT=8222\nWEB_VAULT_ENABLED=true\n"
+               f"WEB_VAULT_FOLDER=/usr/share/webapps/vaultwarden-web\nDOMAIN=https://{app_name(host, 'passwords')}\n")
     host.write("etc/systemd/system/vaultwarden.service.d/50-bromigos.conf",
-               "[Service]\nEnvironment=ROCKET_ADDRESS=127.0.0.1\nEnvironment=ROCKET_PORT=8222\n"
-               "Environment=WEB_VAULT_ENABLED=true\nEnvironment=WEB_VAULT_FOLDER=/usr/share/webapps/vaultwarden-web\n"
-               f"Environment=DOMAIN=https://{app_name(host, 'passwords')}\n")
+               f"[Service]\nEnvironmentFile=/{VAULT_SETTINGS}\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["vaultwarden.service"], restart=True)
 
@@ -1126,6 +1149,66 @@ def prepare_recyclarr(host, it):
             host.store.use(f"{app}/api-key", "recyclarr.service")
 
 
+AUTOSCAN_CONFIG = APPS + "/autoscan/config/config.yml"
+AUTOSCAN_HEAD = "# bromigos lab provision --local: Autoscan's settings. Change anything and they are yours: the\n" \
+                "# engine writes this file again only while the rest of it is as it wrote it ({digest})\n"
+PLEX_PREFS = APPS + "/plex/config/Library/Application Support/Plex Media Server/Preferences.xml"
+
+
+def plex_token(host):
+    """Plex's own token, from its settings file once it's signed in (claimed); "" before."""
+    try:
+        return ET.parse(host.path(PLEX_PREFS)).getroot().get("PlexOnlineToken") or ""
+    except (OSError, ET.ParseError):
+        return ""
+
+
+def ours(text):
+    """Is this file as the engine wrote it: its head, and the digest there of the rest?"""
+    head, _, body = text.partition("\n")
+    second, _, body = body.partition("\n")
+    m = re.search(r"\(([0-9a-f]{16})\)$", second)
+    return head + "\n" == AUTOSCAN_HEAD.split("\n")[0] + "\n" and bool(m) and m.group(1) == hashlib.sha256(body.encode()).hexdigest()[:16]
+
+
+def prepare_autoscan(host, it):
+    """Autoscan exits at start without /config/config.yml. Its settings: the triggers Sonarr and
+    Radarr call, and the media servers it tells, where this server knows them: Jellyfin with the
+    API key in the secret store (jellyfin/api-key), Plex with the token in its own settings once
+    it's signed in. With neither, no target: Autoscan starts, takes what Sonarr and Radarr send
+    and waits, and a note says the one step. Autoscan reads its keys from this file alone, so the
+    file is its account's, 0600. A file someone changed (its first line isn't ours) is left alone."""
+    p = host.path(AUTOSCAN_CONFIG)
+    if p.exists() and not ours(p.read_text()):
+        return
+    triggers = {"manual": {"priority": 0}}
+    for app in ("sonarr", "radarr"):
+        if app in host.selected:
+            triggers[app] = [{"name": app, "priority": 2}]
+    targets, missing = {}, []
+    if "jellyfin" in host.selected:
+        if host.store.exists("jellyfin/api-key"):
+            targets["jellyfin"] = [{"url": "http://jellyfin:8096", "token": host.store.get("jellyfin/api-key")}]
+        else:
+            missing.append("Jellyfin: finish its first-run page, make an API key (Dashboard › API Keys) and save it with "
+                           "bromigos lab secrets set jellyfin/api-key")
+    if "plex" in host.selected:
+        token = plex_token(host)
+        if token:
+            targets["plex"] = [{"url": "http://host.containers.internal:32400", "token": token}]  # privacy: allow (Podman's name for the host)
+        else:
+            missing.append("Plex: sign in to it on its page (port 32400)")
+    doc = {"port": 3030, "triggers": triggers, **({"targets": targets} if targets else {})}
+    body = json.dumps(doc, indent=1) + "\n"            # YAML is a superset of JSON
+    host.write(AUTOSCAN_CONFIG, AUTOSCAN_HEAD.format(digest=hashlib.sha256(body.encode()).hexdigest()[:16]) + body, 0o600)
+    if host.root == "/":
+        uid, gid = host.media_owner()
+        os.chown(p, uid, gid)
+    if missing:
+        note(host, it, "Autoscan starts and tells no media server yet. One step for you, then run this again: "
+                       + "; ".join(missing) + ".")
+
+
 def qbit_hash(password, salt=None):
     """qBittorrent's WebUI\\Password_PBKDF2: PBKDF2-HMAC-SHA512, 100000 rounds, as @ByteArray(salt:key)."""
     salt = salt or os.urandom(16)
@@ -1155,8 +1238,8 @@ def prepare_gluetun(host, it):
         raise ProvisionError("type your VPN user name in the VPN's settings first")
 
 
-PREPARE = {"gluetun": prepare_gluetun, "start-page": prepare_start_page, "litellm": prepare_litellm, "recyclarr": prepare_recyclarr,
-           "qbittorrent": prepare_qbittorrent}
+PREPARE = {"autoscan": prepare_autoscan, "gluetun": prepare_gluetun, "start-page": prepare_start_page, "litellm": prepare_litellm,
+           "recyclarr": prepare_recyclarr, "qbittorrent": prepare_qbittorrent}
 
 
 # ---------------------------------------------------------------- wiring the media apps together

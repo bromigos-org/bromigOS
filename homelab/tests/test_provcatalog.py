@@ -153,7 +153,8 @@ class FormatTwoTests(unittest.TestCase):
         self.assertEqual(PC.web_names(), WEB_NAMES)
         cat = PC.by_id()
         for i in WEB_NAMES:
-            want = 3005 if i == "monitoring" else cat[i]["ports"][0]
+            # Grafana's port; RustFS's console (its first port, 9000, is the S3 API, no page)
+            want = {"monitoring": 3005, "s3": 9001}.get(i, cat[i]["ports"][0])
             self.assertEqual(cat[i]["web"]["port"], want, i)
         for it in PC.load():
             if it["web"]:

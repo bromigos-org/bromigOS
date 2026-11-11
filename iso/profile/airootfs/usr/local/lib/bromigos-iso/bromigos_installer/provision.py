@@ -216,8 +216,28 @@ def suggest_models(hw):
 
 
 # ── this machine ────────────────────────────────────────────────────────────────────────
-def hardware(probe=None):
-    """{cpu, ram_gb, disk_gb, gpu, gpu_name, gpu_vram_gb}: what this computer has to give."""
+def app_disk_gb(probe, a=None):
+    """The disk the apps' data goes to, in GB: the chosen data disks (with two copies, what fits
+    twice: half of them, and never more than all but the largest), else the system disk; before
+    either is chosen, the largest disk. Never every disk added up: the others hold nothing of
+    the apps'. A USB stick never counts."""
+    disks = [d for d in (probe or {}).get("disks", []) if not d.get("medium")]
+    if not disks:
+        return 0
+    s = (a or {}).get("server") if isinstance((a or {}).get("server"), dict) else {}
+    data = [d["size"] for d in disks if d["path"] in (s.get("data_disks") or []) and d["path"] != (a or {}).get("disk")]
+    if data and s.get("data_layout") == "raid1" and len(data) >= 2:
+        size = min(sum(data) // 2, sum(data) - max(data))
+    elif data:
+        size = sum(data)
+    else:
+        size = next((d["size"] for d in disks if d["path"] == (a or {}).get("disk")), max(d["size"] for d in disks))
+    return size // 10 ** 9
+
+
+def hardware(probe=None, a=None):
+    """{cpu, ram_gb, disk_gb, gpu, gpu_name, gpu_vram_gb}: what this computer has to give. a: the
+    answers so far, for the disk the apps' data goes to (app_disk_gb)."""
     if os.environ.get("BROMIGOS_INSTALLER_HW"):
         return json.loads(os.environ["BROMIGOS_INSTALLER_HW"])
     if os.environ.get("BROMIGOS_INSTALLER_FAKE"):
@@ -226,8 +246,7 @@ def hardware(probe=None):
         try:
             from bromigos_homelab import localprovision
             hw = dict(localprovision.detect())
-            hw["disk_gb"] = sum(d.get("size", 0) for d in (probe or {}).get("disks", []) if not d.get("medium")) // 10 ** 9 \
-                or hw.get("disk_gb", 0)
+            hw["disk_gb"] = app_disk_gb(probe, a) or hw.get("disk_gb", 0)
             # the engine counts a card whose driver is loaded; on the stick NVIDIA's isn't (Field Kit
             # doesn't carry it), so a card it would come for counts too: model serving stays a choice
             if not hw.get("gpu"):
@@ -241,7 +260,7 @@ def hardware(probe=None):
             hw["ram_gb"] = round(int(next(l for l in f if l.startswith("MemTotal")).split()[1]) / 1024 ** 2)
     except (OSError, StopIteration, ValueError):
         pass
-    hw["disk_gb"] = sum(d.get("size", 0) for d in (probe or {}).get("disks", []) if not d.get("medium")) // 10 ** 9
+    hw["disk_gb"] = app_disk_gb(probe, a)
     hw.update(_nvidia_card() or {})
     return hw
 
