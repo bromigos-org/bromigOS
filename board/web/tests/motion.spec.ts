@@ -17,6 +17,11 @@ test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
   for (const hash of ["home", "supply", "data", "m/myserver"])
     test(`#${hash}: nothing moves`, async ({ page }) => {
+      // the running backup without its stream, so it is still running however long the page takes
+      await page.route("**/fixtures/running.json", async (route) => {
+        const doc = await (await route.fetch()).json();
+        await route.fulfill({ json: { ...doc, stream: [] } });
+      });
       await open(page, "running", hash);
       await page.getByRole("button", { name: "Raise the drawer of jobs" }).click();
       await expect(page.locator("#sh-actd .pulse").first()).toBeVisible();

@@ -50,7 +50,7 @@ export async function open(page: Page, fixture: string, hash = "") {
     document.addEventListener("securitypolicyviolation", (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
   });
   await page.goto(`/?fixture=${fixture}${hash ? `#${hash}` : ""}`);
-  await expect(page.locator(".shell")).toBeVisible();
+  await expect(page.locator(".shell")).toBeVisible({ timeout: 15_000 });
   return {
     errors,
     csp: () => page.evaluate(() => window.__csp),

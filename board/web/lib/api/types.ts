@@ -111,8 +111,23 @@ export interface MachineReadings {
   cpu_pct: number | null;
   ram_pct: number | null;
   temp_c: number | null;
+  ram_used_bytes?: number | null;
+  ram_total_bytes?: number | null;
+  load1?: number | null;
+  net_in_mbps?: number | null;
+  net_out_mbps?: number | null;
   at: number;
   max_age_s: number;
+}
+
+/** What is in the box: the salvage scan's own keys (provcatalog.py). */
+export interface Hardware {
+  cpu: number | null;
+  ram_gb: number | null;
+  gpu: boolean;
+  gpu_name: string | null;
+  gpu_vram_gb: number | null;
+  drives: { device: string; model: string; size_bytes: number; kind: string }[];
 }
 
 export interface Machine {
@@ -126,6 +141,7 @@ export interface Machine {
   updates: { count: number; security: boolean } | null;
   readings: MachineReadings | null;
   apps: number | null;
+  hardware?: Hardware | null;
 }
 
 export interface NeedsYou {
@@ -165,6 +181,49 @@ export interface Board {
   /** The updates and rollbacks of `bromigos server status --json`. */
   updates: unknown;
   ups: unknown;
+}
+
+// ---------------------------------------------------------------- a machine's trends
+
+export type VitalsRange = "24h" | "7d" | "30d";
+export type SeriesName = "cpu_pct" | "ram_pct" | "net_in_mbps" | "net_out_mbps" | "temp_c";
+
+export interface Vitals {
+  schema: 1;
+  machine: string;
+  range: VitalsRange;
+  step_s: number;
+  at: number;
+  series: Partial<Record<SeriesName, [number, number | null][]>>;
+}
+
+// ---------------------------------------------------------------- what the board passes through
+
+/** `bromigos storage health --json`: the keys the page reads (docs/storage.md, Scripting). */
+export interface DriveHealth {
+  schema: number;
+  checked_at: number | null;
+  drives: { key: string; device: string; model: string; kind: string; present: boolean; verdict: "healthy" | "watch" | "checking" | "worse" | "replace" | "unknown"; words: string; summary: string }[];
+}
+
+/** `bromigos lab backups status --json`: the keys the page reads. Times are Unix seconds. */
+export interface BackupsStatus {
+  configured: boolean;
+  to: string;
+  health: { state: "ok" | "attention" | "waiting" | "off" | "unknown"; verdict: string };
+  last_success: { ts: number | null } | null;
+  last_test_passed: { ts: number | null } | null;
+}
+
+/** The updates of `bromigos server status --json`, and its rollbacks. */
+export interface UpdatesStatus {
+  phase: string;
+  finished: string | null;
+  finished_ts?: number | null;
+  mode: string;
+  window: string;
+  auto: boolean;
+  rollbacks: unknown[];
 }
 
 // ---------------------------------------------------------------- the activity record (DESIGN §4)

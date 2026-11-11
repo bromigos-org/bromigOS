@@ -5,6 +5,7 @@ import "@/styles/tokens.css";
 import "@/styles/base.css";
 import "@/styles/shell.css";
 import "@/styles/home.css";
+import "@/styles/machine.css";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (

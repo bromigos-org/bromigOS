@@ -47,6 +47,7 @@ export function DepthDrawer({ signedIn }: { signedIn: boolean }) {
 export function Tabs({ place, id, label }: { place: Place; id?: string | null; label: string }) {
   const { route } = useLab();
   const tabs = TABS[place] ?? [];
+  const cur = place === "machine" && route.tab === "setup" ? "" : route.tab; // Set-up stands in for Overview
   return (
     <nav className="sh-tabs" aria-label={label}>
       {tabs.map((t) =>
@@ -58,10 +59,10 @@ export function Tabs({ place, id, label }: { place: Place; id?: string | null; l
         ) : (
           <a
             key={t.id}
-            className={`sh-tab${route.tab === t.id ? " on" : ""}`}
+            className={`sh-tab${cur === t.id ? " on" : ""}`}
             href={href(place, t.id, id ?? null)}
             title={t.hint}
-            aria-current={route.tab === t.id ? "page" : undefined}
+            aria-current={cur === t.id ? "page" : undefined}
           >
             {t.label}
           </a>

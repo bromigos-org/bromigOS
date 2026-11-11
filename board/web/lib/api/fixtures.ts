@@ -12,7 +12,7 @@
 
 import type { Api } from "./client";
 import { ApiError, cleanCode } from "./errors";
-import type { ActivityEvent, Board, Door, JobRecord, Session } from "./types";
+import type { ActivityEvent, Board, Door, JobRecord, Session, Vitals } from "./types";
 
 type Err = { $status: number; $error?: { code: string; words: string } };
 type Doc<T> = T | Err;
@@ -25,6 +25,8 @@ export interface Fixture {
   board: Doc<Board>;
   signin?: { code: string; session: Session };
   activity: JobRecord[];
+  /** Trends by machine and range ("myserver/24h"); a missing one answers 404. */
+  vitals?: Record<string, Vitals>;
   stream?: { after_ms: number; event: "job" | "gone"; data: JobRecord | { id: string } }[];
 }
 
@@ -77,6 +79,12 @@ export function fixtureApi(name: string): Api {
     async board() {
       owner();
       return answer((await load()).board);
+    },
+    async vitals(machine, range) {
+      owner();
+      const v = (await load()).vitals?.[`${machine}/${range}`];
+      if (!v) throw new ApiError(404, "no-trends", "This server keeps no trends yet.");
+      return v;
     },
     activity(on, connected) {
       const timers: number[] = [];

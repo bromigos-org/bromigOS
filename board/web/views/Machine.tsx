@@ -1,0 +1,809 @@
+// A machine (IA.md §2): Overview ("What is this machine doing, and does it need me?"), Vitals ("Is
+// it this machine, and which app?"), Hardware ("What is in this box?") and Set-up (first run).
+// Every figure is the server's: the board's machine row, its tiles, and the drive, backup and
+// update documents as their commands print them. What isn't read yet says so, or is planned.
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Hologram } from "@/components/Hologram";
+import { Trend } from "@/components/Trend";
+import { Icon, IconLink, Planned, State } from "@/components/ui";
+import { api } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
+import type { BackupsStatus, Board, DriveHealth, Machine as M, SeriesName, Shape, Tile, UpdatesStatus, Vitals, VitalsRange } from "@/lib/api/types";
+import { holoIcon } from "@/lib/icons";
+import { useLab } from "@/lib/lab";
+import { href } from "@/lib/routes";
+import { ago, clock, stale, when } from "@/lib/time";
+import { Tabs } from "@/shell/Shell";
+
+// ---------------------------------------------------------------- shared
+
+const GB = 1024 ** 3;
+const gb = (b: number) => (b / GB >= 10 ? Math.round(b / GB) : Math.round((b / GB) * 10) / 10);
+const sizeWords = (b: number) => (b >= 1e12 ? `${Math.round(b / 1e11) / 10} TB` : `${Math.round(b / 1e9)} GB`);
+
+/** The board's verdict line for one machine. */
+function machineVerdict(b: Board, m: M, now: number): { words: string; look: "" | "warn" | "q" } {
+  const r = m.readings;
+  if (m.state === "unknown" || (r && stale(r.at, r.max_age_s, now))) return { words: `NOT READ FOR ${ago(r?.at ?? b.at, now).replace(" ago", "").toUpperCase()}`, look: "q" };
+  const n = b.needs_you.filter((x) => x.machine === m.name).length;
+  if (n) return { words: `${n} THING${n === 1 ? "" : "S"} NEED${n === 1 ? "S" : ""} YOU`, look: "warn" };
+  if (m.state === "warn" || m.state === "down") return { words: m.state_word.toUpperCase(), look: "warn" };
+  return { words: "ALL SYSTEMS NOMINAL", look: "" };
+}
+
+function Fresh({ at, now }: { at: number; now: number }) {
+  return (
+    <span className="chip" title={`When this machine was last read: ${clock(at)}, in this browser's time. The page reads again every 15 seconds.`}>
+      {clock(at)} · {ago(at, now).toUpperCase()}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------- Overview: the hero
+
+/** The catalogue's eight groups (provision-catalogue.toml), as the rack's modules, left then right. */
+const GROUPS: { id: string; name: string; glyph: string; side: "l" | "r"; row: 1 | 2 | 3 | 4; go?: string }[] = [
+  { id: "lab-core", name: "LAB CORE", glyph: "g-rack", side: "l", row: 1 },
+  { id: "network", name: "NETWORK", glyph: "g-cloud", side: "l", row: 2, go: "#network" },
+  { id: "games", name: "GAMES", glyph: "g-gamepad", side: "l", row: 3, go: "#den/play" },
+  { id: "media", name: "MEDIA", glyph: "g-monitor", side: "l", row: 4, go: "#den" },
+  { id: "ai", name: "AI", glyph: "g-gpu", side: "r", row: 1 },
+  { id: "storage", name: "STORAGE", glyph: "g-drive", side: "r", row: 2, go: "#data" },
+  { id: "home", name: "HOME APPS", glyph: "g-house", side: "r", row: 3 },
+  { id: "brodec", name: "BRODEC", glyph: "g-phone", side: "r", row: 4 },
+];
+const ROW_Y = { 1: [116, 187], 2: [196, 219], 3: [275, 251], 4: [355, 283] } as const;
+
+function Beam({ side, row, on }: { side: "l" | "r"; row: 1 | 2 | 3 | 4; on: boolean }) {
+  const [my, ry] = ROW_Y[row];
+  const d = side === "l" ? `M526 ${ry}L291 ${my}` : `M654 ${ry}L889 ${my}`;
+  if (!on) return <path className="ln off" d={d} />;
+  return (
+    <>
+      <path className="ln-glow" d={d} />
+      <path className="ln" d={d} />
+      {[0, 1, 2].map((k) => (
+        <circle key={k} className="ln-dot" r="3" style={{ offsetPath: `path('${d}')`, animationDelay: `${-(row * 0.3 + k * 1.13).toFixed(2)}s` } as CSSProperties} />
+      ))}
+    </>
+  );
+}
+
+function Hero({ b, m, apps, now }: { b: Board; m: M; apps: Tile[]; now: number }) {
+  const v = machineVerdict(b, m, now);
+  const mods = GROUPS.map((g) => {
+    const mine = apps.filter((t) => t.installed && t.group === g.id);
+    const up = mine.filter((t) => t.state === "ok").length;
+    const bad = mine.some((t) => t.state === "degraded" || t.state === "down");
+    return { ...g, n: mine.length, up, bad, names: mine.map((t) => t.job) };
+  });
+  const lit = mods.filter((x) => x.n).length;
+  return (
+    <div className="stage board" role="group" aria-label={`${m.name} as its hologram, with a module for each group of apps`}>
+      <div className="tilt">
+        <svg className="h-art beams" viewBox="0 0 1180 430" aria-hidden="true">
+          {mods.map((x) => (
+            <Beam key={x.id} side={x.side} row={x.row} on={!!x.n} />
+          ))}
+        </svg>
+        <div className="st-rack">
+          <svg className="st-em" viewBox="0 0 179 300" aria-hidden="true">
+            <path className="cone" d="M34 268H145L176 6H3z" />
+          </svg>
+          <Hologram kind={m.kind} state={v.look === "warn" ? "warn" : v.look === "q" ? "unknown" : "ok"} label={`${m.name}'s hologram`} />
+        </div>
+        <div className="mods">
+          {mods.map((x) => {
+            const body = (
+              <>
+                <svg className={`gl${x.n ? (x.bad ? " warn" : " live") : ""}`} viewBox="0 0 100 100" aria-hidden="true">
+                  <use href={`#${x.glyph}`} />
+                </svg>
+                <span>
+                  <b>{x.name}</b>
+                  <i>{x.n ? (x.up === x.n ? `${x.n} running` : `${x.up} of ${x.n} running`) : "empty"}</i>
+                </span>
+                <Icon id={x.n ? (x.bad ? "s-warn" : "s-ok") : "s-unk"} size={16} />
+              </>
+            );
+            const hint = x.n
+              ? `${x.name[0] + x.name.slice(1).toLowerCase()}: ${x.names.join(", ")}. ${x.up === x.n ? "All running." : `${x.up} of ${x.n} running.`}${x.go ? " Press to open it." : ""}`
+              : `${x.name[0] + x.name.slice(1).toLowerCase()}: nothing installed. Its module stays dim: an empty slot, not a lit prop.`;
+            const cls = `mod ${x.side} y${x.row}${x.n ? " on" : ""}`;
+            return x.go && x.n ? (
+              <a key={x.id} className={cls} href={x.go} title={hint}>
+                {body}
+              </a>
+            ) : (
+              <div key={x.id} className={cls} title={hint}>
+                {body}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="st-top">
+        <span className="over" title={`${lit} of the catalogue's eight groups have apps on ${m.name}`}>
+          {lit} OF 8 GROUPS LIT
+        </span>
+        <p className={`verdict${v.look ? ` ${v.look}` : ""}`} role="status" title="This machine's one status line: the worst of everything below">
+          {v.words}
+        </p>
+        <Fresh at={m.readings?.at ?? b.at} now={now} />
+      </div>
+      <span className="h-scan" aria-hidden="true" />
+      <span className="h-edge" aria-hidden="true" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Overview: the reading tiles
+
+const DRIVE_SHAPE: Record<DriveHealth["drives"][number]["verdict"], Shape> = { healthy: "ok", watch: "ok", checking: "warn", worse: "warn", replace: "down", unknown: "unknown" };
+const RANK: Shape[] = ["ok", "unknown", "warn", "down"];
+
+function StorageTile({ doc }: { doc: DriveHealth | null }) {
+  const drives = doc?.drives.filter((d) => d.present) ?? [];
+  const worst = drives.reduce<Shape>((w, d) => (RANK.indexOf(DRIVE_SHAPE[d.verdict]) > RANK.indexOf(w) ? DRIVE_SHAPE[d.verdict] : w), "ok");
+  const bad = drives.find((d) => DRIVE_SHAPE[d.verdict] === worst && worst !== "ok");
+  return (
+    <a className={`panel rt wide${worst === "warn" || worst === "down" ? " is-warn" : ""}`} href="#data" title="Storage: each drive's verdict, from bromigos storage health. Press for every drive (Data › Drives).">
+      <h3>
+        <span>
+          <Icon id="i-storage" size={16} />
+          STORAGE
+        </span>
+        {doc ? <State shape={worst} word={bad ? bad.words : "healthy"} /> : <State shape="unknown" word="could not check" />}
+      </h3>
+      {doc ? (
+        <ul className="dv">
+          {drives.map((d) => (
+            <li key={d.key} title={`${d.model} (${d.device}): ${d.words}. ${d.summary}`}>
+              <Icon id="i-drive" size={16} />
+              <span>
+                <b>{d.device}</b> <span className="muted">{d.model}</span>
+              </span>
+              <State shape={DRIVE_SHAPE[d.verdict]} word={d.words} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="small muted">The drives' health couldn't be read on the server.</p>
+      )}
+    </a>
+  );
+}
+
+const BACKUP_SHAPE: Record<BackupsStatus["health"]["state"], Shape> = { ok: "ok", attention: "warn", waiting: "unknown", off: "unknown", unknown: "unknown" };
+
+function BackupsTile({ doc, now }: { doc: BackupsStatus | null; now: number }) {
+  const last = doc?.last_success?.ts ? doc.last_success.ts * 1000 : null;
+  const test = doc?.last_test_passed?.ts ? doc.last_test_passed.ts * 1000 : null;
+  return (
+    <a className={`panel rt${doc?.health.state === "attention" ? " is-warn" : ""}`} href="#data/backups" title={`Backups: ${doc?.health.verdict ?? "couldn't be read"} Press for Data › Backups.`}>
+      <h3>
+        <span>
+          <Icon id="i-backup" size={16} />
+          BACKUPS
+        </span>
+        <State shape={doc ? BACKUP_SHAPE[doc.health.state] : "unknown"} word={doc ? (doc.configured ? doc.health.state : "off") : "could not check"} />
+      </h3>
+      <div className="rd" title={last ? `The last good copy: ${when(last, now)}` : "No good copy yet"}>
+        <span className="k">Last good copy</span>
+        <span className={`v${last ? "" : " q"}`}>{last ? clock(last) : "none"}</span>
+        <span className="s">{last ? ago(last, now) : doc?.configured ? "not yet" : "backups are off"}</span>
+      </div>
+      <div className="tags">
+        {doc?.to && (
+          <span className="chip" title={`Where the copies go: ${doc.to}`}>
+            TO {doc.to.split(":")[0].toUpperCase()}
+          </span>
+        )}
+        <span className={`chip${test ? " lit" : ""}`} title={test ? `A test restore last proved the backup ${ago(test, now)}` : "No restore has been proven yet"}>
+          {test ? `PROVEN ${ago(test, now).toUpperCase()}` : "NOT PROVEN YET"}
+        </span>
+      </div>
+    </a>
+  );
+}
+
+/** bromigos-server's PHASE_WORDS, the update's state as the server says it. */
+const PHASE: Record<string, [string, Shape]> = {
+  never: ["no update yet", "unknown"],
+  updating: ["updating now", "ok"],
+  reboot: ["restarting to check", "ok"],
+  verify: ["checking", "ok"],
+  ok: ["came back healthy", "ok"],
+  nothing: ["nothing to update", "ok"],
+  "rolled-back": ["rolled back", "warn"],
+  attention: ["needs attention", "down"],
+  failed: ["didn't finish", "warn"],
+  waiting: ["waiting for you", "warn"],
+  "reboot-waiting": ["restart waits", "ok"],
+};
+
+function UpdatesTile({ doc, now }: { doc: UpdatesStatus | null; now: number }) {
+  const [words, shape] = doc ? (PHASE[doc.phase] ?? [doc.phase, "unknown" as Shape]) : ["could not check", "unknown" as Shape];
+  const at = doc?.finished_ts ? doc.finished_ts * 1000 : doc?.finished ? Date.parse(doc.finished) || null : null;
+  return (
+    <a className={`panel rt${shape === "warn" || shape === "down" ? " is-warn" : ""}`} href="#supply/updates" title="Updates: the system's last update, as bromigos server status says it. Press for Supply › Updates.">
+      <h3>
+        <span>
+          <Icon id="i-update" size={16} />
+          UPDATES
+        </span>
+        <State shape={shape} word={words} />
+      </h3>
+      <div className="rd" title={at ? `The last update finished ${when(at, now)}` : "When the last update finished isn't known"}>
+        <span className="k">Last update</span>
+        <span className={`v${at ? "" : " q"}`}>{at ? clock(at) : "·"}</span>
+        <span className="s">{at ? ago(at, now) : ""}</span>
+      </div>
+      <div className="tags">
+        {doc && (
+          <span className="chip" title={`Updates are ${doc.mode}${doc.window ? `, in the window ${doc.window}` : ""}`}>
+            {doc.window ? `WINDOW ${doc.window}` : doc.mode.toUpperCase()}
+          </span>
+        )}
+        <span className="chip" title="Apps update after the system, each behind a snapshot. Planned.">
+          APPS AFTER IT
+        </span>
+        <Planned hint="Planned: app updates behind a snapshot (DESIGN.md §2)" />
+      </div>
+    </a>
+  );
+}
+
+// ---------------------------------------------------------------- Overview: apps
+
+export function AppTile({ t, now }: { t: Tile; now: number }) {
+  const ic = holoIcon(t.holo);
+  const shape: Shape = t.state === "ok" || t.state === "starting" || t.state === "updating" ? "ok" : t.state === "degraded" ? "warn" : t.state === "down" ? "down" : "unknown";
+  const old = t.reading && stale(t.reading.at, t.reading.max_age_s, now);
+  return (
+    <div className="tile in" data-id={t.id} title={`${t.job}: ${t.app}${t.version ? ` ${t.version}` : ""}. ${t.state_word ?? "Not installed"}.`}>
+      <span className={`plate${ic.known ? "" : " off"}${shape === "warn" || shape === "down" ? " amber" : ""}`} aria-hidden="true">
+        <Icon id={ic.id} className={t.state === "starting" || t.state === "updating" ? "pulse" : ""} />
+      </span>
+      <span className="nm">
+        <a href={href("app", "", t.id)} title={`${t.job} (${t.app}): its page, with restart, logs, roll back and remove`}>
+          <b>{t.job}</b>
+        </a>
+        <State shape={shape} word={t.state_word ?? "Unknown"} />
+      </span>
+      {t.reading && (
+        <span className={`read${old ? " muted" : ""}`} title={`${t.reading.text}: from ${t.reading.source}, ${ago(t.reading.at, now)}`}>
+          {t.reading.text}
+          {old && ` · ${ago(t.reading.at, now)}`}
+        </span>
+      )}
+      <span className="foot">
+        <span className="addr">{t.open?.url.replace(/^https?:\/\//, "")}</span>
+        {t.open && <IconLink icon="i-open" href={t.open.url} label={`Open ${t.job}`} hint={`Open ${t.job} (${t.app}) at ${t.open.url}`} rel="noreferrer" />}
+      </span>
+    </div>
+  );
+}
+
+function Overview({ b, m, now }: { b: Board; m: M; now: number }) {
+  const apps = b.apps.filter((t) => (t.machine ?? b.server.name) === m.name);
+  const needs = b.needs_you.filter((n) => n.machine === m.name);
+  const fixed = b.fixed.filter((f) => f.machine === m.name);
+  const pages = apps.filter((t) => t.installed && t.open);
+  const parts = apps.filter((t) => t.installed && !t.open);
+  return (
+    <>
+      <Hero b={b} m={m} apps={apps} now={now} />
+      {(needs.length > 0 || fixed.length > 0) && (
+        <div className="mc-cols">
+          {needs.length > 0 && (
+            <section className="panel is-warn" title={`What on ${m.name} needs a person, cheapest step first`}>
+              <h2 className="ph">
+                <span>NEEDS YOU · {needs.length}</span>
+              </h2>
+              {needs.map((n) => (
+                <div className="lb-need" key={n.id} title={`${n.words}${n.detail ? `: ${n.detail}` : ""}`}>
+                  <Icon id="i-alert" size={20} className="warn" />
+                  <span>
+                    {n.words}
+                    {n.subject && (
+                      <>
+                        : <b>{n.subject.name}</b>
+                      </>
+                    )}
+                    {n.detail && <span className="d">{n.detail}</span>}
+                  </span>
+                  <IconLink icon="i-open" href={n.go ? `#${n.go}` : "#activity"} label={`Open: ${n.words}`} hint="Open it where it is fixed" />
+                </div>
+              ))}
+            </section>
+          )}
+          {fixed.length > 0 && (
+            <section className="panel" title="What bromigOS put right by itself, and how to look closer">
+              <h2 className="ph">
+                <span>FIXED BY ITSELF · {fixed.length}</span>
+              </h2>
+              {fixed.map((f) => (
+                <div className="lb-need" key={f.id} title={`${f.words}, ${when(f.at, now)}`}>
+                  <Icon id="i-undo" size={20} />
+                  <span>
+                    {f.words}
+                    <span className="d">{when(f.at, now)}</span>
+                  </span>
+                  <IconLink icon="i-open" href="#activity" label={`Look closer: ${f.words}`} hint="Look closer: the job's steps in Activity" />
+                </div>
+              ))}
+            </section>
+          )}
+        </div>
+      )}
+      {m.here ? (
+        <div className="rtiles three">
+          <StorageTile doc={b.storage as DriveHealth | null} />
+          <BackupsTile doc={b.backups as BackupsStatus | null} now={now} />
+          <UpdatesTile doc={b.updates as UpdatesStatus | null} now={now} />
+        </div>
+      ) : (
+        <p className="small muted mc-parts" title={`${m.name} serves this same page at its own name, with its drives, backups and updates`}>
+          {m.name}'s drives, backups and updates are on its own page, at its own name.
+        </p>
+      )}
+      <div className="mc-apps">
+        <div className="grouphead" title={`The apps on ${m.name} with a page of their own`}>
+          <Icon id="i-supply" size={16} />
+          APPS
+          <span className="meta">{pages.filter((t) => t.state === "ok").length} running</span>
+        </div>
+        {pages.length ? (
+          <div className="tiles apps">
+            {pages.map((t) => (
+              <AppTile key={t.id} t={t} now={now} />
+            ))}
+          </div>
+        ) : (
+          <p className="small muted">Nothing with a page of its own yet. Supply › Browse has what this machine can run.</p>
+        )}
+      </div>
+      {parts.length > 0 && (
+        <div className="mc-parts">
+          <div className="grouphead" title="Parts that run without a page of their own">
+            <Icon id="i-module" size={16} />
+            ALWAYS-ON PARTS
+            <span className="meta">{parts.filter((t) => t.state === "ok").length} running</span>
+          </div>
+          <div className="tags">
+            {parts.map((t) => (
+              <a key={t.id} className="chip" href={href("app", "", t.id)} title={`${t.job} (${t.app}): ${t.state_word ?? "unknown"}. Opens its page.`}>
+                <Icon id={holoIcon(t.holo).id} size={16} />
+                <span className="sr-only">{t.job}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Vitals
+
+/** A ring of twenty cells (the installer's budget meter bent round): `lit` of them on. */
+function ring(lit: number) {
+  const n = Math.max(0, Math.min(20, Math.round(lit)));
+  return n ? `${"8 2 ".repeat(n - 1)}8 ${200 - 10 * (n - 1) - 8}` : "0 200";
+}
+
+type Gauge = { key: string; icon: string; name: string; fig: string | null; unit: string; sub: string; cells: number; shape: Shape; word: string; s: string; hint: string };
+
+function gauges(m: M): Gauge[] {
+  const r = m.readings, hw = m.hardware;
+  const g = (o: Omit<Gauge, "shape" | "word"> & { high: boolean }): Gauge => ({ ...o, shape: o.fig === null ? "unknown" : o.high ? "warn" : "ok", word: o.fig === null ? "not measured" : o.high ? "high" : "normal" });
+  const cpu = r?.cpu_pct ?? null, used = r?.ram_used_bytes ?? null, total = r?.ram_total_bytes ?? (hw?.ram_gb ? hw.ram_gb * GB : null);
+  const heat = r?.temp_c ?? null, nin = r?.net_in_mbps ?? null, nout = r?.net_out_mbps ?? null;
+  const net = nin === null && nout === null ? null : (nin ?? 0) + (nout ?? 0);
+  return [
+    g({ key: "cpu", icon: "i-chip", name: "Processor", fig: cpu === null ? null : String(cpu), unit: "%", sub: hw?.cpu ? `OF ${hw.cpu} CORES` : "BUSY", cells: (cpu ?? 0) / 5, high: (cpu ?? 0) >= 90, s: r?.load1 != null ? `load ${r.load1}` : "", hint: `Processor: ${cpu ?? "not measured"}${cpu === null ? "" : " % busy"}. Each cell of the ring is a twentieth.` }),
+    g({ key: "mem", icon: "i-memory", name: "Memory", fig: used === null ? (r?.ram_pct != null ? String(r.ram_pct) : null) : String(gb(used)), unit: used === null ? "%" : "GB", sub: total ? `OF ${gb(total)} GB` : "IN USE", cells: (r?.ram_pct ?? 0) / 5, high: (r?.ram_pct ?? 0) >= 90, s: used !== null && total ? `${gb(total - used)} GB free` : "", hint: "Memory in use: measured use, not what the apps' recipes ask for." }),
+    g({ key: "heat", icon: "i-temp", name: "Heat", fig: heat === null ? null : String(heat), unit: "°C", sub: "HOTTEST DRIVE", cells: heat === null ? 0 : ((heat - 20) / 45) * 20, high: (heat ?? 0) >= 55, s: "", hint: "Heat: the hottest drive. The ring runs from 20 to 65 °C; 55 °C is where the disk watch notes it." }),
+    g({ key: "net", icon: "i-net", name: "Network", fig: net === null ? null : String(Math.round(net)), unit: "", sub: "MBIT/S", cells: net === null ? 0 : Math.max(net > 0 ? 1 : 0, (net / 1000) * 20), high: false, s: net === null ? "" : `${Math.round(nin ?? 0)} in · ${Math.round(nout ?? 0)} out`, hint: "Network: megabits a second now, in and out. The ring counts against one gigabit a second." }),
+  ];
+}
+
+const SERIES: { id: SeriesName; name: string; unit: string; icon: string; max?: number }[] = [
+  { id: "cpu_pct", name: "Processor", unit: "%", icon: "i-chip", max: 100 },
+  { id: "ram_pct", name: "Memory", unit: "%", icon: "i-memory", max: 100 },
+  { id: "net_in_mbps", name: "Network in", unit: "Mbit/s", icon: "i-net" },
+  { id: "net_out_mbps", name: "Network out", unit: "Mbit/s", icon: "i-net" },
+  { id: "temp_c", name: "Drive heat", unit: "°C", icon: "i-temp" },
+];
+const RANGES: { id: VitalsRange; label: string; hint: string }[] = [
+  { id: "24h", label: "24 H", hint: "The last 24 hours" },
+  { id: "7d", label: "7 D", hint: "The last 7 days" },
+  { id: "30d", label: "30 D", hint: "The last 30 days" },
+];
+
+function Trends({ m, now }: { m: M; now: number }) {
+  const [range, setRange] = useState<VitalsRange>("24h");
+  const [series, setSeries] = useState<SeriesName>("cpu_pct");
+  const [doc, setDoc] = useState<{ state: "loading" } | { state: "ok"; v: Vitals } | { state: "none" } | { state: "error"; words: string }>({ state: "loading" });
+  useEffect(() => {
+    let live = true;
+    setDoc({ state: "loading" });
+    api()
+      .vitals(m.name, range)
+      .then(
+        (v) => live && setDoc({ state: "ok", v }),
+        (e) => live && setDoc(e instanceof ApiError && e.status === 404 ? { state: "none" } : { state: "error", words: e instanceof ApiError ? e.words : "The trends couldn't be read." }),
+      );
+    return () => {
+      live = false;
+    };
+  }, [m.name, range]);
+  const s = SERIES.find((x) => x.id === series)!;
+  const pts = doc.state === "ok" ? doc.v.series[series] : undefined;
+  const last = pts?.filter((p) => p[1] !== null).at(-1);
+  return (
+    <section className="panel vt-trends" title="One trend chart: pick the series and the range">
+      <h2 className="ph">
+        <span>
+          <Icon id="i-uptime" size={16} />
+          TRENDS
+        </span>
+        <span className="seg" role="radiogroup" aria-label="The range the trend shows">
+          {RANGES.map((r) => (
+            <span key={r.id}>
+              <input type="radio" name="vt-range" id={`vt-r-${r.id}`} checked={range === r.id} onChange={() => setRange(r.id)} title={r.hint} />
+              <label htmlFor={`vt-r-${r.id}`} title={r.hint}>
+                {r.label}
+              </label>
+            </span>
+          ))}
+        </span>
+      </h2>
+      <span className="seg vt-series" role="radiogroup" aria-label="Which trend">
+        {SERIES.map((x) => (
+          <span key={x.id}>
+            <input type="radio" name="vt-s" id={`vt-s-${x.id}`} checked={series === x.id} onChange={() => setSeries(x.id)} title={`Show the ${x.name.toLowerCase()} trend`} />
+            <label htmlFor={`vt-s-${x.id}`} title={`Show the ${x.name.toLowerCase()} trend`}>
+              {x.name}
+            </label>
+          </span>
+        ))}
+      </span>
+      {doc.state === "ok" && pts ? (
+        <div className="vt-ch">
+          <div className="vt-chh">
+            <span className="k">
+              <Icon id={s.icon} size={16} />
+              {s.name}
+            </span>
+            <b title={last ? `The newest reading, ${when(last[0], now)}` : "No reading in this range"}>{last ? `${last[1]} ${s.unit}` : "·"}</b>
+          </div>
+          <Trend name={s.name} unit={s.unit} points={pts} max={s.max} now={now} />
+        </div>
+      ) : (
+        <div className="vt-none" title={doc.state === "none" ? "This server doesn't keep trends for the page yet. Planned." : undefined}>
+          {doc.state === "loading" && <span>Reading…</span>}
+          {doc.state === "none" && (
+            <>
+              <span>Trends aren't kept on this server yet.</span>
+              <Planned hint="Planned: the board's trend history (GET /api/vitals)" />
+            </>
+          )}
+          {doc.state === "error" && <span>{doc.words}</span>}
+          {doc.state === "ok" && <span>This server doesn't keep the {s.name.toLowerCase()} trend.</span>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function VitalsTab({ b, m, now }: { b: Board; m: M; now: number }) {
+  const gs = gauges(m);
+  const hot = gs.filter((g) => g.shape === "warn");
+  const r = m.readings;
+  const old = !r || stale(r.at, r.max_age_s, now);
+  const apps = b.apps.filter((t) => t.installed && (t.machine ?? b.server.name) === m.name && t.measured?.ram_bytes);
+  const hungry = [...apps].sort((a, z) => (z.measured!.ram_bytes ?? 0) - (a.measured!.ram_bytes ?? 0))[0];
+  const watching = b.needs_you.filter((n) => n.machine === m.name).length;
+  const grafana = b.apps.find((t) => t.id === "monitoring" && t.installed);
+  return (
+    <>
+      <div className="stage vt-stage" role="group" aria-label={`${m.name}'s vital signs as four gauges`}>
+        <div className="tilt">
+          <div className="vt-gauges">
+            {gs.map((g) => (
+              <div key={g.key} className={`vt-g${g.fig === null || old ? " q" : ""}${g.shape === "warn" ? " warn" : ""}`} title={g.hint}>
+                <span className="over">
+                  <Icon id={g.icon} size={16} />
+                  {g.name}
+                </span>
+                <svg className="vt-ring" viewBox="0 0 180 196" role="img" aria-label={g.fig === null ? `${g.name}: not measured` : `${g.name}: ${g.fig} ${g.unit} ${g.sub.toLowerCase()}`}>
+                  <path className="g-beam vt-cone" d="M32 178H148L170 30H10z" />
+                  <ellipse className="vt-em" cx="90" cy="178" rx="58" ry="10" />
+                  <circle className="ring-track ring-cells" cx="90" cy="88" r="58" pathLength="200" strokeDasharray="8 2" strokeDashoffset="-1" transform="rotate(-90 90 88)" />
+                  {g.fig !== null && <circle className="ring-done ring-cells" cx="90" cy="88" r="58" pathLength="200" strokeDasharray={ring(g.cells)} strokeDashoffset="-1" transform="rotate(-90 90 88)" />}
+                  <text className="vt-fig" x="90" y="96">
+                    {g.fig ?? "·"}
+                    <tspan className="vt-u">{g.fig === null ? "" : g.unit}</tspan>
+                  </text>
+                  <text className="vt-sub" x="90" y="116">
+                    {g.sub}
+                  </text>
+                </svg>
+                <State shape={old && g.fig !== null ? "unknown" : g.shape} word={old && g.fig !== null ? `read ${ago(r!.at, now)}` : g.word} />
+                <span className="vt-s">{g.s}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="st-top">
+          <span className="over" title="Whose vitals these are">
+            {[m.name.toUpperCase(), m.hardware?.cpu ? `${m.hardware.cpu} CORES` : "", m.hardware?.ram_gb ? `${m.hardware.ram_gb} GB` : ""].filter(Boolean).join(" · ")}
+          </span>
+          <p className={`verdict${old ? " q" : hot.length ? " warn" : ""}`} role="status" title="The four gauges' one status line: the worst of them">
+            {!r ? "NOT MEASURED" : old ? `NOT READ FOR ${ago(r.at, now).replace(" ago", "").toUpperCase()}` : hot.length ? `${hot.map((g) => g.name.toUpperCase()).join(", ")} HIGH` : "VITALS NOMINAL"}
+          </p>
+          {r && <Fresh at={r.at} now={now} />}
+        </div>
+        <span className="h-scan" aria-hidden="true" />
+        <span className="h-edge" aria-hidden="true" />
+      </div>
+      <Trends m={m} now={now} />
+      <div className="vt-row2">
+        <section className="panel" title="Watts now, and the month's cost as an estimate at your price per kWh. Planned.">
+          <h2 className="ph">
+            <span>
+              <Icon id="i-power" size={16} />
+              POWER
+            </span>
+            <Planned hint="Planned: energy (IA.md, item 9)" />
+          </h2>
+          <div className="rd">
+            <span className="v q">·</span>
+            <span className="s">not measured yet</span>
+          </div>
+        </section>
+        {hungry ? (
+          <a className="panel vt-link" href={href("app", "", hungry.id)} title={`The app using the most memory on ${m.name}: ${hungry.job} (${hungry.app}). Opens its page.`}>
+            <h2 className="ph">
+              <span>
+                <Icon id="i-supply" size={16} />
+                HUNGRIEST
+              </span>
+            </h2>
+            <div className="rd">
+              <span className="v m">{hungry.job}</span>
+              <span className="s">{gb(hungry.measured!.ram_bytes!)} GB of memory</span>
+            </div>
+          </a>
+        ) : (
+          <section className="panel" title="No app's memory use is measured yet">
+            <h2 className="ph">
+              <span>HUNGRIEST</span>
+            </h2>
+            <div className="rd">
+              <span className="v q">·</span>
+              <span className="s">nothing measured</span>
+            </div>
+          </section>
+        )}
+        <a className="panel vt-link" href="#settings" title="The watches: what raises an alert, and its line (disk full, heat, backup age). They are set in Settings › Notifications.">
+          <h2 className="ph">
+            <span>
+              <Icon id="i-alert" size={16} />
+              WATCHES
+            </span>
+          </h2>
+          <div className="rd">
+            <span className={`v m${watching ? " w" : ""}`}>{watching ? `${watching} needs you` : "all quiet"}</span>
+            <span className="s">opens Settings</span>
+          </div>
+        </a>
+        {grafana?.open ? (
+          <a className="vt-graf" href={grafana.open.url} title={`Grafana, the lab's monitoring: every reading in depth. Opens it at ${grafana.open.url}.`} rel="noreferrer">
+            <Icon id="i-gauge" />
+            <span>
+              <b>GRAFANA</b>
+              <State shape="ok" word="installed" />
+            </span>
+            <Icon id="i-open" />
+          </a>
+        ) : (
+          <div className="vt-graf" title="Grafana, the lab's monitoring, isn't installed: Monitoring in Supply adds it">
+            <Icon id="i-gauge" />
+            <span>
+              <b>GRAFANA</b>
+              <State shape="unknown" word="not installed" />
+            </span>
+            <IconLink icon="i-add" href="#supply/add/monitoring" label="Add Monitoring" hint="Add Monitoring (Prometheus and Grafana) from Supply" move="drop" />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Hardware
+
+function cellsOf(pct: number) {
+  return <span className="cells" aria-hidden="true"><i style={{ "--lit": `${Math.max(0, Math.min(100, Math.round(pct / 5) * 5))}%` } as CSSProperties} /></span>;
+}
+
+function HardwareTab({ b, m }: { b: Board; m: M }) {
+  const hw = m.hardware;
+  const r = m.readings;
+  const storage = m.here ? (b.storage as DriveHealth | null) : null;
+  const worst = storage?.drives.find((d) => d.present && DRIVE_SHAPE[d.verdict] !== "ok");
+  const drives = hw?.drives ?? [];
+  return (
+    <>
+      <div className="hw-parts">
+        <section className="panel hw-part" title="The processor: its cores, and how busy they are now">
+          <h2 className="ph">
+            <span>
+              <Icon id="i-chip" size={16} />
+              PROCESSOR
+            </span>
+          </h2>
+          <div className="rd">
+            <span className={`v${hw?.cpu ? "" : " q"}`}>
+              {hw?.cpu ?? "·"}
+              <small>cores</small>
+            </span>
+            {r?.cpu_pct != null && cellsOf(r.cpu_pct)}
+            <span className="s">{r?.cpu_pct != null ? `${r.cpu_pct} % busy` : "not measured"}</span>
+          </div>
+          <a className="hw-go" href={href("machine", "vitals", m.name)} title="Vitals: how busy, over time">
+            <Icon id="i-gauge" size={16} />
+            VITALS
+          </a>
+        </section>
+        <section className="panel hw-part" title="The memory: how much, and how much is in use">
+          <h2 className="ph">
+            <span>
+              <Icon id="i-memory" size={16} />
+              MEMORY
+            </span>
+          </h2>
+          <div className="rd">
+            <span className={`v${hw?.ram_gb ? "" : " q"}`}>
+              {hw?.ram_gb ?? "·"}
+              <small>GB</small>
+            </span>
+            {r?.ram_pct != null && cellsOf(r.ram_pct)}
+            <span className="s">{r?.ram_pct != null ? `${r.ram_pct} % in use` : "not measured"}</span>
+          </div>
+          <a className="hw-go" href="#supply" title="Supply › Installed: the apps, and what each uses">
+            <Icon id="i-supply" size={16} />
+            BY APP
+          </a>
+        </section>
+        <section className={`panel hw-part${worst ? " is-warn" : ""}`} title="The drives in this box, and their verdicts in Data › Drives">
+          <h2 className="ph">
+            <span>
+              <Icon id="i-drive" size={16} />
+              DRIVES
+            </span>
+            {worst && <State shape={DRIVE_SHAPE[worst.verdict]} word={worst.words} />}
+          </h2>
+          <div className="rd">
+            <span className={`v${drives.length ? "" : " q"}`}>
+              {drives.length || "·"}
+              <small>drives</small>
+            </span>
+            <span className="s">{drives.map((d) => `${d.device} ${sizeWords(d.size_bytes)}`).join(" · ") || "not read"}</span>
+          </div>
+          <a className="hw-go" href="#data" title="Data › Drives: every drive's health">
+            <Icon id="i-storage" size={16} />
+            DATA
+          </a>
+        </section>
+        <section className="panel hw-part" title="The graphics card, and who it is given to: the desktop, apps or virtual machines">
+          <h2 className="ph">
+            <span>
+              <Icon id="i-gpu" size={16} />
+              GRAPHICS CARD
+            </span>
+            {!hw?.gpu && <State shape="unknown" word="none" />}
+          </h2>
+          <p className="hw-no small">{hw?.gpu ? `${hw.gpu_name ?? "A graphics card"}${hw.gpu_vram_gb ? ` · ${hw.gpu_vram_gb} GB` : ""}` : hw ? "No graphics card for it here" : "Not read"}</p>
+          <div className="seg hw-owner" title="Who the card is given to: the desktop, apps or virtual machines (Settings › Graphics on a desktop; hw vfio). Planned on this page.">
+            <span className="chip">Desktop</span>
+            <span className="chip">Apps</span>
+            <span className="chip">VMs</span>
+          </div>
+          <Planned hint="Planned: giving the card to apps, games or VMs from this page (IA.md, item 18)" />
+        </section>
+      </div>
+      <section className="panel" title="System versions: each update keeps a snapshot to go back to. Pin one, or boot the previous one. Planned on this page.">
+        <h2 className="ph">
+          <span>
+            <Icon id="i-rollback" size={16} />
+            SYSTEM VERSIONS
+          </span>
+          <Planned hint="Planned: the snapshots and going back, on this page (IA.md, item 11). Every update already snapshots, checks and rolls back by itself." />
+        </h2>
+        <p className="small muted">Every update takes a snapshot, checks the system came back, and rolls back by itself if not.</p>
+      </section>
+      <div className="hw-row">
+        <span className="hw-dim" title="A docked phone at the server: its battery, signal and the apps it holds. Planned.">
+          <Icon id="i-phone" size={20} />
+          no docked phone
+        </span>
+        <Planned hint="Planned: the home phone at the server (IA.md, item 22)" />
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Set-up
+
+function SetUp({ m }: { m: M }) {
+  return (
+    <section className="panel" title={`${m.name}'s Set-up: does the plan fit, and what is still off?`}>
+      <h2 className="ph">
+        <span>SET-UP</span>
+      </h2>
+      <ol className="flow">
+        <li title="Pick what this server runs: Supply › Browse shows what fits">
+          <span>
+            <span className="num">1</span>
+            <Icon id="i-supply" size={20} />
+          </span>
+          Pick what it runs
+          <a href="#supply/browse" title="Open Supply › Browse">
+            Supply › Browse
+          </a>
+        </li>
+        <li title="Pick where the nightly backup goes. Planned on this page; today it is set at the server.">
+          <span>
+            <span className="num">2</span>
+            <Icon id="i-backup" size={20} />
+          </span>
+          Pick a backup place
+          <Planned />
+        </li>
+        <li title="Pair your phone, so BRODEC reaches this server from anywhere. Planned on this page.">
+          <span>
+            <span className="num">3</span>
+            <Icon id="i-phone" size={20} />
+          </span>
+          Pair a phone
+          <Planned />
+        </li>
+      </ol>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- the page
+
+export function Machine({ name, tab }: { name: string; tab: string }) {
+  const { board, now } = useLab();
+  const t = now();
+  const doc = board.state === "ok" ? board.doc : null;
+  const m = useMemo(() => doc?.machines.find((x) => x.name === name) ?? null, [doc, name]);
+  if (board.state === "loading") return null;
+  if (!doc)
+    return (
+      <div className="unreach">
+        <Icon id="i-offline" size={40} />
+        <p>{board.state === "error" ? board.error.words : ""} The page tries again every 15 seconds.</p>
+      </div>
+    );
+  if (!m)
+    return (
+      <div className="unreach" title="No machine of this lab has that name">
+        <Icon id="s-unk" size={40} />
+        <p>No machine called {name} is in this lab.</p>
+      </div>
+    );
+  const setup = tab === "setup" || (tab === "" && doc.status.state === "setup" && m.here);
+  return (
+    <>
+      <Tabs place="machine" id={m.name} label={`${m.name}'s tabs`} />
+      {tab === "vitals" ? <VitalsTab b={doc} m={m} now={t} /> : tab === "hardware" ? <HardwareTab b={doc} m={m} /> : setup ? <SetUp m={m} /> : <Overview b={doc} m={m} now={t} />}
+    </>
+  );
+}

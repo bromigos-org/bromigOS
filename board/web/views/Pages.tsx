@@ -6,6 +6,7 @@ import { useLab } from "@/lib/lab";
 import { PLACE_NAME, TABS, type Place } from "@/lib/routes";
 import { Sheet, Tabs } from "@/shell/Shell";
 import { Home } from "./Home";
+import { Machine } from "./Machine";
 
 const PLACE_ICON: Record<Place, string> = {
   home: "i-home",
@@ -112,7 +113,11 @@ export function Pages() {
         </>
       );
     case "machine":
-      return <Placeholder place="machine" id={route.id} />;
+      return (
+        <Page label={`${route.id}`}>
+          <Machine name={route.id ?? ""} tab={route.tab} />
+        </Page>
+      );
     case "app":
       return (
         <Page label={`App ${route.id}`}>

@@ -5,5 +5,4 @@ next-env.d.ts
 test-results/
 playwright-report/
 public/fonts/
-public/holo/
 public/fixtures/

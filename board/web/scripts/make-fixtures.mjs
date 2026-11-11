@@ -70,13 +70,40 @@ const machine = (name, kind, extra = {}) => ({
   readings: { cpu_pct: 12, ram_pct: 31, temp_c: 36, at: NOW - 20 * SEC, max_age_s: 45 },
   apps: 0, ...extra,
 });
-const MYSERVER = machine("myserver", "server", { updates: { count: 2, security: false }, apps: APPS.length, readings: { cpu_pct: 23, ram_pct: 49, temp_c: 38, at: NOW - 20 * SEC, max_age_s: 45 } });
+const HW = { cpu: 4, ram_gb: 16, gpu: false, gpu_name: null, gpu_vram_gb: 0, drives: [
+  { device: "nvme0", model: "Samsung SSD 970 EVO Plus 500GB", size_bytes: 500107862016, kind: "nvme" },
+  { device: "sda", model: "WDC WD10EZEX", size_bytes: 1000204886016, kind: "ata" },
+  { device: "sdb", model: "WDC WD10EZEX", size_bytes: 1000204886016, kind: "ata" }] };
+const MYSERVER = machine("myserver", "server", { updates: { count: 2, security: false }, apps: APPS.length, hardware: HW,
+  readings: { cpu_pct: 23, ram_pct: 49, temp_c: 38, ram_used_bytes: 7.8 * GB, ram_total_bytes: 16 * GB, load1: 0.9, net_in_mbps: 6, net_out_mbps: 28, at: NOW - 20 * SEC, max_age_s: 45 } });
+
+// the pass-through documents, in their commands' own keys (docs/storage.md, lib/bromigos_backups.py, bromigos-server)
+const drive = (device, model, kind, verdict, words, summary) => ({ key: `${kind}-${model.replace(/\W+/g, "_")}-${device}`, device, model, kind, present: true, verdict, words, summary });
+const STORAGE = { schema: 1, checked_at: NOW - 12 * MIN, history: "/var/lib/bromigos/drives/history.json", rules: {}, drives: [
+  drive("nvme0", "Samsung SSD 970 EVO Plus 500GB", "nvme", "healthy", "healthy", "nothing to report"),
+  drive("sda", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report"),
+  drive("sdb", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report")] };
+const STORAGE_WORSE = { ...STORAGE, drives: STORAGE.drives.map((d) => (d.device === "sdb" ? { ...d, verdict: "worse", words: "getting worse", summary: "reallocated sectors rose from 0 to 8 in the last 3 days" } : d)) };
+const S = (ms) => Math.round(ms / 1000);
+const BACKUPS = { schema: 1, ok: true, server: true, configured: true, to: "s3:backups.example.org/myserver", destination: {},
+  health: { state: "ok", verdict: "Backups are healthy: the last copy was made today and checks out.", problems: [] },
+  last_backup: { phase: "ok", ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 }, last_success: { ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 },
+  last_check: null, last_check_passed: null, last_read_back: null, last_test: { phase: "ok", ts: S(NOW - 12 * D) }, last_test_passed: { ts: S(NOW - 12 * D) },
+  snapshots: { count: 41 }, drives: [], restore: null, running: null, checked_at: "2026-11-10T22:01:40Z", now: S(NOW) };
+const UPDATES = { hold: null, waiting: null, phase: "ok", started: "2026-11-10 03:18", finished: "2026-11-10 03:21", finished_ts: S(Date.UTC(2026, 10, 10, 11, 21)),
+  pre: 40, post: 41, packages: 12, reason: "", kernel: false, auto: true, mode: "auto", window: "03:00-05:00", channel: "stable", notify: true,
+  cluster_reboots: false, timer: "active", rollbacks: [] };
+
+// a machine's trends, a reading every 15 minutes for a day (GET /api/vitals)
+const wave = (base, amp, k) => Array.from({ length: 97 }, (_, i) => [NOW - 24 * H + i * 15 * MIN, Math.round((base + amp * Math.sin(i / k) + (amp / 3) * Math.sin(i / 2.3)) * 10) / 10]);
+const VITALS = { "myserver/24h": { schema: 1, machine: "myserver", range: "24h", step_s: 900, at: NOW - 20 * SEC,
+  series: { cpu_pct: wave(22, 9, 9), ram_pct: wave(48, 4, 14), net_in_mbps: wave(8, 5, 6), net_out_mbps: wave(24, 12, 7), temp_c: wave(36, 3, 16) } } };
 
 const board = (over = {}) => ({
   schema: 1, at: NOW - 20 * SEC, max_age_s: 45, lab, server: { name: "myserver", kind: "server", roles: ["home", "media"] },
   status: { state: "ok", words: "Everything is running.", checked_at: NOW - 20 * SEC },
   machines: [MYSERVER], needs_you: [], fixed: [], apps: APPS,
-  storage: null, backups: null, updates: null, ups: null,
+  storage: STORAGE, backups: BACKUPS, updates: UPDATES, ups: null,
   ...over,
 });
 
@@ -150,7 +177,7 @@ const F = {
     signin: { code: "KX7-42Q", session: signedIn() }, activity: [backupDone] },
   unreachable: { about: "The page loaded but the board service doesn't answer.", door: { $status: 503, $error: { code: "unavailable", words: "The board service isn't answering." } },
     session: { $status: 503 }, board: { $status: 503 }, activity: [] },
-  healthy: { about: "Signed in, one server, everything running, nothing running now.", door: door(), session: signedIn(), board: board({ fixed: [] }), activity: [backupDone, rolledBack] },
+  healthy: { about: "Signed in, one server, everything running, nothing running now; a day of trends.", door: door(), session: signedIn(), board: board({ fixed: [] }), activity: [backupDone, rolledBack], vitals: VITALS },
   running: { about: "Signed in; a backup runs and finishes while you watch (the stream).", door: door(), session: signedIn(), board: board(),
     activity: [backupRunning, backupDone],
     stream: [
@@ -160,7 +187,7 @@ const F = {
     ] },
   "needs-you": { about: "Signed in; a drive is getting worse; a drive replacement asks you; Photos' update was put back.", door: door(), session: signedIn(3),
     board: board({ status: { state: "needs-you", words: "1 thing needs you.", checked_at: NOW - MIN },
-      machines: [{ ...MYSERVER, state: "warn", state_word: "needs you" }], needs_you: [DRIVE_ALERT],
+      machines: [{ ...MYSERVER, state: "warn", state_word: "needs you" }], needs_you: [DRIVE_ALERT], storage: STORAGE_WORSE,
       fixed: [{ id: rolledBack.id, machine: "myserver", words: "Photos' update was put back", at: rolledBack.ended_at }] }),
     activity: [askReplace, rolledBack, backupDone] },
   alert: { about: "Signed in; a drive is getting worse, and no job asks yet: the strip shows the alarm.", door: door(), session: signedIn(),
