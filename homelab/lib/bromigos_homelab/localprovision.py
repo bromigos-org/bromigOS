@@ -611,7 +611,7 @@ def install_quadlet(host, it):
             host.store._podman(name, host.store.get(name))      # a key saved before Podman's driver was set up
     host.mkdir(APPS + "/" + it["id"], 0o750)
     if it["id"] in DATABASES:
-        database_hook(host, it["id"])
+        database_hook(host, it["id"])                    # its database made safe before every backup
     prepare = PREPARE.get(it["id"])
     if prepare:
         prepare(host, it)
@@ -742,14 +742,16 @@ def step_monitoring(host, it):
     enable(host, ["prometheus.service", "grafana.service"], restart=True)
 
 
+DB_HOOKS = "etc/bromigos/backup-databases.d"
 # The lab's own nightly backup, on a machine that isn't a bromigOS Server (a Server's own covers
-# the apps). --one-file-system keeps it to the disk each path is on: /srv/data (the data disks,
-# read again as /srv/apps) and /srv/backups (other machines' backups, and this one's own
-# repository by default) are left out. So every folder on a disk of its own is named: /srv/apps,
-# a mount of the data disks' apps subvolume on a server that has them. A path that isn't there is
-# left off the command line (restic 0.19 fails a run that names one). The apps' databases are copied whole first (bromigos_backups.copy_databases, into
-# /var/lib/bromigos; one that fails doesn't stop the backup, its file is still read as it is),
-# and the unit fails, after the backup, when it doesn't hold the apps' data or a copy failed
+# the apps): `bromigos lab backups job` (labbackup.py, which needs nothing but bromigos-lab). It
+# copies the apps' databases whole, runs restic over these paths with --one-file-system, looks
+# into the new backup for the apps' folders, applies the keep rules, and keeps how it went in
+# /var/lib/bromigos/lab/backup.json, where `bromigos alerts` reads it. --one-file-system keeps
+# restic to the disk each path is on: /srv/data (the data disks, read again as /srv/apps) and
+# /srv/backups (other machines' backups, and this one's own repository by default) are left out.
+# So every folder on a disk of its own is named: /srv/apps, a mount of the data disks' apps
+# subvolume on a server that has them
 BACKUP_PATHS = ("/etc", "/srv", "/" + APPS, "/var/lib/bromigos", AD.VAULT_OLD)
 BACKUP_UNIT = """[Unit]
 Description=Back up this server's apps and settings (restic)
@@ -760,25 +762,108 @@ Type=oneshot
 LoadCredentialEncrypted={cred}
 Environment=RESTIC_PASSWORD_FILE=%d/{cred}
 Environment=RESTIC_REPOSITORY={repo}
-ExecStartPre=/bin/sh -c 'restic cat config >/dev/null 2>&1 || restic init'
-ExecStartPre=-/usr/lib/bromigos/bin/bromigos-lab backups copy-databases
-ExecStart=/bin/sh -c 'for p in {paths}; do [ -e "$$p" ] && set -- "$$@" "$$p"; done; exec /usr/bin/restic backup --one-file-system --exclude-caches "$$@"'
-ExecStartPost=/usr/lib/bromigos/bin/bromigos-lab backups holds
-ExecStartPost=/usr/bin/restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+ExecStart=/usr/lib/bromigos/bin/bromigos-lab backups job {paths}
 """
-# The apps whose databases are SQLite files: each gets a hook, so every backup copies them whole
-# while the app runs (lib/bromigos_backups.py, copy_databases). Immich's postgres makes its own
-# nightly dump into its library folder (library/backups), which the backup holds
-DB_HOOKS = "etc/bromigos/backup-databases.d"
-DATABASES = {"passwords": ("passwords (Vaultwarden)", (AD.VAULT + "/db.sqlite3", AD.VAULT_OLD + "/db.sqlite3")),
-             "documents": ("documents (Paperless-ngx)", ("/" + APPS + "/documents/data/db.sqlite3",))}
+# Every app that keeps a database gets a hook when it is installed (and at the next apply on a
+# server set up before its hook was known): /etc/bromigos/backup-databases.d/<item>.toml, which
+# every backup of this machine reads first (labbackup.py, copy_databases: bromigOS Server's
+# nightly backup, the Go Bag and the lab's own).
+#   sqlite   the app's SQLite files, under its own folder. Each one there is copied whole with
+#            SQLite's online backup while the app runs. A * matches inside one folder: an app
+#            with several databases has each copied
+#   own      the app makes its own database backups, as files the backup holds. Nothing is
+#            copied; the newest must be younger than own_days, or the backup says so
+#   note     why, for the hook's comment
+# tests/test_local_provision.py holds this to the catalogue: every item with a `database` row
+# in its [[item.data]] has an entry.
+_A = "/" + APPS
+_ARR = "{0}.db and logs.db. {1} also keeps zipped backups of its own in config/Backups, which the backup holds as files."
+DATABASES = {
+    "passwords": {"sqlite": [AD.VAULT + "/db.sqlite3", AD.VAULT_OLD + "/db.sqlite3"],
+                  "note": "The vault's SQLite database, in whichever of its two folders the vault is."},
+    "documents": {"sqlite": [_A + "/documents/data/db.sqlite3"]},
+    "photos": {"own": [_A + "/photos/library/backups/*"], "own_days": 3,
+               "note": "Immich's database is PostgreSQL, whose files can't be copied while it runs. Immich dumps it "
+                       "itself every night into its library folder (library/backups; Administration, Settings, "
+                       "Backup), and the backup holds those dumps. This hook checks that the newest is recent."},
+    "plex": {"own": [_A + "/plex/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/"
+                     "com.plexapp.plugins.library.db-20*"], "own_days": 10,
+             "note": "Plex's database is SQLite with Plex's own extensions, which only Plex reads safely. Plex backs it "
+                     "up itself every three days, beside the database (Settings, Scheduled Tasks), and the backup "
+                     "holds those files. This hook checks that the newest is recent."},
+    "sonarr": {"sqlite": [_A + "/sonarr/config/*.db"], "note": _ARR.format("sonarr", "Sonarr")},
+    "radarr": {"sqlite": [_A + "/radarr/config/*.db"], "note": _ARR.format("radarr", "Radarr")},
+    "lidarr": {"sqlite": [_A + "/lidarr/config/*.db"], "note": _ARR.format("lidarr", "Lidarr")},
+    "prowlarr": {"sqlite": [_A + "/prowlarr/config/*.db"], "note": _ARR.format("prowlarr", "Prowlarr")},
+    "bazarr": {"sqlite": [_A + "/bazarr/config/db/*.db"]},
+    "jellyfin": {"sqlite": [_A + "/jellyfin/config/data/*.db"],
+                 "note": "Every database in Jellyfin's data folder (jellyfin.db, and library.db on an older Jellyfin)."},
+    "seerr": {"sqlite": [_A + "/seerr/config/db/*.sqlite3"]},
+    "tautulli": {"sqlite": [_A + "/tautulli/config/tautulli.db"]},
+    "navidrome": {"sqlite": [_A + "/navidrome/data/navidrome.db"]},
+    "audiobookshelf": {"sqlite": [_A + "/audiobookshelf/config/absdatabase.sqlite"],
+                       "note": "Audiobookshelf also makes daily backups of its own in metadata/backups, which the "
+                               "backup holds as files."},
+    "uptime": {"sqlite": [_A + "/uptime/data/kuma.db"]},
+    "home-automation": {"sqlite": [_A + "/home-automation/config/home-assistant_v2.db"],
+                        "note": "The recorder's history. Home Assistant's settings are plain files beside it."},
+    "pelican-panel": {"sqlite": [_A + "/pelican-panel/data/database/*.sqlite"]},
+    "beets": {"sqlite": [_A + "/beets/config/musiclibrary.blb"]},
+    "pinchflat": {"sqlite": [_A + "/pinchflat/config/db/*.db"]},
+    "autoscan": {"sqlite": [_A + "/autoscan/config/autoscan.db"], "note": "Its list of folders waiting for a rescan."},
+    "slskd": {"sqlite": [_A + "/slskd/app/data/*.db"]},
+}
+HOOK_HEAD = "# bromigos lab provision --local: "
+
+
+def database_what(it):
+    """An app as a person knows it, for the backup's words: photos (Immich)."""
+    job = it.get("job") or it["name"]
+    return f"{job[:1].lower()}{job[1:]} ({it['app']})" if it.get("app") and job != it["app"] else it["name"]
+
+
+def database_hook_text(it):
+    d = DATABASES[it["id"]]
+    lines = [HOOK_HEAD + database_what(it),
+             "# Its database, made safe before every backup of this server (docs/server.md, \"Backups\").",
+             "# The engine writes this file again at each apply."]
+    words = d.get("note", "").split()
+    while words:                                     # the note, as comment lines of about 100 columns
+        line = "#"
+        while words and len(line) + 1 + len(words[0]) <= 100:
+            line += " " + words.pop(0)
+        lines.append(line)
+    lines.append(f"what = {json.dumps(database_what(it))}")
+    if d.get("sqlite"):
+        lines.append("sqlite = [" + ", ".join(json.dumps(p) for p in d["sqlite"]) + "]")
+    if d.get("own"):
+        lines.append("own = [" + ", ".join(json.dumps(p) for p in d["own"]) + "]")
+        lines.append(f"own_days = {d.get('own_days', 3)}")
+    return "\n".join(lines) + "\n"
 
 
 def database_hook(host, item):
-    what, paths = DATABASES[item]
-    host.write(f"{DB_HOOKS}/{item}.toml",
-               f"# bromigos lab provision --local: {what}'s database, copied whole before every backup\n"
-               f"what = {json.dumps(what)}\nsqlite = [{', '.join(json.dumps(p) for p in paths)}]\n")
+    host.write(f"{DB_HOOKS}/{item}.toml", database_hook_text(host.cat[item]))
+
+
+def forget_database_hook(path):
+    """An app that left: its hook goes with it (only a file the engine wrote)."""
+    try:
+        if path.read_text().startswith(HOOK_HEAD):
+            path.unlink()
+    except OSError:
+        pass
+
+
+def sync_database_hooks(host, installed):
+    """Each installed app that keeps a database has its hook, whatever engine set the app up:
+    a server from before a hook was known gets it here, at its next apply. A hook of the
+    engine's for an app that isn't installed any more is removed."""
+    for i in DATABASES:
+        if i in installed:
+            database_hook(host, i)
+        else:
+            forget_database_hook(host.path(f"{DB_HOOKS}/{i}.toml"))
 
 
 def step_backups(host, it):
@@ -1434,6 +1519,11 @@ def sab_servers(host, http):
 def fingerprint(it, host):
     doc = {k: it[k] for k in ("install", "images", "enable", "secrets", "ports")}
     doc["settings"] = host.settings.get(it["id"]) or {}
+    # the recipe's own revision (the catalogue's `version`): raised when what the engine writes
+    # for the item changed, so a server that has it gets the change at its next apply. Left out
+    # at 1, so an item nobody revised keeps the fingerprint it had
+    if it.get("version", 1) != 1:
+        doc["recipe"] = it["version"]
     if "quadlet" in it["install"] or it["id"] in ("caddy", "start-page", "den-tv", "litellm"):
         doc["selected"] = sorted(host.selected)
     if it["id"] in ("models", "litellm"):
@@ -1561,6 +1651,7 @@ class Runner:
             self.stage("Waiting for the internet")
             host.sleep(self.poll)
             online = host.online()
+        sync_database_hooks(host, {i for i, r in self.state["items"].items() if r.get("state") == "done"})
         if any(i in host.selected for i in CATEGORIES):
             try:
                 wire_media(host)

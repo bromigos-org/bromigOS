@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | apps [list [--all] | show ID | add ID… [--plan] | remove ID [--delete-data] [--plan] | restart ID | logs ID [-f] | budget [ID…]] [--json] | deploy ID | restart ID | logs ID | backups [list | show [ID] [PATH] | restore [ID] [PATH…] [--to DIR | --in-place [--apply]] | test [--all] | run | check | go-bag [status | drives | setup [DRIVE] [--erase] | run | forget]] [--from go-bag] [--json] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | apps [list [--all] | show ID | add ID… [--plan] | remove ID [--delete-data] [--plan] | restart ID | logs ID [-f] | budget [ID…]] [--json] | deploy ID | restart ID | logs ID | backups [list | show [ID] [PATH] | restore [ID] [PATH…] [--to DIR | --in-place [--apply]] | test [--all] | run | check | go-bag [status | drives | setup [DRIVE] [--erase] | run | forget] | copy-databases | holds [PATH…] | job PATH…] [--from go-bag] [--json] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
 # bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab provision; bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.0.2.20; bromigos lab network join; bromigos lab media get "Cowboy Bebop" --seasons all --specials; bromigos lab apps; sudo bromigos lab apps add photos; sudo bromigos lab apps remove photos; bromigos lab backups; bromigos lab backups restore /etc/fstab; bromigos lab link
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
@@ -131,6 +131,15 @@
                                     itself and ends "Safe to unplug" (docs/server.md, "The Go Bag")
   bromigos lab backups list | show | restore | test --from go-bag
                                     the same commands, reading the Go Bag drive
+  bromigos lab backups copy-databases
+                                    every app's database made safe for a backup of your own: copied
+                                    whole while the app runs (the nightly backup does it itself)
+  bromigos lab backups holds [PATH…]
+                                    for a backup job of your own: does the newest backup in
+                                    $RESTIC_REPOSITORY hold these folders (none: every app's)?
+  bromigos lab backups job PATH…    the lab's own nightly backup on a machine that isn't a bromigOS
+                                    Server (bromigos-lab-backup.service runs it): the databases, restic
+                                    over these folders, a look into the new backup, the keep rules
   bromigos lab apps [list] [--all] [--json]
                                     bromigOS Server's apps: each one's state, memory, data and page
   bromigos lab apps show ID | add ID… [--plan] | remove ID [--delete-data] [--plan] | restart ID
@@ -524,6 +533,9 @@ def main(argv):
     if cmd == "power":
         from bromigos_homelab import power
         return power.main(rest)
+    if cmd == "backups" and rest[:1] and rest[0] in ("copy-databases", "holds", "job"):
+        from bromigos_homelab import labbackup                   # the lab's own, on any machine: labbackup.py
+        return labbackup.main(rest)
     if cmd == "backups":                                         # bromigOS Server's own: lib/bromigos_backups.py
         try:
             import bromigos_backups

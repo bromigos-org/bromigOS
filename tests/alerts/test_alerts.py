@@ -312,6 +312,60 @@ class Checks(Machine):
         self.m.write("backup-units", "")
         self.assertEqual(states(self.m.run())["backup.restic"], "skipped")
 
+    def lab_backup(self, state=None, unit_state="inactive", timer="active", result="success"):
+        """The lab's own backup on a machine that isn't a Server: its unit, its timer and its record."""
+        unit = "bromigos-lab-backup.service"
+        self.m.write("backup-units", f"{unit} loaded {unit_state} dead Back up this server's apps and settings (restic)\n")
+        self.m.write(f"show/{unit}", f"ActiveState={unit_state}\nResult={result}\nExecMainStatus={0 if result == 'success' else 1}\n"
+                     "Description=Back up this server's apps and settings (restic)\nTriggeredBy=bromigos-lab-backup.timer\n")
+        self.m.write("show/bromigos-lab-backup.timer", f"ActiveState={timer}\nLastTriggerUSec=@{NOW // 1000 - 3600}\n")
+        if state is not None:
+            self.m.rootfile("/var/lib/bromigos/lab/backup.json", json.dumps(state))
+        return {a["id"]: a for a in self.m.run()["alerts"] if a["check"] == "backup.restic"}
+
+    def test_the_labs_own_backup_fails_in_the_servers_words(self):
+        """bromigos-lab-backup.service (bromigos lab provision --local's Backups, on a machine that
+        isn't a Server) keeps a record like the Server's. A failed or late one is raised by the
+        same verdict, in the same words, with the unit's own commands. It used to raise nothing:
+        the check looked for restic* and bromigos-backup* units only."""
+        hour = 3600
+        failed = {"phase": "failed", "at": "2026-10-30T03:40:00-07:00", "ts": NOW / 1000 - hour,
+                  "reason": "the destination can't be reached: Fatal: unable to open config file"}
+        good = {"phase": "ok", "at": "2026-10-29T03:40:00-07:00", "ts": NOW / 1000 - 25 * hour}
+        got = self.lab_backup({"run": failed, "run_ok": good}, unit_state="failed", result="exit-code")
+        self.assertEqual(list(got), ["backup.restic:lab"])
+        lab = got["backup.restic:lab"]
+        self.assertEqual((lab["severity"], lab["title"]), ("needs_you", "The last backup failed"))
+        self.assertEqual(lab["fix"]["commands"], ["journalctl -u bromigos-lab-backup.service -n 50 --no-pager",
+                                                  "sudo systemctl start bromigos-lab-backup.service"])
+        # late: nothing failed, and none has finished for two days
+        late = self.lab_backup({"run": dict(good, ts=NOW / 1000 - 50 * hour)})
+        self.assertEqual([a["title"] for a in late.values()], ["No backup for 50 hours"])
+        self.assertEqual(self.lab_backup({"run": dict(good, ts=NOW / 1000 - 50 * hour)}, timer="inactive"), {},
+                         "its timer was turned off: nothing is late")
+        # an app's database that couldn't be copied whole, and the apps' data left out
+        db = {"name": "documents", "what": "documents (Paperless-ngx)", "path": "/srv/apps/documents/data/db.sqlite3",
+              "ok": False, "reason": "/srv/apps/documents/data/db.sqlite3 couldn't be copied: file is not a database"}
+        self.assertEqual([a["title"] for a in self.lab_backup({"run": dict(good, ts=NOW / 1000 - hour, databases=[db])}).values()],
+                         ["A database wasn't copied for the backup"])
+        left = dict(failed, reason="the backup left out /srv/apps (the apps' data)", missing=["/srv/apps"], snapshot="1234abcd")
+        self.assertIn("The rest is in that backup (1234abcd), but it doesn't count.",
+                      self.lab_backup({"run": left, "run_ok": good})["backup.restic:lab"]["detail"])
+        # healthy: nothing, and never a test restore it doesn't have
+        self.assertEqual(self.lab_backup({"run": dict(good, ts=NOW / 1000 - hour), "first_ok_ts": NOW / 1000 - 90 * 24 * hour}), {})
+        # killed before it could write why: the record says the last one worked, the unit says it failed
+        killed = self.lab_backup({"run": dict(good, ts=NOW / 1000 - hour)}, unit_state="failed", result="signal")
+        self.assertEqual(killed["backup.restic:lab"]["title"], "The last backup failed")
+        self.assertIn("ended with signal before it could say why", killed["backup.restic:lab"]["detail"])
+        # the same record as the Server's own: the same title, detail and note
+        self.m.write("backup-units", "")
+        server = self.server_backup({"run": failed, "run_ok": good})["backup.restic:server"]
+        self.assertEqual((lab["title"], lab["detail"], lab["fix"]["note"]), (server["title"], server["detail"], server["fix"]["note"]))
+
+    def test_the_labs_backup_unit_from_before_its_record_is_raised_too(self):
+        (a,) = self.lab_backup(unit_state="failed", result="exit-code").values()
+        self.assertEqual((a["severity"], a["title"]), ("needs_you", "The last backup failed: bromigos-lab-backup"))
+
     def server_backup(self, state, to="s3:https://s3.example/backups/box"):
         self.m.rootfile("/etc/bromigos/server.toml", f'[backup]\nto = "{to}"\n')
         self.m.rootfile("/var/lib/bromigos/server/backup.json", json.dumps(state))

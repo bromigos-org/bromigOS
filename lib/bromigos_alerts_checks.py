@@ -8,7 +8,8 @@ it instead of working it out again:
   update.restart   core's reboot rules (core/crates/bromigos-core/src/reboot.rs), read the same way
   update.held      bromigos-server's own state (its Arch news hold)
   server.app-data  `bromigos lab app-data status --json`
-  backup.restic    bromigos_backups.health(): the verdict `bromigos lab backups` prints
+  backup.restic    bromigos_backups.health(): the verdict `bromigos lab backups` prints (the lab's
+                   own backup on a machine that isn't a Server is judged by it too)
   fieldkit.finding Field Kit's engine (`fieldkit-engine engine check …`) and the findings a
                    Field Kit stick saved in this install
   game.steam       `bromigos game check --json`
@@ -27,6 +28,10 @@ FIELDKIT_FINDINGS = "/var/lib/bromigos/fieldkit/findings.json"
 SERVER_STATE = "/var/lib/bromigos/server/update.json"
 BACKUP_STATE = "/var/lib/bromigos/server/backup.json"     # bromigos server backup
 SERVER_CONFIG = "/etc/bromigos/server.toml"               # its [backup] to: where the backups go
+# the lab's own backup, on a machine that isn't a Server (bromigos lab provision --local's Backups
+# item; bromigos-lab's labbackup.py keeps its record in the Server's shape)
+LAB_BACKUP_STATE = "/var/lib/bromigos/lab/backup.json"
+LAB_BACKUP_UNIT = "bromigos-lab-backup.service"
 DAY = 86400_000
 
 
@@ -433,7 +438,7 @@ def backup(ctx):
                                fix={"commands": p["commands"], "touches": p["touches"], "from": "bromigos", "root": True,
                                     "note": p["note"]}))
     rc, out, _ = env.run(["systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--type=service",
-                          "restic*", "bromigos-backup*"], timeout=15)
+                          "restic*", "bromigos-backup*", "bromigos-lab-backup*"], timeout=15)
     if rc == 127 and not raw:
         raise Skip("no systemd here")
     units = sorted({line.split()[0] for line in out.splitlines() if line.strip() and line.split()[0].endswith(".service")})
@@ -444,6 +449,38 @@ def backup(ctx):
                               "TriggeredBy"])
         name = unit.removesuffix(".service")
         timer = p.get("TriggeredBy", "").split()
+        if unit == LAB_BACKUP_UNIT and env.read(LAB_BACKUP_STATE):
+            # The lab's own backup keeps a record of each run, in the Server's shape: the same
+            # verdict judges it (bromigos_backups.health), so a failed or late one is raised in
+            # the Server's own words, with this unit's commands
+            import bromigos_backups as B
+            try:
+                lst = json.loads(env.read(LAB_BACKUP_STATE))
+            except ValueError:
+                lst = {}
+            h = B.health("lab", lst if isinstance(lst, dict) else {}, now / 1000,
+                         {"kind": "lab", "path": "", "present": None}, unit=unit)
+            scheduled = bool(timer) and _show(env, timer[0], ["ActiveState"]).get("ActiveState") == "active"
+            said = False
+            for prob in h["problems"]:
+                if prob["id"] == "stale" and not scheduled:      # its timer was turned off: nothing is late
+                    continue
+                said = said or prob["id"] == "failed"
+                found.append(alert("backup.restic", prob["subject"], prob["severity"], prob["title"], prob["detail"], "restic",
+                                   evidence=evidence([h["verdict"], *journal_tail(env, unit, 15)], state=h["state"],
+                                                     problem=prob["id"], unit=unit),
+                                   fix={"commands": prob["commands"], "touches": prob["touches"], "from": "bromigos",
+                                        "root": True, "note": prob["note"]}))
+            if p.get("ActiveState") == "failed" and not said:
+                # it ended before it could write why (killed, or out of memory): systemd's word for it
+                found.append(alert("backup.restic", "lab", "needs_you", "The last backup failed",
+                                   f"{p.get('Description') or unit} ended with {p.get('Result') or 'an error'} before it "
+                                   "could say why. Nothing was copied this time.", "restic",
+                                   evidence=evidence(journal_tail(env, unit), unit=unit, result=p.get("Result", "")),
+                                   fix={"commands": [f"journalctl -u {unit} -n 50 --no-pager", f"sudo systemctl start {unit}"],
+                                        "touches": ["runs the backup again"], "from": "bromigos", "root": True,
+                                        "note": B.READ_FIRST}))
+            continue
         if p.get("ActiveState") == "failed" or p.get("Result") not in (None, "", "success"):
             fix = {"commands": [f"journalctl -u {unit} -n 50 --no-pager", f"sudo systemctl start {unit}"],
                    "touches": [f"runs {unit} again (a backup)"], "from": "bromigos", "root": True,

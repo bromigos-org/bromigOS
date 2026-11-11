@@ -272,7 +272,7 @@ server_data() {     # the checks reach the server on a small disk (no SSH here: 
     "$T" login --name server-data --user tester --password tester --timeout 60 >/dev/null || return 1
     TIMEOUT=2100 run server-data 'echo tester | sudo -S -p "" sh -c "echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest" || exit 1
         sudo mkdir -p /run/fkchecks && sudo mount -o ro /dev/disk/by-label/FKCHECKS /run/fkchecks || exit 1
-        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page passwords=1 move=1'
+        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page passwords=1 dbapp=navidrome dbfile=data/navidrome.db move=1'
 }
 
 step "Field Kit starts (offline): console, Home, engine, offline store" live || true

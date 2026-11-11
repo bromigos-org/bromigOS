@@ -1371,6 +1371,10 @@ def cmd_backup(a):
         # [backup] paths, and what every backup must hold (the apps' data, those copies) by name:
         # on a server with data disks /srv/apps is a mount of its own
         paths = [at(p) for p in B.backup_set(b["paths"])]
+        # what this backup must hold, as the server is now: the apps' folder, each app's own, the
+        # copies. Kept on the run's record (`saw`), so a later check judges the backup against
+        # what was here when it ran, and an app set up since isn't called missing from it
+        saw = B.required_now(b["exclude"])
         args = ["backup", "--json", "--tag", "bromigos-server", "--exclude-caches"]
         for x in b["exclude"]:
             args += ["--exclude", x]
@@ -1393,14 +1397,14 @@ def cmd_backup(a):
         # not crossed, would otherwise leave the apps' data out with nothing said
         snap = summary.get("snapshot_id", "")
         try:
-            gone = B.missing(env, {"id": snap}, B.required_paths())
+            gone = B.missing(env, {"id": snap}, saw)
         except B.Problem as e:
             gone, why = None, e.message
         if gone or gone is None:
             reason = (f"the backup left out {B.missing_words(gone)}" if gone else
                       f"what the backup holds couldn't be read back: {B.sentence(why)}")
             B.update_state(run={"phase": "failed", "at": now(), "ts": time.time(), "reason": reason, "snapshot": snap[:8],
-                                "missing": gone or [], "databases": dbs, "to": B.same_place(b["to"])})
+                                "missing": gone or [], "databases": dbs, "saw": saw, "to": B.same_place(b["to"])})
             print(f"bromigos-server: the backup failed: {reason}", file=sys.stderr)
             return 1
         restic(env, "forget", "--tag", "bromigos-server", "--prune", "--keep-daily", str(b["keep_daily"]),
@@ -1408,7 +1412,7 @@ def cmd_backup(a):
         run = {"phase": "ok" if rc == 0 else "partial", "at": now(), "ts": time.time(), "to": B.same_place(b["to"]),
                "snapshot": summary.get("snapshot_id", "")[:8], "files": summary.get("total_files_processed"),
                "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-               "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, ""), "databases": dbs}
+               "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, ""), "databases": dbs, "saw": saw}
         # what the health line says without the key: the last backup that worked, when the first
         # one did (the test restore's clock starts there), how many are kept and what they span
         more = {"run": run, "run_ok": run}
@@ -1434,17 +1438,21 @@ def cmd_backup(a):
     try:
         rc, out, _ = restic(env, "snapshots", "--json", "--tag", "bromigos-server", timeout=600)
         newest = max(json.loads(out) or [None], key=lambda s: B.stamp(s.get("time")) or 0 if s else 0) if rc == 0 else None
-        gone = B.missing(env, newest, B.required_paths()) if newest else []
+        must, later = B.expected(B.read_json(BACKUP_STATE), newest, b["exclude"]) if newest else ([], [])
+        gone = B.missing(env, newest, must)
     except (ValueError, TypeError, AttributeError):
-        gone = []
+        gone, later = [], []
     except B.Problem as e:
         return backup_failed(verb, f"what the newest backup holds couldn't be read: {B.sentence(e.message)}")
     if gone:
         return backup_failed(verb, f"the newest backup ({newest.get('short_id') or newest['id'][:8]}) doesn't hold "
-                             f"{B.missing_words(gone)}, which is on this server")
+                             f"{B.missing_words(gone)}, which was on this server when it ran")
     chk = {"phase": "ok", "at": now(), "ts": time.time(), "data": bool(data), "reason": ""}
     B.update_state(check=chk, check_ok=chk, **({"read_back_ok": chk} if data else {}))
     print("bromigos-server: the backup checks out" + (" (5 % of its data read back)" if data else ""))
+    if later:
+        # set up since that backup ran: not missing from it, and not in a backup yet
+        print("bromigos-server: " + B.not_yet_words([{"path": p, "what": B.what(p)} for p in later], B.next_run()))
     return 0
 
 

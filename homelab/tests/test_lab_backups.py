@@ -7,6 +7,7 @@ never run, and every file is under the test's temporary folder.
 The tests that restore need restic on PATH (the packages' checkdepends and CI install it); the
 health line's wording runs without it."""
 import contextlib
+import datetime
 import json
 import os
 import re
@@ -51,13 +52,17 @@ esac
 ''',
     # restic: the real one. With $FAKE/hang, a restore that writes restores that one path, then hangs
     # (not the look at where the backup's links point, which goes to a scratch folder)
-    # $FAKE/drop: a path restic is handed and leaves out, as a restic that went wrong would.
+    # $FAKE/drop: a path restic is handed and leaves out, as a restic that went wrong would;
+    # $FAKE/leaves-out: a folder inside what it is handed that it leaves out the same way.
     # $FAKE/other-filesystems: folders that are other filesystems (a data disks' subvolume mounted at
     # srv/apps). Under --one-file-system restic leaves each out unless it is named as a target,
     # and so does this stand-in, by excluding it
     "restic": r'''#!/bin/sh
 if [ "$1" = backup ] && [ -f "$FAKE/drop" ]; then
   d=$(cat "$FAKE/drop"); for a; do shift; [ "$a" = "$d" ] || set -- "$@" "$a"; done
+fi
+if [ "$1" = backup ] && [ -f "$FAKE/leaves-out" ]; then
+  set -- "$@" --exclude "$(cat "$FAKE/leaves-out")"
 fi
 if [ "$1" = backup ] && [ -f "$FAKE/other-filesystems" ]; then
   case " $* " in *" --one-file-system "*)
@@ -407,7 +412,8 @@ class Status(Rig):
         self.assertEqual(sorted(d), sorted(
             ["schema", "ok", "server", "configured", "to", "destination", "timers", "health", "last_backup", "last_success",
              "last_check", "last_check_passed", "last_read_back", "last_test", "last_test_passed", "snapshots", "drives",
-             "restore", "running", "checked_at", "now"]))
+             "restore", "running", "checked_at", "now", "not_in_backup_yet", "next_backup_ts"]))
+        self.assertEqual((d["not_in_backup_yet"], d["next_backup_ts"]), ([], None))
         self.assertEqual(d["drives"], [], "no Go Bag is set up (test_lab_backup_drive.py has the rest)")
         self.assertEqual((d["schema"], d["ok"], d["server"], d["configured"], d["to"]), (1, True, True, True, "/mnt/backup"))
         self.assertEqual(d["destination"], {"kind": "folder", "path": "/mnt/backup", "present": True})
@@ -1018,9 +1024,9 @@ class AppData(Rig):
         (self.fake / "drop").write_text(str(self.root / "srv/apps"))
         r = self.server("backup", "run")
         self.assertEqual(r.returncode, 1, r.stdout)
-        self.assertIn("the backup failed: the backup left out /srv/apps (the apps' data)", r.stderr)
+        self.assertIn("the backup failed: the backup left out /srv/apps (the apps' data)\n", r.stderr)
         st = self.state()
-        self.assertEqual((st["run"]["phase"], st["run"]["missing"]), ("failed", ["/srv/apps"]))
+        self.assertEqual((st["run"]["phase"], st["run"]["missing"]), ("failed", ["/srv/apps", "/srv/apps/photos"]))
         self.assertNotIn("run_ok", st)
         d = self.doc(rc=1)
         (p,) = d["health"]["problems"]
@@ -1028,24 +1034,81 @@ class AppData(Rig):
         self.assertIn(f"The backup left out /srv/apps (the apps' data). The rest is in that backup ({st['run']['snapshot']}), "
                       "but it doesn't count. No backup has worked yet.", p["detail"])
 
-    def test_the_check_and_the_test_restore_fail_when_the_newest_backup_lacks_the_apps(self):
-        shutil.rmtree(self.root / "srv/apps")                            # not there when this backup ran
-        snap = self.backup()
-        self.assertEqual(self.server("backup", "check").returncode, 0)
-        self.assertEqual(self.lab("test").returncode, 0)
-        self.put(APP, "sand\n")                                          # there now: the backup must hold it
+    def test_one_apps_folder_left_out_fails_and_an_exclude_of_your_own_does_not(self):
+        self.put("srv/apps/documents/data/tax.pdf", "2025\n")
+        (self.fake / "leaves-out").write_text(str(self.root / "srv/apps/photos"))        # nothing asked for this
+        r = self.server("backup", "run")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("the backup left out /srv/apps/photos (the photos app's data)", r.stderr)
+        st = self.state()
+        self.assertEqual((st["run"]["missing"], st["run"]["saw"]), (["/srv/apps/photos"], ["/srv/apps", "/srv/apps/documents", "/srv/apps/photos"]))
+        # the weekly check and the test restore say the same of that backup: the app was there when it ran
         r = self.server("backup", "check")
         self.assertEqual(r.returncode, 1)
-        self.assertIn(f"the newest backup ({snap}) doesn't hold /srv/apps (the apps' data), which is on this server", r.stderr)
-        e = self.doc("test", rc=1)
-        self.assertIn(f"the newest backup ({snap}) doesn't hold /srv/apps (the apps' data)", e["error"]["message"])
-        d = self.doc(rc=1)
-        self.assertEqual(sorted(p["id"] for p in d["health"]["problems"]), ["check-failed", "test-failed"])
-        # the next backup holds it, and both pass again
-        self.backup()
+        self.assertIn(f"the newest backup ({st['run']['snapshot']}) doesn't hold /srv/apps/photos (the photos app's data), "
+                      "which was on this server when it ran", r.stderr)
+        self.assertIn("doesn't hold /srv/apps/photos (the photos app's data), which was on this server when it ran",
+                      self.doc("test", rc=1)["error"]["message"])
+        # your own exclude is your choice: that folder isn't asked of the backup
+        (self.fake / "leaves-out").unlink()
+        self.paths("/etc", "/home", "/srv", exclude=["photos"])           # by name: the rig's paths are under its own root
+        snap = self.backup()
+        self.assertEqual(self.state()["run"]["saw"], ["/srv/apps", "/srv/apps/documents"])
+        self.assertFalse(self.holds(APP, snap))
         self.assertEqual(self.server("backup", "check").returncode, 0)
         self.assertEqual(self.lab("test").returncode, 0)
-        self.assertEqual(self.doc()["health"]["state"], "ok")
+
+    def test_an_app_set_up_after_the_last_backup_is_not_a_failure(self):
+        shutil.rmtree(self.root / "srv/apps")                            # no app yet when this backup ran
+        snap = self.backup()
+        self.assertEqual(self.state()["run"]["saw"], [])
+        self.assertEqual(self.doc()["not_in_backup_yet"], [])
+        self.put(APP, "sand\n")                                          # the first app, set up since
+        r = self.server("backup", "check")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("bromigos-server: /srv/apps (the apps' data) and /srv/apps/photos (the photos app's data): not in a "
+                      "backup yet: the next one runs tonight", r.stdout)
+        r = self.lab("test")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("/srv/apps/photos (the photos app's data): not in a backup yet", r.stdout)
+        d = self.doc()
+        self.assertEqual((d["ok"], d["health"]["state"], d["health"]["problems"]), (True, "ok", []))
+        self.assertEqual(d["not_in_backup_yet"], [{"path": "/srv/apps", "what": "the apps' data"},
+                                                  {"path": "/srv/apps/photos", "what": "the photos app's data"}])
+        self.assertIn("  Added since   /srv/apps (the apps' data) and /srv/apps/photos (the photos app's data): not in a "
+                      "backup yet: the next one runs tonight", self.lab().stdout)
+        # the timer says when: the status gives the time
+        (self.bin / "systemctl").write_text(STUBS["systemctl"].replace(
+            'case "$1" in', 'case "$1" in show) echo "NextElapseUSecRealtime=@1793426400" ;;'))
+        self.assertEqual(self.doc()["next_backup_ts"], 1793426400)
+        at = datetime.datetime.fromtimestamp(1793426400, datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")     # the rig's TZ
+        self.assertIn(f"not in a backup yet: the next one runs at {at}", self.lab().stdout)
+        (self.bin / "systemctl").write_text(STUBS["systemctl"])
+        # the next backup takes it, and nothing is left to say
+        self.backup()
+        self.assertEqual(self.doc()["not_in_backup_yet"], [])
+        self.assertNotIn("Added since", self.lab().stdout)
+        self.assertNotIn("not in a backup yet", self.server("backup", "check").stdout)
+        self.assertEqual(snap != self.state()["run"]["snapshot"], True)
+
+    def test_a_backup_from_before_the_runs_kept_a_list_is_judged_by_when_each_folder_was_made(self):
+        # backup.json from a bromigOS that didn't record what a run saw: a folder made after the
+        # backup isn't asked of it; one that was there, and isn't in it, still is
+        if B.born(str(self.root)) is None:
+            self.skipTest("this filesystem doesn't keep when a folder was made")
+        self.put("srv/apps/documents/data/tax.pdf", "2025\n")
+        (self.fake / "leaves-out").write_text(str(self.root / "srv/apps/documents"))
+        self.assertEqual(self.server("backup", "run").returncode, 1)
+        st = self.state()
+        for rec in (st["run"],):
+            del rec["saw"]
+        (self.root / "var/lib/bromigos/server/backup.json").write_text(json.dumps(st))
+        time.sleep(1.1)
+        self.put("srv/apps/navidrome/data/navidrome.db", "music\n")       # set up after that backup
+        r = self.server("backup", "check")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("doesn't hold /srv/apps/documents (the documents app's data), which was on this server when it ran", r.stderr)
+        self.assertNotIn("navidrome", r.stderr)
 
     def test_a_folder_destination_inside_what_is_backed_up_is_not_backed_up_into_itself(self):
         self.put("etc/bromigos/server.toml", '[backup]\nto = "/srv/backups/restic"\npaths = ["/etc", "/srv"]\n')
@@ -1114,18 +1177,23 @@ class Databases(Rig):
         self.assertFalse((self.root / "var/lib/bromigos/backup-databases/documents/db.sqlite3").exists())
 
 
+# the lab's module with nothing of bromigos-core's to import: a machine that has only bromigos-lab
+NO_CORE = ("import sys; sys.path.insert(0, %r); sys.modules['bromigos_backups'] = None; "
+           "from bromigos_homelab import labbackup; sys.exit(labbackup.main(sys.argv[1:]))" % str(REPO / "homelab/lib"))
+
+
 @unittest.skipUnless(RESTIC, "restic isn't installed")
 class TheLabsOwnBackup(unittest.TestCase):
     """The backup `bromigos lab provision --local` sets up on a machine that isn't a Server
-    (bromigos-lab-backup.service): its own restic command, run from the unit it writes, with
-    /srv/apps on a filesystem of its own."""
+    (bromigos-lab-backup.service): the unit's own command, `bromigos lab backups job`, with
+    /srv/apps on a filesystem of its own, and its record, which `bromigos alerts` reads."""
 
     def setUp(self):
         sys.path.insert(0, str(REPO / "homelab/tests"))
         from bromigos_homelab import localprovision as L, provcatalog as PC, secretstore as S
         from provfake import FakeMachine
         self.tmp = tempfile.TemporaryDirectory()
-        t = Path(self.tmp.name)
+        t = self.t = Path(self.tmp.name).resolve()
         self.root, self.fake, self.bin = t / "root", t / "fake", t / "bin"
         for d in (self.root, self.fake, self.bin):
             d.mkdir()
@@ -1140,30 +1208,30 @@ class TheLabsOwnBackup(unittest.TestCase):
             L.step_backups(host, PC.by_id()["backups"])
         PC._cache.clear()
         unit = (self.root / "etc/systemd/system/bromigos-lab-backup.service").read_text()
-        self.unit = unit
-        # systemd's $$ is a $; the paths it names, under the stand-in root
-        script = shlex.split(next(line for line in unit.splitlines() if line.startswith("ExecStart="))[len("ExecStart="):])
-        self.assertEqual(script[:2], ["/bin/sh", "-c"])
-        self.script = re.sub(r"for p in ([^;]+);", lambda m: "for p in " + " ".join(
-            shlex.quote(str(self.root / w.lstrip("/"))) for w in m.group(1).split()) + ";",
-            script[2].replace("$$", "$")).replace("/usr/bin/restic", "restic")
+        words = shlex.split(next(line for line in unit.splitlines() if line.startswith("ExecStart="))[len("ExecStart="):])
+        self.assertEqual(words[:3], ["/usr/lib/bromigos/bin/bromigos-lab", "backups", "job"])
+        self.paths = words[3:]                                           # as the unit names them
         for rel, text in {"etc/hostname": "box\n", APP: "sand\n", "srv/www/index.html": "hello\n",
                           "srv/data/apps/photos/library/beach.jpg": "sand\n"}.items():
             (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.root / rel).write_text(text)
         (t / "key").write_text("a test key\n")
+        (self.fake / "other-filesystems").write_text(f"{self.root / 'srv/apps'}\n{self.root / 'srv/data'}\n")
         self.env = {k: v for k, v in os.environ.items() if k not in ("WAYLAND_DISPLAY", "DISPLAY", "PYTHONPATH")}
         self.env.update(PATH=f"{self.bin}:/usr/bin:/bin", FAKE=str(self.fake), REAL_RESTIC=RESTIC, HOME=str(t),
                         RESTIC_REPOSITORY=str(t / "repo"), RESTIC_PASSWORD_FILE=str(t / "key"), RESTIC_CACHE_DIR=str(t / "cache"),
                         BROMIGOS_SERVER_ROOT=str(self.root), TZ="UTC")
-        subprocess.run([RESTIC, "init"], env=self.env, capture_output=True, check=True)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def command(self):
-        """The unit's ExecStart, its paths under the stand-in root."""
-        return ["sh", "-c", self.script]
+    def job(self, core=True, **more):
+        """The unit's ExecStart. core=False: on a machine with bromigos-lab alone."""
+        cmd = [sys.executable, str(LAB), "backups", "job"] if core else [sys.executable, "-I", "-c", NO_CORE, "job"]
+        return subprocess.run([*cmd, *self.paths], env=dict(self.env, **more), capture_output=True, text=True, stdin=subprocess.DEVNULL)
+
+    def record(self):
+        return json.loads((self.root / "var/lib/bromigos/lab/backup.json").read_text())
 
     def holds(self, rel):
         r = subprocess.run([RESTIC, "ls", "--json", "latest", str(self.root / rel)], env=self.env, capture_output=True, text=True)
@@ -1173,62 +1241,235 @@ class TheLabsOwnBackup(unittest.TestCase):
         return subprocess.run([sys.executable, str(LAB), "backups", *args], env=self.env, capture_output=True, text=True,
                               stdin=subprocess.DEVNULL)
 
-    def check_it_holds_the_apps(self):
+    def test_the_apps_on_a_filesystem_of_their_own(self):
+        r = self.job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertRegex(r.stdout, r"^bromigos-lab: backed up \([0-9a-f]{8}\)\n$")
         self.assertTrue(self.holds(APP), "the apps' data, on a filesystem of its own, is in the backup")
         self.assertTrue(self.holds("srv/www/index.html"))
         self.assertFalse(self.holds("srv/data/apps/photos/library/beach.jpg"), "the data disks aren't read twice")
-        r = self.lab("holds")
-        self.assertEqual(r.returncode, 0, r.stderr)
+        st = self.record()
+        self.assertEqual((st["run"]["phase"], st["run"]["saw"], st["run_ok"]), ("ok", ["/srv/apps", "/srv/apps/photos"], st["run"]))
+        self.assertEqual(st["first_ok_ts"], st["run"]["ts"])
+        self.assertEqual(self.lab("holds").returncode, 0)
+        self.assertEqual(os.stat(self.root / "var/lib/bromigos/lab/backup.json").st_mode & 0o777, 0o644)
 
-    def test_the_apps_on_a_filesystem_of_their_own(self):
-        (self.fake / "other-filesystems").write_text(f"{self.root / 'srv/apps'}\n{self.root / 'srv/data'}\n")
-        r = subprocess.run(self.command(), env=self.env, capture_output=True, text=True)
+    def test_it_needs_nothing_of_bromigos_core(self):
+        # #112's unit ran `bromigos lab backups holds` through bromigos-core's library, which a
+        # machine with bromigos-lab alone doesn't have: the unit failed there after every backup
+        r = self.job(core=False)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.check_it_holds_the_apps()
+        self.assertTrue(self.holds(APP))
+        self.assertEqual(self.record()["run"]["phase"], "ok")
+        for verb in (["copy-databases"], ["holds"]):
+            r = subprocess.run([sys.executable, "-I", "-c", NO_CORE, *verb], env=self.env, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
 
     @unittest.skipUnless(mounts_work(), "no mount of our own here (user namespaces are off)")
     def test_a_real_mount_at_srv_apps(self):
+        (self.fake / "other-filesystems").unlink()
         apps, data = self.root / "srv/apps", self.root / "srv/data"
         r = subprocess.run(["unshare", "-rm", "sh", "-ec", 'mount -t tmpfs apps "$1"; mount -t tmpfs data "$2"; '
                             'mkdir -p "$1/photos/library" "$2/apps"; echo sand > "$1/photos/library/beach.jpg"; '
-                            'echo sand > "$2/apps/beach.jpg"; shift 2; exec "$@"', "sh", str(apps), str(data), *self.command()],
-                           env=self.env, capture_output=True, text=True)
+                            'echo sand > "$2/apps/beach.jpg"; shift 2; exec "$@"', "sh", str(apps), str(data),
+                            sys.executable, str(LAB), "backups", "job", *self.paths], env=self.env, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(self.holds(APP))
         self.assertFalse(self.holds("srv/data/apps/beach.jpg"))
 
-    def test_the_unit_fails_when_the_backup_lacks_the_apps(self):
-        self.assertIn("ExecStartPost=/usr/lib/bromigos/bin/bromigos-lab backups holds\n", self.unit)
-        self.assertIn("ExecStartPre=-/usr/lib/bromigos/bin/bromigos-lab backups copy-databases\n", self.unit)
-        self.assertLess(self.unit.index("backups holds"), self.unit.index("restic forget"), "nothing is let go first")
-        subprocess.run([RESTIC, "backup", str(self.root / "etc")], env=self.env, capture_output=True, check=True)
-        r = self.lab("holds")
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("The newest backup doesn't hold /srv/apps (the apps' data), which is on this computer.", r.stderr)
+    def test_a_backup_without_an_apps_folder_fails_and_its_record_says_why(self):
+        self.assertEqual(self.job().returncode, 0)
+        good = self.record()["run_ok"]
+        (self.fake / "leaves-out").write_text(str(self.root / "srv/apps/photos"))
+        r = self.job()
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("bromigos-lab: the backup failed: the backup left out /srv/apps/photos (the photos app's data)\n", r.stderr)
+        st = self.record()
+        self.assertEqual((st["run"]["phase"], st["run"]["missing"], st["run_ok"]), ("failed", ["/srv/apps/photos"], good))
+        self.assertEqual(st["run"]["reason"], "the backup left out /srv/apps/photos (the photos app's data)")
 
-    def test_the_databases_are_copied_first_and_a_copy_that_failed_fails_the_unit(self):
+    def test_the_data_disks_away_and_a_destination_that_cannot_be_made(self):
+        (self.root / "etc/fstab").write_text("UUID=2222 /srv/apps btrfs subvol=/apps,nofail 0 0\n")
+        r = self.job()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("the data disks aren't mounted, so /srv/apps (the apps' data) can't be read. Nothing was backed up", r.stderr)
+        self.assertFalse((self.t / "repo").exists(), "restic never ran")
+        self.assertEqual(self.record()["run"]["phase"], "failed")
+        (self.root / "etc/fstab").unlink()
+        shut = self.t / "shut"                                           # a folder nothing can be made in
+        shut.mkdir(mode=0o555)
+        try:
+            r = self.job(RESTIC_REPOSITORY=str(shut / "repo"))
+        finally:
+            shut.chmod(0o755)
+        self.assertEqual(r.returncode, 1)
+        self.assertTrue(self.record()["run"]["reason"].startswith("the destination couldn't be set up: "), self.record()["run"])
+
+    def test_the_databases_are_copied_first_and_a_copy_that_failed_is_said(self):
         db = self.root / "srv/apps/documents/data/db.sqlite3"
         db.parent.mkdir(parents=True)
-        c = sqlite3.connect(db)
-        c.execute("CREATE TABLE documents (title TEXT)")
-        c.execute("INSERT INTO documents VALUES ('tax 2025')")
-        c.commit()
-        c.close()
+        with contextlib.closing(sqlite3.connect(db)) as c:
+            c.execute("CREATE TABLE documents (title TEXT)")
+            c.execute("INSERT INTO documents VALUES ('tax 2025')")
+            c.commit()
         hooks = self.root / "etc/bromigos/backup-databases.d"
         hooks.mkdir(parents=True)
         (hooks / "documents.toml").write_text('what = "documents (Paperless-ngx)"\nsqlite = ["/srv/apps/documents/data/db.sqlite3"]\n')
         r = self.lab("copy-databases")
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout, "documents (Paperless-ngx): copied\n")
-        self.assertEqual(subprocess.run(self.command(), env=self.env, capture_output=True).returncode, 0)
+        self.assertEqual((r.returncode, r.stdout), (0, "documents (Paperless-ngx): /srv/apps/documents/data/db.sqlite3 copied\n"), r.stderr)
+        self.assertEqual(self.job().returncode, 0)
         self.assertTrue(self.holds("var/lib/bromigos/backup-databases/documents/db.sqlite3"))
-        self.assertEqual(self.lab("holds").returncode, 0)
+        row = {"name": "documents", "what": "documents (Paperless-ngx)", "path": "/srv/apps/documents/data/db.sqlite3", "ok": True, "reason": ""}
+        self.assertEqual(self.record()["run"]["databases"], [row])
+        self.assertIn("/var/lib/bromigos/backup-databases", self.record()["run"]["saw"])
         db.write_text("not a database\n" * 50)
         self.assertEqual(self.lab("copy-databases").returncode, 1)
-        self.assertEqual(subprocess.run(self.command(), env=self.env, capture_output=True).returncode, 0)
+        r = self.job()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("bromigos-lab: backed up (", r.stdout, "the rest is backed up")
+        self.assertIn("bromigos-lab: documents (Paperless-ngx): /srv/apps/documents/data/db.sqlite3 couldn't be copied:", r.stderr)
+        st = self.record()
+        self.assertEqual((st["run"]["phase"], st["run"]["databases"][0]["ok"]), ("ok", False))
+        # what the alert reads from that record: the Server's own words
+        h = B.health("lab", st, time.time(), {"kind": "lab", "path": "", "present": None}, unit="bromigos-lab-backup.service")
+        self.assertEqual([(p["id"], p["subject"]) for p in h["problems"]], [("database-copy-failed", "lab")])
+        self.assertEqual(h["verdict"], "Backed up just now. But the database of documents (Paperless-ngx) wasn't copied whole, "
+                         "so it may not open from this backup.")
+
+    def test_holds_by_hand(self):
+        self.assertEqual(self.job().returncode, 0)
+        r = self.lab("holds", "/srv/apps", "/srv/apps/photos")
+        self.assertEqual((r.returncode, r.stderr), (0, ""))
+        (self.root / "srv/apps/documents").mkdir()
         r = self.lab("holds")
         self.assertEqual(r.returncode, 1)
-        self.assertIn("Documents (Paperless-ngx): its database wasn't copied whole for the backup:", r.stderr)
+        self.assertEqual(r.stderr, "The newest backup doesn't hold /srv/apps/documents (the documents app's data), on this computer now.\n")
+        self.assertEqual(json.loads(self.lab("holds", "--json").stdout)["missing"], ["/srv/apps/documents"])
+        self.assertEqual(self.lab("holds", "srv/apps").returncode, 2)
+
+
+class DatabaseHooks(unittest.TestCase):
+    """labbackup.copy_databases(): what a hook can say, and what each backup makes of it."""
+
+    def setUp(self):
+        from bromigos_homelab import labbackup
+        self.L = labbackup
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name).resolve()
+        self.addCleanup(self.tmp.cleanup)
+
+    def at(self, path):
+        return str(self.root / path.lstrip("/"))
+
+    def hook(self, name, text, age_days=0):
+        p = self.root / "etc/bromigos/backup-databases.d" / f"{name}.toml"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        os.utime(p, (NOW - age_days * DAY, NOW - age_days * DAY))
+
+    def db(self, rel, rows=3, wal=False):
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        c = sqlite3.connect(p)
+        if wal:
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("PRAGMA wal_autocheckpoint=0")
+        c.execute("CREATE TABLE t (n INTEGER)")
+        c.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(rows)])
+        c.commit()
+        return c                                                         # left open, as an app has it
+
+    def copies(self, name):
+        d = self.root / "var/lib/bromigos/backup-databases" / name
+        out = {}
+        for p in sorted(d.iterdir()) if d.is_dir() else []:
+            with contextlib.closing(sqlite3.connect(p)) as c:
+                out[p.name] = c.execute("SELECT count(*) FROM t").fetchone()[0]
+        return out
+
+    def run_hooks(self):
+        return self.L.copy_databases(self.at, now=NOW)
+
+    def test_an_app_with_several_databases_has_each_copied(self):
+        # Sonarr's way: sonarr.db and logs.db, each with a write-ahead log beside it, open while copied
+        held = [self.db("srv/apps/sonarr/config/sonarr.db", 500, wal=True), self.db("srv/apps/sonarr/config/logs.db", 7, wal=True)]
+        (self.root / "srv/apps/sonarr/config/config.xml").write_text("<Config/>\n")
+        (self.root / "srv/apps/sonarr/config/notes.db").mkdir()            # a folder that looks like one: not a file
+        self.hook("sonarr", 'what = "shows (Sonarr)"\nsqlite = ["/srv/apps/sonarr/config/*.db"]\n')
+        rows = self.run_hooks()
+        self.assertEqual([(r["path"], r["ok"]) for r in rows],
+                         [("/srv/apps/sonarr/config/logs.db", True), ("/srv/apps/sonarr/config/sonarr.db", True)])
+        self.assertEqual(self.copies("sonarr"), {"logs.db": 7, "sonarr.db": 500})
+        self.assertTrue((self.root / "srv/apps/sonarr/config/sonarr.db-wal").exists(), "the app's own files are as they were")
+        for c in held:
+            c.close()
+
+    def test_two_folders_with_one_file_name_keep_both(self):
+        for c in (self.db("srv/apps/passwords/db.sqlite3", 4), self.db("var/lib/vaultwarden/db.sqlite3", 9)):
+            c.close()
+        self.hook("passwords", 'what = "passwords (Vaultwarden)"\nsqlite = ["/srv/apps/passwords/db.sqlite3", '
+                  '"/var/lib/vaultwarden/db.sqlite3"]\n')
+        self.assertEqual([r["ok"] for r in self.run_hooks()], [True, True])
+        self.assertEqual(self.copies("passwords"), {"db.sqlite3": 4, "vaultwarden-db.sqlite3": 9})
+
+    def test_nothing_there_yet_is_not_a_failure_and_a_broken_hook_is(self):
+        self.hook("beets", 'what = "music tags (Beets)"\nsqlite = ["/srv/apps/beets/config/musiclibrary.blb"]\n')
+        self.assertEqual(self.run_hooks(), [])
+        self.hook("broken", 'what = "cut short\n')
+        (row,) = self.run_hooks()
+        self.assertEqual((row["name"], row["ok"]), ("broken", False))
+        self.assertIn("/etc/bromigos/backup-databases.d/broken.toml can't be read", row["reason"])
+
+    def test_a_copy_that_would_not_fit_is_refused_with_nothing_written(self):
+        self.db("srv/apps/navidrome/data/navidrome.db", 50).close()
+        self.hook("navidrome", 'what = "music (Navidrome)"\nsqlite = ["/srv/apps/navidrome/data/navidrome.db"]\n')
+        with mock.patch.object(self.L.shutil, "disk_usage", return_value=mock.Mock(free=1 << 20)):
+            (row,) = self.run_hooks()
+        self.assertFalse(row["ok"])
+        self.assertRegex(row["reason"], r"couldn't be copied: no room for the copy in /var/lib/bromigos/backup-databases "
+                                        r"\(it needs \d+ MiB, and 1 MiB are free\)")
+        self.assertEqual(self.copies("navidrome"), {})
+
+    def test_an_app_that_makes_its_own_database_backups(self):
+        # Immich's way: nothing to copy (postgres), and its own nightly dumps are files the backup holds
+        hook = 'what = "photos (Immich)"\nown = ["/srv/apps/photos/library/backups/*"]\nown_days = 3\n'
+        dumps = self.root / "srv/apps/photos/library/backups"
+        own = {"name": "photos", "what": "photos (Immich)", "path": "/srv/apps/photos/library/backups/*", "ok": True, "reason": "", "own": True}
+        self.hook("photos", hook)
+        self.assertEqual(self.run_hooks(), [], "set up today, no dump yet: its first one is tonight")
+        self.hook("photos", hook, age_days=5)
+        (row,) = self.run_hooks()
+        self.assertEqual(row, dict(own, ok=False, reason="it has made no database backup of its own "
+                                   "(/srv/apps/photos/library/backups/*): its own backup may be turned off"))
+        dumps.mkdir(parents=True)
+        (dumps / "immich-db-backup-1.sql.gz").write_text("dump\n")
+        os.utime(dumps / "immich-db-backup-1.sql.gz", (NOW - DAY, NOW - DAY))
+        self.assertEqual(self.run_hooks(), [own])
+        os.utime(dumps / "immich-db-backup-1.sql.gz", (NOW - 9 * DAY, NOW - 9 * DAY))
+        (row,) = self.run_hooks()
+        self.assertEqual((row["ok"], row["reason"]), (False, "its own newest database backup (/srv/apps/photos/library/backups/*) "
+                                                       "is 9 days old: its own backup may be turned off"))
+        # on the health line and as a problem of its own, in words for that
+        run = {"phase": "ok", "at": "x", "ts": NOW - HOUR, "databases": [row]}
+        h = B.health(S3, {"run": run, "run_ok": run}, NOW, {"kind": "s3", "path": "", "present": None})
+        self.assertEqual([(p["id"], p["title"]) for p in h["problems"]],
+                         [("database-own-backup-stale", "An app's own database backup is out of date")])
+        self.assertEqual(h["verdict"], "Backed up 1 hour ago. But photos (Immich) has no recent database backup of its own, so "
+                         "its database may not be in this backup. Last test restore: none yet.")
+
+    def test_the_server_and_the_lab_ask_the_same_of_a_backup(self):
+        for rel in ("srv/apps/photos/library", "srv/apps/.hidden", "var/lib/bromigos/backup-databases/photos"):
+            (self.root / rel).mkdir(parents=True)
+        (self.root / "srv/apps/a-file").write_text("x\n")
+        os.symlink("photos", self.root / "srv/apps/a-link")
+        want = ["/srv/apps", "/srv/apps/photos", "/var/lib/bromigos/backup-databases"]
+        self.assertEqual(self.L.required(self.at), want)
+        with mock.patch.object(B, "ROOT", str(self.root)):
+            self.assertEqual(B.required_now(), want)
+            self.assertEqual(B.required_now(["/srv/apps/ph*", "node_modules"]), [want[0], want[2]])
+            self.assertEqual(B.required_now(["photos"]), [want[0], want[2]])
+            self.assertEqual(B.required_now(["apps", "**/library"]), want, "the apps' folder itself is always asked for")
+            self.assertEqual([B.what(p) for p in want], [self.L.what(p) for p in want])
 
 
 class Command(Rig):
