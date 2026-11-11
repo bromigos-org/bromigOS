@@ -21,15 +21,6 @@ test("Lab: the name, the address, the door and the world, as the server has them
   await expect(panel(page, "THIS LAB")).toContainText("/etc/bromigos/server.toml");
 });
 
-test("Lab: what the page may do isn't claimed until the server says", async ({ page }) => {
-  await open(page, "healthy", "settings/lab");
-  const may = panel(page, "WHAT THIS PAGE MAY DO");
-  await expect(may.locator(".rows li")).toHaveCount(4);
-  await expect(may.locator(".rows li .st")).toHaveText(["not said", "not said", "not said", "not said"]);
-  await expect(may.locator(".pl")).toHaveCount(1);
-  await expect(may).toContainText('actions = ["restart"]');
-});
-
 test("Lab: with the server's list, each action is allowed or not, and none is a switch", async ({ page }) => {
   await open(page, "actions", "settings/lab");
   const may = panel(page, "WHAT THIS PAGE MAY DO");
@@ -147,6 +138,19 @@ test.describe("the real client, the service's real answers", () => {
       await whole(page, w, `settings = ${JSON.stringify(value)}`);
       await page.evaluate(() => (window.location.hash = "settings"));
     }
+  });
+
+  test("a server that doesn't say what the page may do: nothing is claimed either way", async ({ page }) => {
+    const s = new Service();
+    const b = copy(real.boards.healthy);
+    delete b.actions; // an older service: the key isn't there at all
+    s.board = b;
+    await openReal(page, s, "settings/lab");
+    const may = panel(page, "WHAT THIS PAGE MAY DO");
+    await expect(may.locator(".rows li")).toHaveCount(4);
+    await expect(may.locator(".rows li .st")).toHaveText(["not said", "not said", "not said", "not said"]);
+    await expect(may.locator(".pl")).toHaveCount(1);
+    await expect(may).toContainText('actions = ["restart"]');
   });
 
   test("a server that turned every action off: each is not allowed, and that is an answer, not a planned mark", async ({ page }) => {
