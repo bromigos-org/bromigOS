@@ -672,9 +672,11 @@ class TV(Controls, Bumps, Hold, Tracks, Links):
             rect = DEN.get(screen, (0, 0, 200, 175))
         return max(48, int(rect[3] * 1.5))
 
-    def stream(self, ch, slot, full=False, screen=None):
+    def stream(self, ch, slot, full=False, screen=None, quality=None):
         """{"url", "headers", "ytdl_format", "title", "start", "web", "kind"} for what's on, or
-        None. Not full: sized to the screen (a transcode, or a small YouTube format)."""
+        None. Not full: sized to the screen (a transcode, or a small YouTube format). Full: a
+        server's file at [tv] fullscreen_quality, or `quality` (the full-screen player's
+        transcode when the file didn't play, live/live/tvfull.py)."""
         if slot is None:
             return None
         if ch["kind"] == "link":
@@ -709,7 +711,7 @@ class TV(Controls, Bumps, Hold, Tracks, Links):
         tracks = self.track_stream_args(screen or "big", it) if hasattr(a, "video_streams") else {}
         try:
             if full:
-                s = a.video_stream(it, self.conf().get("fullscreen_quality", "direct"), start=start,
+                s = a.video_stream(it, quality or self.conf().get("fullscreen_quality", "direct"), start=start,
                                    device="bromigos-den-tv-full", **tracks)
             else:
                 s = a.video_stream(it, self.conf().get("quality", "auto"), height=height, start=start,

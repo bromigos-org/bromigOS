@@ -104,7 +104,8 @@ enabled = true           # false: every screen shows only its own picture (chann
 hover_hint = true        # floating controls on hover (off: use the widget, app or number-pad remote)
 quality = "auto"         # the den's streams: "auto" (sized to each screen: 240p or 360p, or the file when it's
                          # already that small), "direct" (every file as it is), "480p", "720p"
-fullscreen_quality = "direct"   # full screen with sound (bromigos-live tv open)
+fullscreen_quality = "direct"   # full screen with sound (bromigos-live tv open); a file that doesn't play
+                                # gets a 1080p transcode instead
 tint = 0.4               # how much the den's phosphor colours the picture (0: true colour)
 volume = 60              # a screen's volume until you set one (the sound starts off)
 duck = 30                # percent of it while VECTOR speaks or a codec call plays

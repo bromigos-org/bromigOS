@@ -1,4 +1,5 @@
 """A private mpv controller and IPC bridge, only for the den's full-screen player."""
+import collections
 import json
 import os
 import queue
@@ -8,6 +9,19 @@ import subprocess
 import tempfile
 import threading
 import time
+
+from .tvlink import redact
+
+# A server's file opens in a second or two. Past this, the direct stream isn't coming (a server
+# that answers a file's headers but never its bytes), and full screen plays a transcode instead.
+DIRECT_OPEN_TIMEOUT = 8.0
+FALLBACK_QUALITY = "1080p"
+LOG_LINES = 40                          # mpv's warnings and errors logged per file, at most
+
+
+def is_direct(stream):
+    """A server's file as it is (not a transcode, a bump, YouTube or a local file)."""
+    return bool(stream and stream.get("adapter") and stream.get("quality") == "direct")
 
 
 class Session:
@@ -28,6 +42,12 @@ class Session:
         self.track_sel = tv.full_tracks(screen) if hasattr(tv, "full_tracks") else {}
         self.track_list = []                # mpv's, observed
         self.subs_added = set()             # subtitle addresses added to this file
+        self.quality = None                 # the server quality asked for (None: [tv] fullscreen_quality)
+        self.loaded = False                 # the file playing opened (a file-loaded, or a time)
+        self.switching = False              # a loadfile sent, its start-file not seen yet
+        self.opened_at = time.monotonic()
+        self.errors = collections.deque(maxlen=8)   # mpv's last errors, redacted
+        self.logged = 0
         self.refresh_palette()
         with open(self.conf_path, "w") as f:
             os.chmod(self.conf_path, 0o600)
@@ -42,6 +62,7 @@ class Session:
         args = ["mpv", "--no-config", "--load-scripts=no", "--osc=no", "--idle=yes", "--fs",
                 "--force-window=immediate", "--volume-max=100", f"--volume={self.volume}",
                 "--hwdec=auto", "--hwdec-codecs=all", "--audio-client-name=bromigOS den TV",
+                "--msg-level=all=warn",          # its warnings and errors, to live.log (never its addresses)
                 f"--title={stream['title']} · bromigOS den TV", f"--force-media-title={stream['title']}",
                 f"--include={self.conf_path}", f"--input-ipc-server={self.sock_path}",
                 f"--script={script}", f"--script-opts={opts}"]
@@ -51,13 +72,75 @@ class Session:
         args.extend(extra or [])
         args.append(stream["url"])
         try:
-            self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                         start_new_session=True)
+            # mpv writes its messages to stdout when that isn't a terminal.
+            self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                         start_new_session=True, text=True, errors="replace")
         except OSError:
             shutil.rmtree(self.folder, ignore_errors=True)
             raise
+        self.reader = threading.Thread(target=self._read_errors, daemon=True, name="den-tv-full-log")
+        self.reader.start()
         self.thread = threading.Thread(target=self._loop, daemon=True, name="den-tv-full")
         self.thread.start()
+
+    def log(self, text):
+        log = getattr(self.tv, "log", None)
+        if log:
+            log(text)
+
+    def _read_errors(self):
+        """mpv's warnings and errors, with every address and key taken out: to live.log, and
+        the last ones kept to say on the player why it isn't playing."""
+        try:
+            for line in self.proc.stdout:
+                text = redact(line.strip())[:200]
+                if not text:
+                    continue
+                self.errors.append(text)
+                if self.logged < LOG_LINES:
+                    self.logged += 1
+                    self.log(f"tv: full screen mpv: {text}")
+        except (OSError, ValueError):
+            pass
+        finally:
+            try: self.proc.stdout.close()
+            except OSError: pass
+
+    def why(self, fallback=""):
+        """The first thing mpv said went wrong with this file (yt-dlp's guess after it is noise)."""
+        if not self.errors:
+            self.stopped.wait(.3)                           # its line may be a moment behind the event
+        said = [e for e in self.errors if not e.startswith("[ytdl_hook]")] or list(self.errors)
+        return said[0] if said else fallback
+
+    def _loading(self):
+        """A new file is on its way: the last one's end-file isn't this one's."""
+        self.loaded = False
+        self.switching = True
+        self.opened_at = time.monotonic()
+        self.errors.clear()
+        self.logged = 0
+
+    def _fall_back(self, why, mpv_said=True):
+        """The server's file didn't play: the same moment as a transcode, for the rest of the session."""
+        reason = self.why(why) if mpv_said else why
+        self.log(f"tv: full screen: the direct stream of {self.stream.get('title')} didn't play ({reason}); "
+                 f"a {FALLBACK_QUALITY} transcode instead")
+        self.quality = FALLBACK_QUALITY
+        self._retune()
+        self.send("show-text", f"Direct play failed: {reason}\nPlaying a {FALLBACK_QUALITY} transcode", 6000)
+
+    def _failed(self, why):
+        """Nothing more to try: say why on the player, not a black screen at 00:00."""
+        reason = self.why(why)
+        self.log(f"tv: full screen: can't play {self.stream.get('title')}: {reason}")
+        self.send("show-text", f"Can't play this: {reason}", 30000)
+
+    def _watch(self):
+        if self.loaded or self.switching or self.bump is not None or self.quality is not None:
+            return
+        if is_direct(self.stream) and time.monotonic() - self.opened_at > DIRECT_OPEN_TIMEOUT:
+            self._fall_back(f"nothing from the server in {DIRECT_OPEN_TIMEOUT:.0f} s", mpv_said=False)
 
     def refresh_palette(self):
         from . import glkit
@@ -128,6 +211,7 @@ class Session:
         """A bump between two items: its clip from the pack (a local file, silent), its caption
         on mpv's OSD."""
         self.bump = bump
+        self._loading()
         self.send("set_property", "force-media-title", bump.caption or "Den TV")
         self.send("loadfile", bump.path, "replace", -1, {"start": "0"})
         if bump.caption:
@@ -137,7 +221,10 @@ class Session:
         self.bump = None
         n, ch = self.tv.channel(self.screen)
         slot = self.tv.slot(ch)
-        stream = self.tv.stream(ch, slot, full=True, screen=self.screen)
+        if self.quality:
+            stream = self.tv.stream(ch, slot, full=True, screen=self.screen, quality=self.quality)
+        else:
+            stream = self.tv.stream(ch, slot, full=True, screen=self.screen)
         if not stream:
             self.send("quit")
             return
@@ -147,11 +234,18 @@ class Session:
         self.send("set_property", "force-media-title", stream["title"])
         self.send("set_property", "ytdl-format", stream.get("ytdl_format") or "")
         options = {"start": str(stream.get("start") or 0)}
+        self._loading()
         self.send("loadfile", stream["url"], "replace", -1, options)
 
     def _event(self, event):
+        if event.get("event") == "start-file":
+            self.switching = False
         if event.get("event") == "file-loaded":
             self.subs_added = set()
+            self.loaded = not self.switching
+        if (event.get("event") == "property-change" and event.get("name") == "time-pos"
+                and event.get("data") is not None and not self.switching):
+            self.loaded = True
         if event.get("event") == "property-change" and event.get("name") == "track-list":
             self.track_list = event.get("data") or []
             self._apply_tracks()
@@ -167,6 +261,15 @@ class Session:
                     # Updating the shared state also updates the den's OSD, without echoing IPC.
                     self.tv.set_sound(self.screen, on=(not self.muted if event["name"] == "mute" else state["sound"]),
                                       volume=self.volume, from_full=True)
+        if event.get("event") == "end-file" and self.switching:
+            return                                          # the file it replaces
+        if event.get("event") == "end-file" and event.get("reason") == "error":
+            why = event.get("file_error") or "it didn't open"
+            if is_direct(self.stream) and self.quality is None and self.bump is None:
+                self._fall_back(why)
+            else:
+                self._failed(why)
+            return
         if event.get("event") == "end-file" and event.get("reason") == "eof":
             if self.bump is not None:                       # the bump's over: the channel's next item
                 self.bump = None
@@ -195,6 +298,7 @@ class Session:
                 pending = b""
                 while self.proc.poll() is None and not self.stopped.is_set():
                     self.refresh_palette()
+                    self._watch()
                     while not self.messages.empty():
                         cmd = self.messages.get_nowait()
                         if cmd == "retune":
