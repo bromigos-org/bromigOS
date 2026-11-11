@@ -190,7 +190,8 @@ alerts and the jobs were read.
   `sudo bromigos activity retry ID`.
 - **Adding an app.** The Add sheet's control appears only when the board says the page may
   add (`actions` holds `"add"`) and the app's tile says it can be added. Otherwise the
-  sheet shows the command and a planned mark. The service doesn't send `actions` yet.
+  sheet shows the command and a planned mark. `actions` is root's `[board] actions`, as the
+  service read it ([Actions](#actions)).
 - **Restarting and removing an app.** The same rule, with `"restart"` and `"remove"`:
   the control is there when `actions` holds the word and the app's tile lists it in `can`.
   Removing keeps the app's data. An app the server won't remove (another app needs it, or
@@ -770,6 +771,7 @@ draws first from those same documents:
  "backups": "… bromigos lab backups status --json",
  "updates": {"updates": "… bromigos server status --json's updates", "rollbacks": []},
  "ups": {"found": false},
+ "actions": ["restart", "add", "remove", "delete-data"],
  "sources": {"storage": {"command": ["bromigos", "storage", "health", "--json"], "at": 1794289999000, "ok": true, "rc": 1},
              "apps": {"command": ["bromigos", "lab", "apps", "list", "--json"], "at": 1794289999000, "ok": false, "rc": 2,
                       "why": "bromigos lab: no command apps"}},
@@ -805,6 +807,10 @@ draws first from those same documents:
   owns the fact: `data`, `data/backups`, `supply/updates` or `activity`.
 - `fixed` lists the jobs that failed and put things back by themselves (`rolled-back`):
   `title` is the job's own ("Updating Photos"), `words` what became of it.
+- `actions` lists what the page may ask for on this server: root's `[board] actions`
+  ([What a session can do](#what-a-session-can-do-and-how-to-turn-it-off)), and `[]` when
+  actions are off or aren't set up. The page shows a control only for a word that is there.
+  The list is for the page's sake: root's helper decides again on every request.
 - `readings` and `updates` in `machines` are null: nothing the reader runs measures how busy
   a machine is, or counts its waiting updates, yet.
 
@@ -852,8 +858,10 @@ browser, say which actions the page may use, as root, in `/etc/bromigos/server.t
 actions = ["restart"]        # only restarts; [] turns every action off
 ```
 
-Left out, it means `["restart", "add", "remove", "delete-data"]`. The page then only shows
-what the server is doing, and you add and remove apps with `sudo bromigos lab apps`.
+Left out, it means `["restart", "add", "remove", "delete-data"]`. With `[]` the page only
+shows what the server is doing, and you add and remove apps with `sudo bromigos lab apps`.
+The board's document carries the list as `actions`, so the page offers only what the server
+allows.
 `sudo bromigos server board sessions --end-all` signs every browser out at once.
 
 #### How a request reaches root

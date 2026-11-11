@@ -282,6 +282,13 @@ def allowed_verbs():
     return [x for x in v if x in DEFAULT_ACTIONS] if isinstance(v, list) else []
 
 
+def offered():
+    """What the page may ask for on this server, for the board's document (`actions`): root's
+    [board] actions, and nothing while actions aren't set up (no requests folder). Root reads
+    this as it gathers the readings; the page shows a control only for what is listed."""
+    return allowed_verbs() if os.path.isdir(paths.at(REQUESTS)) else []
+
+
 def catalogue():
     from bromigos_homelab import provcatalog
     return provcatalog.by_id()

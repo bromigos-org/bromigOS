@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-from . import SCHEMA, paths
+from . import SCHEMA, actions, paths
 
 # (part of the board, the command): every one is a command that ships, run as root
 SOURCES = (
@@ -194,7 +194,7 @@ def door_fallback(host):
 
 def gather(env=None):
     host = paths.hostname()
-    doc = {"schema": SCHEMA, "host": host, "settings": paths.board_settings(), "sources": {}}
+    doc = {"schema": SCHEMA, "host": host, "settings": paths.board_settings(), "actions": actions.offered(), "sources": {}}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCES)) as pool:
         futures = {name: pool.submit(run_source, argv, TIMEOUT_S, env) for name, argv in SOURCES}
         for name, _ in SOURCES:

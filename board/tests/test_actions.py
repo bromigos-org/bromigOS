@@ -23,7 +23,7 @@ from common import BOARD, LAN, NOW, REPO, Root
 
 from starlette.testclient import TestClient
 
-from bromigos_board import actions, api, auth, cli, paths
+from bromigos_board import actions, api, auth, board, cli, paths, snapshot
 
 ORIGIN = "https://myserver.local"
 PAGE = {"x-bromigos-board": "1", "origin": ORIGIN}
@@ -180,6 +180,27 @@ class AskTests(Base):
         self.path("etc/bromigos/server.toml").write_text('[board]\nactions = []\n')
         self.assertEqual(self.post({"verb": "restart", "app": "photos"}).status_code, 403)
         self.assertEqual(len(self.ran), 1)
+
+    def test_the_board_says_which_actions_the_page_may_offer(self):
+        """`actions` in the board's document: root's [board] actions, as the reader read them."""
+        def offered():
+            snapshot.write(snapshot.gather())
+            return self.c.get("/api/board").json()["actions"]
+        self.sign_in()
+        self.assertEqual(offered(), list(actions.DEFAULT_ACTIONS))           # left out: all of them
+        self.assertEqual(offered()[:4], ["restart", "add", "remove", "delete-data"])
+        self.path("etc/bromigos/server.toml").write_text('[board]\nactions = ["restart", "reboot", 7]\n')
+        self.assertEqual(offered(), ["restart"], "only words the board knows")
+        self.path("etc/bromigos/server.toml").write_text('[board]\nactions = []\n')
+        self.assertEqual(offered(), [])
+        self.path("etc/bromigos/server.toml").write_text('[board]\nactions = "restart"\n')
+        self.assertEqual(offered(), [], "not a list: nothing")
+        self.path("etc/bromigos/server.toml").unlink()
+        self.path(actions.REQUESTS).rmdir()
+        self.assertEqual(offered(), [], "actions aren't set up: nothing is offered")
+        # an old reading without the key, or with something else under it
+        self.assertEqual(board.shape({"at": 1, "actions": "restart"}, 1)["actions"], [])
+        self.assertEqual(board.shape({"at": 1}, 1)["actions"], [])
 
     def test_when_the_helper_is_slow_the_page_is_told_to_watch_activity(self):
         self.sign_in()

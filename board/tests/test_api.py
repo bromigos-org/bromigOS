@@ -178,8 +178,9 @@ class BoardContractTests(Base):
         self.assertEqual(r.status_code, 200)
         b = r.json()
         self.assertEqual(set(b), {"schema", "at", "max_age_s", "age_s", "stale", "lab", "server", "status", "machines",
-                                  "needs_you", "fixed", "apps", "storage", "backups", "updates", "ups",
+                                  "needs_you", "fixed", "apps", "storage", "backups", "updates", "ups", "actions",
                                   "host", "settings", "sources", "system", "activity", "alerts"})
+        self.assertEqual(b["actions"], [], "this stand-in server has no requests folder: no action is offered")
         self.assertEqual((b["schema"], b["max_age_s"], b["stale"]), (1, 45, False))
         self.assertEqual(b["server"], {"name": "myserver", "kind": "server", "roles": ["home-services"]})
         self.assertEqual(b["status"]["state"], "needs-you")

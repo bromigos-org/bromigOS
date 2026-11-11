@@ -174,6 +174,9 @@ def shape(snap, now_ms):
         "backups": snap.get("backups"),
         "updates": {"updates": system.get("updates"), "rollbacks": system.get("rollbacks")} if system else None,
         "ups": (system or {}).get("ups"),
+        # what the page may ask for (root's [board] actions, as the reader read it): the page
+        # shows a control only for a verb that is here. Root's helper decides again each time.
+        "actions": [a for a in snap.get("actions") or [] if isinstance(a, str)] if isinstance(snap.get("actions"), list) else [],
     }
     # the commands' own documents too, for the Depth drawer and for scripts
     doc.update({k: snap.get(k) for k in EXTRA})
