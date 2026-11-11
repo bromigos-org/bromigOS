@@ -1,8 +1,9 @@
 # The Lab board's actions (docs/board.md, "Actions"). Started by bromigos-board-act.path. As
 # root, bromigos-board act takes each request out of /run/bromigos-board/requests, checks it
-# again (a verb on its closed list, a catalogue id, root's [board] actions) and starts the job:
-# bromigos-activity run … -- /usr/bin/bromigos lab apps VERB ID. No word of a request reaches a
-# shell. It waits three seconds for more requests, then ends.
+# again (a verb on its closed list, a catalogue id or a job among root's own records, root's
+# [board] actions) and starts the job: bromigos-activity run … -- /usr/bin/bromigos lab apps
+# VERB ID. A job's own action goes to bromigos-activity answer, cancel or retry. No word of a
+# request reaches a shell. It waits three seconds for more requests, then ends.
 [Unit]
 Description=bromigOS Lab board: the actions asked from the page
 Documentation=file:///usr/share/doc/bromigos-board/board.md

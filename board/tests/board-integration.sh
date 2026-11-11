@@ -365,6 +365,57 @@ code=$(/usr/lib/bromigos/board/bromigos-board code --json | python3 -c 'import j
 sleep 2
 [[ $(calls 'remove photos --delete-data --yes') == 1 ]] || fail "data was deleted more than once"
 
+section "a job's own actions: answered, stopped and started again by root's helper, for real"
+# three real jobs, started as root starts any job: one that asks, one that may be stopped, one
+# that fails and was started as safe to start again
+act=/usr/lib/bromigos/bin/bromigos-activity
+state() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["state"])' "/var/lib/bromigos/activity/jobs/$1.json" 2>/dev/null; }
+started() { python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])'; }
+job_is() { [[ $(state "$1") == "$2" ]]; }
+job_do() {  # job_do JOB VERB [JSON]: POST /api/activity/JOB/VERB as the signed-in browser
+    local body=${3-}
+    [[ -n $body ]] || body='{}'
+    from=192.168.1.31 api POST "/api/activity/$1/$2" "${page[@]}" -H "$session_cookie" -d "$body"
+}
+asks=$("$act" run --kind test.ask --title "Asking" --detach --json -- /bin/sh -c \
+    'echo "::ask ready Is it ready? [yes] It is [no] Not yet"; read -r a < "$BROMIGOS_ACTIVITY_ANSWERS"; [ "$a" = yes ]' | started)
+sleeps=$("$act" run --kind test.sleep --title "Waiting" --cancel-safe --detach --json -- /bin/sleep 600 | started)
+fails=$("$act" run --kind test.fail --title "Failing" --retry-safe --detach --json -- /bin/false | started)
+[[ -n $asks && -n $sleeps && -n $fails ]] || fail "the jobs didn't start: '$asks' '$sleeps' '$fails'"
+wait_for 30 job_is "$asks" needs-you && wait_for 30 job_is "$sleeps" running && wait_for 30 job_is "$fails" failed \
+    || fail "the jobs are $(state "$asks"), $(state "$sleeps"), $(state "$fails")"
+# what the job isn't asking, and what isn't a job, start nothing
+[[ $(job_do "$asks" answer '{"question": "ready", "choice": "maybe"}') == 409 ]] && grep -q '"bad-choice"' /tmp/body || fail "a choice it doesn't have: $(cat /tmp/body)"
+[[ $(job_do "$asks" answer '{"question": "other", "choice": "yes"}') == 409 ]] && grep -q '"not-asking"' /tmp/body || fail "another question: $(cat /tmp/body)"
+[[ $(job_do "$asks" cancel) == 409 ]] && grep -q '"not-safe"' /tmp/body || fail "stopping a job that never said it is safe: $(cat /tmp/body)"
+[[ $(job_do "${sleeps%-*}" cancel) == 404 ]] && grep -q '"no-job"' /tmp/body || fail "a part of an id: $(cat /tmp/body)"
+[[ $(job_do "$sleeps" retry) == 409 ]] && grep -q '"cant-retry"' /tmp/body || fail "starting again a job that runs: $(cat /tmp/body)"
+[[ $(state "$asks") == needs-you && $(state "$sleeps") == running ]] || fail "a refused action changed a job: $(state "$asks"), $(state "$sleeps")"
+# the answer reaches the job, and the job goes on to its end
+[[ $(job_do "$asks" answer '{"question": "ready", "choice": "yes"}') == 202 ]] || { journalctl -u bromigos-board-act.service --no-pager -n 30; fail "the answer: $(cat /tmp/body)"; }
+grep -q '"words":"Answered."' /tmp/body || fail "the answer's words: $(cat /tmp/body)"
+wait_for 30 job_is "$asks" succeeded || { cat "/var/lib/bromigos/activity/jobs/$asks.json"; fail "the answered job is $(state "$asks")"; }
+grep -q 'Answered: It is' "/var/lib/bromigos/activity/jobs/$asks.json" || fail "the record doesn't say what was answered"
+[[ $(job_do "$asks" answer '{"question": "ready", "choice": "yes"}') == 409 ]] && grep -q '"ended"' /tmp/body || fail "answering a job that ended: $(cat /tmp/body)"
+# stopped
+[[ $(job_do "$sleeps" cancel) == 202 ]] || { journalctl -u bromigos-board-act.service --no-pager -n 30; fail "the stop: $(cat /tmp/body)"; }
+wait_for 40 job_is "$sleeps" cancelled || fail "the stopped job is $(state "$sleeps")"
+# started again: a new job, asked for from the board
+[[ $(job_do "$fails" retry) == 202 ]] || { journalctl -u bromigos-board-act.service --no-pager -n 30; fail "starting again: $(cat /tmp/body)"; }
+again=$(python3 -c 'import json; print(json.load(open("/tmp/body"))["job"])')
+[[ $again =~ ^[0-9]{8}-[0-9]{4}-test\.fail-[0-9a-f]{4}$ && $again != "$fails" ]] || fail "no new job came back: $(cat /tmp/body)"
+wait_for 30 job_is "$again" failed || fail "the job started again is $(state "$again")"
+python3 - "$again" <<'PY' || fail "the new job's record: $(cat "/var/lib/bromigos/activity/jobs/$again.json")"
+import json, sys
+r = json.load(open(f"/var/lib/bromigos/activity/jobs/{sys.argv[1]}.json"))
+assert r["kind"] == "test.fail" and r["requested_by"]["via"] == "board" and r["command"] == ["/bin/false"], r
+PY
+# root's [board] actions decides each of them
+printf '[board]\nactions = ["restart"]\n' > /etc/bromigos/server.toml
+[[ $(job_do "$fails" retry) == 403 ]] && grep -q '"not-allowed"' /tmp/body || fail "root's [board] actions didn't decide a job's action: $(cat /tmp/body)"
+rm -f /etc/bromigos/server.toml
+[[ -z $(ls /run/bromigos-board/requests) ]] || fail "requests were left: $(ls -a /run/bromigos-board/requests)"
+
 section "the activity stream: signed in, the jobs' records come through"
 # (the records' folder was made here, by the helper's first run: the API's user must be able to read it)
 as_board ls /var/lib/bromigos/activity/jobs >/dev/null || fail "the board's user can't read the activity records: $(stat -c '%n %U:%G %a' /var/lib/bromigos /var/lib/bromigos/activity /var/lib/bromigos/activity/jobs)"

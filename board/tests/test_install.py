@@ -294,6 +294,12 @@ class RootStepsDown(Root):
             self.assertNotIn("chown(", text, name)
 
 
+
+def tomllib_load(text):
+    import tomllib
+    return tomllib.loads(text)
+
+
 class PackageTests(unittest.TestCase):
     def test_removing_the_package_takes_its_site_out_of_caddy_and_ends_the_sessions(self):
         text = (REPO / "packaging" / "bromigos-board" / "bromigos-board.install").read_text()
@@ -301,6 +307,84 @@ class PackageTests(unittest.TestCase):
         self.assertIn("rm -f etc/caddy/conf.d/bromigos-board.caddy", remove)
         self.assertLess(remove.index("rm -f etc/caddy/conf.d/bromigos-board.caddy"), remove.index("systemctl reload caddy.service"))
         self.assertIn("var/lib/bromigos-board/sessions", remove)
+
+    def upgrade(self, old_actions, toml, steps=("pre_upgrade", "post_upgrade")):
+        """The package's install script, run as pacman runs it (in the root, its paths relative),
+        in a stand-in root: the old package's library is there for pre_upgrade, then the new
+        command for post_upgrade. old_actions: the old package's actions.py, or None for a board
+        from before actions. Returns server.toml afterwards (None when there is none) and what
+        the script printed."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        root = Path(tmp) / "root"
+        old = root / "usr/lib/bromigos/lib/bromigos_board"
+        old.mkdir(parents=True)
+        (old / "__init__.py").write_text("")
+        if old_actions is not None:
+            (old / "actions.py").write_text(old_actions)
+        if toml is not None:
+            (root / "etc/bromigos").mkdir(parents=True)
+            (root / "etc/bromigos/server.toml").write_text(toml)
+        stubs = Path(tmp) / "bin"
+        stubs.mkdir()
+        for name in ("systemctl", "systemd-sysusers", "systemd-tmpfiles"):
+            (stubs / name).write_text("#!/bin/sh\nexit 0\n")
+            (stubs / name).chmod(0o755)
+        script = REPO / "packaging" / "bromigos-board" / "bromigos-board.install"
+        new_cmd = root / "usr/lib/bromigos/board/bromigos-board"
+        out = []
+        for step in steps:
+            if step == "post_upgrade":       # the new package's files in place of the old ones
+                shutil.rmtree(old.parent)
+                new_cmd.parent.mkdir(parents=True)
+                new_cmd.write_text(f"#!/bin/sh\nexec {sys.executable} -I {BOARD / 'bin' / 'bromigos-board'} \"$@\"\n")
+                new_cmd.chmod(0o755)
+            r = subprocess.run(["bash", "-c", f'. "{script}"; {step} 0.2-1 0.1-1'], cwd=root, capture_output=True, text=True,
+                               env=dict(os.environ, PATH=f"{stubs}:/usr/bin:/bin", BROMIGOS_ROOT=str(root)))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            out.append(r.stdout + r.stderr)
+        self.assertFalse((root / "var/lib/bromigos-board-root/upgrade-actions").exists(), "the note is gone afterwards")
+        p = root / "etc/bromigos/server.toml"
+        return (p.read_text() if p.exists() else None), "".join(out)
+
+    def actions_of(self, toml):
+        import tomllib
+        return tomllib.loads(toml).get("board", {}).get("actions")
+
+    def test_an_upgrade_never_widens_what_the_page_may_do(self):
+        """Review N5. A server whose server.toml doesn't say [board] actions keeps what the board
+        allowed before the upgrade: nothing from a board from before actions, the four app words
+        from one before the job actions. A new install gets the new default."""
+        from bromigos_board import actions
+        toml = "# mine\n[board]\ndoor = true\n\n[updates]\nwindow = \"03:00-05:00\"\n"
+        after, said = self.upgrade(None, toml)
+        self.assertEqual(self.actions_of(after), [])
+        self.assertIn("# mine", after)
+        self.assertIn('window = "03:00-05:00"', after)
+        self.assertIs(tomllib_load(after)["board"]["door"], True)
+        self.assertIn("kept what the board's page could do before this upgrade", said)
+        before_jobs = 'DEFAULT_ACTIONS = ("restart", "add", "remove", "delete-data")\n'
+        after, _ = self.upgrade(before_jobs, "[updates]\nauto = true\n")
+        self.assertEqual(self.actions_of(after), ["restart", "add", "remove", "delete-data"])
+        # the server's own list is its own; the same default, or no server.toml, changes nothing
+        mine = '[board]\nactions = ["restart"]\n'
+        self.assertEqual(self.upgrade(None, mine)[0], mine)
+        same = "DEFAULT_ACTIONS = " + repr(tuple(actions.DEFAULT_ACTIONS)) + "\n"
+        self.assertEqual(self.upgrade(same, "[updates]\nauto = true\n")[0], "[updates]\nauto = true\n")
+        self.assertIsNone(self.upgrade(None, None)[0])
+        # a new install: nothing written, so the new default holds
+        self.assertEqual(self.upgrade(None, "[updates]\nauto = true\n", steps=("post_install",))[0], "[updates]\nauto = true\n")
+
+    def test_the_kept_list_is_what_root_then_allows(self):
+        from bromigos_board import actions
+        after, _ = self.upgrade('DEFAULT_ACTIONS = ("restart", "add", "remove", "delete-data")\n', "[board]\n")
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        (root / "etc/bromigos").mkdir(parents=True)
+        (root / "etc/bromigos/server.toml").write_text(after)
+        with mock.patch.dict(os.environ, {"BROMIGOS_ROOT": str(root)}):
+            self.assertEqual(actions.allowed_verbs(), ["restart", "add", "remove", "delete-data"])
+            self.assertNotIn("job.answer", actions.allowed_verbs())
 
     def test_the_site_caddy_would_be_left_with_is_the_one_it_cant_read(self):
         """Why: the site imports a file of the package's. Without the file, Caddy refuses its whole

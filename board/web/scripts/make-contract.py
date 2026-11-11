@@ -412,7 +412,14 @@ def build(args):
             "PATH": f"{fix}:{os.environ.get('PATH', '/usr/bin:/bin')}", "BROMIGOS_BOARD_NOW_MS": str(NOW - 5000)}))
         origin = "https://myserver.local"
         page = {"x-bromigos-board": "1", "origin": origin}
-        app = api.make_app(tries=auth.Tries(), poll=0.05, stream_s=0.4)
+        # root's helper, which a server's systemd starts when a request appears: here it is called
+        # as each request is written. It is the real one; only the command it would run is not there.
+        from bromigos_board import actions
+
+        def helper(rid):
+            actions.act(rid, log=lambda words: None, run=lambda argv: subprocess.CompletedProcess(argv, 1, "", "no such command here"))
+
+        app = api.make_app(tries=auth.Tries(), poll=0.05, stream_s=0.4, after_ask=helper, action_wait_s=2)
         c = TestClient(app, base_url=origin, headers={"x-forwarded-for": home_address, "user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"})
 
         def snap(drives="healthy", backups_="healthy", apps_="running", jobs=("done",), missing=(), replace=None, at=NOW - 5000):
@@ -454,7 +461,9 @@ def build(args):
         http["session_signed_in"] = exchange(c.get("/api/session"))
         http["signout_other_unknown"] = exchange(c.delete("/api/session/0123456789abcdef", headers=page))
         http["no_such_route"] = exchange(c.get("/api/vitals?machine=myserver&range=24h"))
-        http["no_job_actions"] = exchange(c.post("/api/activity/x/cancel", json={}, headers=page))
+        # a job's own actions (answer, cancel, retry): refused here, where no such job is and nothing is asked of one
+        http["job_action_no_job"] = exchange(c.post("/api/activity/20261110-0553-backup.run-myserver-0000/cancel", json={}, headers=page), {})
+        http["job_action_unknown"] = exchange(c.post("/api/activity/20261110-0553-backup.run-myserver-0000/undo", json={}, headers=page), {})
 
         # the board, signed in, in each state the commands can leave it in
         (root / "run/bromigos-board/board.json").unlink()
@@ -511,6 +520,7 @@ def build(args):
             text = text.replace(i, f"{n + 1:016x}")
         text = re.sub(r'("(?:signed_in_at|last_seen_at|created_at)": ?)\d{13}', rf"\g<1>{NOW}", text)
         text = re.sub(r'("expires_at": ?)\d{13}', rf"\g<1>{NOW + 30 * DAY}", text)
+        text = re.sub(r'("request": ?")[0-9a-f]{16}"', r'\g<1>00000000000000a1"', text)      # a request's id is random too
         # a job's id ends in four random characters, and its record carries this machine's boot id
         text = re.sub(r"(\d{8}-\d{4}-[a-z.-]+-[a-z0-9]+-)[0-9a-f]{4}\b",
                       lambda m: m.group(1) + hashlib.sha1(m.group(1).encode()).hexdigest()[:4], text)

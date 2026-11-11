@@ -12,6 +12,9 @@ client: it serves the page's files and passes /api here.
   GET    /api/activity        the jobs, live, as server-sent events (signed in)
   POST   /api/actions         {verb, app[, delete_data, code]}: restart, add or remove an app, as a
                               job (signed in; deleting its data needs a fresh console code too)
+  POST   /api/activity/{job}/answer   {question, choice}: answer what a job asks (signed in)
+  POST   /api/activity/{job}/cancel   {}: stop a job that says stopping is safe (signed in)
+  POST   /api/activity/{job}/retry    {}: start again a job that ended badly and may be (signed in)
 
 Every answer is JSON with Cache-Control: no-store. An error is {"error": {"code", "words"}}.
 A request from an address that isn't private gets 403 whatever it asks for; every request that
@@ -21,6 +24,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import sys
 import time
 
@@ -32,6 +36,7 @@ from starlette.routing import Route
 from . import SCHEMA, actions, auth, board, door, net, paths
 
 READ_METHODS = ("GET", "HEAD", "OPTIONS")
+DIGITS = re.compile(r"[0-9]{1,12}\Z")      # a length in ASCII digits ("²".isdigit() is true, and int() refuses it)
 BODY_MAX = 4096                 # bytes of a request's body; more is refused unread
 CONNECTIONS_MAX = 64            # connections at once (uvicorn's limit_concurrency); more get 503
 DOOR_EVERY_S = 120              # the door asks root's reader for a reading this often at most
@@ -160,7 +165,7 @@ async def json_body(request):
         return None, error(415, ("not-json", "Send JSON (Content-Type: application/json)."))
     too_big = error(413, ("too-big", "That request is too big."), headers={"Connection": "close"})
     length = request.headers.get("content-length")
-    if length is not None and (not length.isdigit() or int(length) > BODY_MAX):
+    if length is not None and (not DIGITS.match(length) or int(length) > BODY_MAX):
         return None, too_big                     # refused by what it says of itself, unread
     body = b""
     async for chunk in request.stream():         # and read no further than the limit, whatever it said
@@ -380,6 +385,52 @@ async def post_actions(request):
                         status_code=202)
 
 
+# a job's action that was refused: the job isn't there (404), or isn't in a state for it (409)
+JOB_STATUS = {"no-job": 404, "unknown-verb": 404, "ended": 409, "not-asking": 409, "bad-choice": 409, "not-safe": 409,
+              "cant-retry": 409, "not-taken": 409}
+
+
+async def post_job_action(request):
+    """A job's own action: answer its question, stop it, or start it again (actions.py). Like an
+    app's, the API only writes the request down; root's helper looks the job up among root's own
+    records, checks that its state allows the action, and passes it to `bromigos activity`."""
+    rec = session_of(request)
+    if not rec:
+        return error(401, SIGNED_OUT)
+    if not csrf_ok(request):
+        return error(403, CSRF)
+    doc, bad = await json_body(request)
+    if bad:
+        return bad
+    st = request.app.state
+    src = source_of(request)
+    job, verb = request.path_params["job"], request.path_params["verb"]
+    if doc.get("code") is not None:
+        why = st.tries.blocked(src)             # its code is counted like one at sign-in
+        if why:
+            return error(429, ("too-many", why), headers={"Retry-After": "60"})
+    try:
+        rid = await run_in_threadpool(actions.ask_job, verb, job, rec, None, doc.get("question"), doc.get("choice"),
+                                      doc.get("code"))
+    except actions.Refused as e:
+        return error(JOB_STATUS.get(e.code, 400), (e.code, e.words))
+    except OSError:
+        return error(503, ("no-actions", "Actions aren't set up on this server."))
+    if st.after_ask:
+        await run_in_threadpool(st.after_ask, rid)          # (the tests' stand-in for the helper's unit)
+    out = await run_in_threadpool(actions.wait, rid, st.action_wait_s)
+    if out is None:
+        return JSONResponse({"schema": SCHEMA, "ok": True, "job": None if verb == "retry" else job, "request": rid,
+                             "words": "Asked. The job's card shows what became of it."}, status_code=202)
+    if not out.get("ok"):
+        code = out.get("code") if out.get("code") in actions.REFUSALS else "bad-request"
+        if code == "danger-needs-code" and doc.get("code") is not None:
+            await st.sleep(st.tries.wrong(src))
+        return error(JOB_STATUS.get(code, 403), (code, actions.REFUSALS[code]))
+    return JSONResponse({"schema": SCHEMA, "ok": True, "job": out.get("job"), "request": rid, "words": out.get("words")},
+                        status_code=202)
+
+
 ROUTES = [
     Route("/api/door", get_door, methods=["GET"]),
     Route("/api/local", get_local, methods=["GET"]),
@@ -390,6 +441,7 @@ ROUTES = [
     Route("/api/board", get_board, methods=["GET"]),
     Route("/api/activity", get_activity, methods=["GET"]),
     Route("/api/actions", post_actions, methods=["POST"]),
+    Route("/api/activity/{job}/{verb}", post_job_action, methods=["POST"]),
 ]
 
 

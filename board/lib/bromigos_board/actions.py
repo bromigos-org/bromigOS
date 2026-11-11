@@ -25,6 +25,17 @@ carry a request across to root and its answer back, each written by one side onl
    ever quoted in it. The API reads the answer back for the page. The job's record and its steps
    then come through the activity stream like any other job's.
 
+A job's own actions go the same way: answering the question a job asks, stopping a job that says
+stopping is safe, and starting again a job that ended badly and may be started again. The page
+names the job by its whole id; the helper finds that record among root's own (the activity
+records), checks that the job is in a state that allows it, and runs
+
+     bromigos-activity answer JOB CHOICE --json
+     bromigos-activity cancel JOB --json
+     bromigos-activity retry JOB --via board --device BROWSER --detach --json
+
+with the id and the choice it checked, and nothing else from the request.
+
 Deleting an app's data needs a code from `sudo bromigos server board code`, typed again for it.
 Root notes each code it makes in a folder only root can read (/var/lib/bromigos-board-root/codes),
 besides the board's own record. The helper takes a code for a deletion only when both records are
@@ -64,7 +75,17 @@ VERBS = {
 }
 DELETE_TITLE = "Removing {name} and deleting its data"
 DELETE_DATA = "delete-data"             # its word in [board] actions
-DEFAULT_ACTIONS = (*VERBS, DELETE_DATA)
+# a job's own actions: `bromigos activity`'s verbs, each under its word in [board] actions and
+# in a request
+JOB_VERBS = {"answer": "job.answer", "cancel": "job.cancel", "retry": "job.retry"}
+JOB_WORDS = {"job.answer": "Answered.", "job.cancel": "Stopped.", "job.retry": "Started again."}
+# a job's id, whole, as the activity records name it (20261110-1200-app.restart-photos-1a2b)
+# ([0-9], never \d: \d is any script's digit, and "２0261110" isn't an id)
+JOB_ID = re.compile(r"[0-9]{8}-[0-9]{4}-[a-z0-9][a-z0-9.-]{0,80}-[0-9a-f]{4}\Z")
+ANSWER_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")       # a question's id, and a choice's
+DEFAULT_ACTIONS = (*VERBS, DELETE_DATA, *JOB_VERBS.values())
+ENDED = ("succeeded", "failed", "rolled-back", "cancelled", "interrupted")       # the activity records' final states
+RETRY_FROM = ("failed", "rolled-back", "cancelled", "interrupted")
 REQUEST_MAX_AGE_MS = 60_000
 REQUEST_MAX_BYTES = 4096
 RESULT_WAIT_S = 10.0
@@ -74,7 +95,8 @@ LINGER_S = 3.0                          # the helper waits this long for more re
 RUN_MAX_S = 300.0                       # and ends anyway after this long: the path unit starts it again if need be
 # Every refusal's words, fixed: nothing a request said is ever quoted in an answer
 REFUSALS = {
-    "unknown-verb": "The board can't do that: it can restart, add and remove apps.",
+    "unknown-verb": "The board can't do that: it can restart, add and remove apps, and answer, stop or start "
+                    "again a job.",
     "unknown-app": "That isn't an app in the catalogue.",
     "bad-request": "The request isn't one the board makes.",
     "no-request": "There's no such request (it was used already, or never made).",
@@ -83,6 +105,17 @@ REFUSALS = {
     "needs-code": "Deleting an app's data needs a fresh code: run sudo bromigos server board code at the server, "
                   "and type it here. A code that signed a browser in doesn't count.",
     "job-failed": "The job didn't start. The server's log says why: journalctl -u bromigos-board-act.service",
+    # a job's own actions
+    "no-job": "There's no such job: its record may have been cleared away.",
+    "ended": "That job has already ended.",
+    "not-asking": "That job isn't asking that now: it was answered already, or the question changed.",
+    "bad-choice": "That isn't one of the question's answers.",
+    "not-safe": "Stopping that job now isn't safe. Its card says why.",
+    "cant-retry": "That job can't be started again from here: it didn't end badly, or it wasn't started as safe to "
+                  "start again.",
+    "not-taken": "The job didn't take that in time. Look at its card, and try again.",
+    "danger-needs-code": "That answer can't be undone, so it needs a fresh code: run sudo bromigos server board code "
+                         "at the server, and type it here. A code that signed a browser in doesn't count.",
 }
 
 
@@ -107,6 +140,25 @@ def check_shape(verb, app, delete_data=False, code=None):
         raise Refused("unknown-verb")
     if delete_data and not (isinstance(code, str) and 0 < len(code) <= 32):
         raise Refused("needs-code")
+
+
+def check_job_shape(verb, job, question=None, choice=None, code=None):
+    """What both sides check first of a job's action: a verb on the list, a job's whole id, and for
+    an answer the question's id and the choice's, each a plain word, and maybe a code (for a
+    choice the job marks as can't be undone)."""
+    if not isinstance(verb, str) or verb not in JOB_WORDS:
+        raise Refused("unknown-verb")
+    if not isinstance(job, str) or not JOB_ID.match(job):
+        raise Refused("no-job")
+    if verb == "job.answer":
+        if not isinstance(question, str) or not ANSWER_ID.match(question):
+            raise Refused("not-asking")
+        if not isinstance(choice, str) or not ANSWER_ID.match(choice):
+            raise Refused("bad-choice")
+        if code is not None and not (isinstance(code, str) and 0 < len(code) <= 32):
+            raise Refused("bad-request")
+    elif question is not None or choice is not None or code is not None:
+        raise Refused("bad-request")
 
 
 def browser_words(text):
@@ -135,6 +187,28 @@ def ask(verb, app, session, now=None, delete_data=False, code=None):
     dfd = paths.open_folder(paths.at(REQUESTS))
     try:
         # (never over a request that is there: an id is used once)
+        paths.write_at(dfd, rid + ".json", paths.dump(doc), 0o640, replace=False)
+    finally:
+        os.close(dfd)
+    return rid
+
+
+def ask_job(verb, job, session, now=None, question=None, choice=None, code=None):
+    """Write the request for a job's own action (verb: answer, cancel or retry), as ask() does
+    for an app's; its id. `code`: a fresh console code, for a choice the job marks as can't be
+    undone; root checks it and uses it up."""
+    word = JOB_VERBS.get(verb) if isinstance(verb, str) else None
+    check_job_shape(word, job, question, choice, code)
+    now = paths.now_ms() if now is None else now
+    rid = secrets.token_hex(8)
+    doc = {"schema": SCHEMA, "id": rid, "verb": word, "job": job, "at": now, "session": session.get("id"),
+           "browser": session.get("browser")}
+    if word == "job.answer":
+        doc.update(question=question, choice=choice)
+        if code is not None:
+            doc["code"] = code
+    dfd = paths.open_folder(paths.at(REQUESTS))
+    try:
         paths.write_at(dfd, rid + ".json", paths.dump(doc), 0o640, replace=False)
     finally:
         os.close(dfd)
@@ -318,8 +392,96 @@ def command(verb, app, name, browser, delete_data=False):
             "--detach", "--json", "--", paths.tool("bromigos"), "lab", "apps", verb, app] + (["--delete-data", "--yes"] if delete_data else [])
 
 
+def job_record(job):
+    """Root's own record of job `job` (the activity records), or None: looked up by its whole id."""
+    try:
+        import bromigos_activity as A
+        rec = A.find(A.Env(), job)
+    except Exception:           # no such job, no records, no bromigos-core: there is no such job
+        return None
+    return rec if isinstance(rec, dict) and rec.get("id") == job else None
+
+
+def job_command(verb, job, choice, browser):
+    """A job's action as argv, from checked words only: the id root found a record for, and for an
+    answer a choice that record offers."""
+    tool = paths.tool("bromigos-activity")
+    if verb == "job.answer":
+        return [tool, "answer", job, choice, "--json"]
+    if verb == "job.cancel":
+        return [tool, "cancel", job, "--json"]
+    return [tool, "retry", job, "--via", "board", "--device", browser_words(browser), "--detach", "--json"]
+
+
+# what `bromigos activity` says when the job itself refuses (its "refused"), as the board's codes
+REFUSED_AS = {"ended": "ended", "not-asking": "not-asking", "no-such-choice": "bad-choice", "unsafe": "not-safe",
+              "not-retryable": "cant-retry"}
+
+
+def decide_job(doc, now, run, log, record=None):
+    """A request for a job's own action that was read: checked again against root's record of the
+    job, and passed to `bromigos activity`. The answer."""
+    verb, job, question, choice = doc.get("verb"), doc.get("job"), doc.get("question"), doc.get("choice")
+    check_job_shape(verb, job, question, choice, doc.get("code"))
+    if not isinstance(doc.get("at"), int) or isinstance(doc.get("at"), bool) or not 0 <= now - doc["at"] <= REQUEST_MAX_AGE_MS:
+        raise Refused("too-old")
+    if verb not in allowed_verbs():
+        raise Refused("not-allowed")
+    rec = (record or job_record)(job)
+    if not rec:
+        raise Refused("no-job")
+    state = rec.get("state")
+    if verb == "job.answer":
+        q = rec.get("question") if isinstance(rec.get("question"), dict) else None
+        if state in ENDED:
+            raise Refused("ended")
+        # the question's id is in the request so that an answer to a question that was replaced is refused
+        if state != "needs-you" or not q or q.get("id") != question:
+            raise Refused("not-asking")
+        picked = next((c for c in q.get("choices") or [] if isinstance(c, dict) and c.get("id") == choice), None)
+        if picked is None:
+            raise Refused("bad-choice")
+        # a choice the job marks as can't be undone (`[id!]`, "danger") takes what deleting an
+        # app's data takes: a fresh code that root made, used up here. The session alone isn't
+        # enough, whoever started the job (DESIGN §1: what can't be undone asks again)
+        if picked.get("danger") is not False and picked.get("danger") is not None and not use_delete_code(doc.get("code"), now):
+            raise Refused("danger-needs-code")
+    elif verb == "job.cancel":
+        if state in ENDED:
+            raise Refused("ended")
+        if not rec.get("cancel_safe"):
+            raise Refused("not-safe")
+    elif state not in RETRY_FROM or "retry" not in (rec.get("can") or []):
+        raise Refused("cant-retry")
+    argv = job_command(verb, job, choice, doc.get("browser"))
+    run = run or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL))
+    try:
+        r = run(argv)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"bromigos-board: the job's command didn't run: {e}")
+        raise Refused("not-taken") from None
+    try:
+        out = json.loads(r.stdout)
+    except ValueError:
+        out = None
+    out = out if isinstance(out, dict) else {}
+    # started again: the new job's id (its record, where there's no systemd to hand the job to)
+    new = out.get("id") or (out.get("job") or {}).get("id") if verb == "job.retry" else job
+    new = new if isinstance(new, str) and JOB_ID.match(new) else None
+    refused = r.returncode == 3 or out.get("ok") is False
+    if refused or (r.returncode != 0 and not (verb == "job.retry" and new)):
+        # the job refused in the moment between root's look and the command's, or the command failed
+        code = REFUSED_AS.get(out.get("refused")) if refused else None
+        if not code:
+            log("bromigos-board: the job's command failed: " + ((r.stderr or r.stdout or "").strip().splitlines() or ["no word why"])[-1][:300])
+        raise Refused(code or "not-taken")
+    return {"schema": SCHEMA, "ok": True, "job": new, "words": JOB_WORDS[verb]}
+
+
 def decide(doc, now, run, cat, log):
     """A request that was read: checked again, and its job started. The answer."""
+    if doc.get("verb") in JOB_WORDS:
+        return decide_job(doc, now, run, log)
     verb, app, delete_data = doc.get("verb"), doc.get("app"), doc.get("delete_data", False)
     check_shape(verb, app, delete_data, doc.get("code"))
     if not isinstance(doc.get("at"), int) or isinstance(doc.get("at"), bool) or not 0 <= now - doc["at"] <= REQUEST_MAX_AGE_MS:

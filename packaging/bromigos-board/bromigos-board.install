@@ -7,8 +7,29 @@ post_install() {
   systemd-tmpfiles --create /usr/lib/tmpfiles.d/bromigos-board.conf >/dev/null 2>&1 || true
 }
 
+# An upgrade never widens what the board's page may do on its own (docs/board.md, "What a session
+# can do"): before the new files go in, the old package says what it allowed by default; after,
+# a server whose server.toml doesn't say [board] actions gets that list written in. A board from
+# before actions allowed nothing. A new install has none of this, and gets the new default.
+pre_upgrade() {
+  mkdir -p -m 0700 var/lib/bromigos-board-root 2>/dev/null || true
+  python3 -I -c 'import json, sys
+sys.path.insert(0, "usr/lib/bromigos/lib")
+try:
+    from bromigos_board import actions
+    was = list(actions.DEFAULT_ACTIONS)
+except Exception:            # a board with no actions: it allowed nothing
+    was = []
+print(json.dumps(was))' > var/lib/bromigos-board-root/upgrade-actions 2>/dev/null \
+    || rm -f var/lib/bromigos-board-root/upgrade-actions
+}
+
 post_upgrade() {
   post_install
+  if [ -s var/lib/bromigos-board-root/upgrade-actions ]; then
+    usr/lib/bromigos/board/bromigos-board keep-actions var/lib/bromigos-board-root/upgrade-actions || true
+  fi
+  rm -f var/lib/bromigos-board-root/upgrade-actions
   systemctl try-restart bromigos-board.service >/dev/null 2>&1 || true
   # a server set up before the page could act: its helper's watch starts with the rest
   if systemctl is-enabled -q bromigos-board.socket 2>/dev/null; then

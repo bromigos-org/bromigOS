@@ -24,6 +24,9 @@ bromigos-board snapshot [--once]
                             seconds while a browser is connected; --once: one reading
 bromigos-board act [ID]     (root, bromigos-board-act.service) take the page's requests out of
                             their folder, check each again and start its job; ID: that one only
+bromigos-board keep-actions FILE
+                            (root, the package's upgrade) a server with no [board] actions keeps
+                            what the board could do before: the list in FILE (JSON), written in
 """
 
 EXIT_OK, EXIT_PROBLEM, EXIT_USAGE, EXIT_CANT = 0, 1, 2, 3
@@ -193,6 +196,57 @@ def cmd_activity_folder(a):
     return EXIT_OK
 
 
+def keep_actions(was):
+    """On an upgrade: a server whose server.toml doesn't say `[board] actions` gets the list the
+    board allowed before the upgrade written in, so the browsers already signed in can't do more
+    than they could. Nothing changes when the file says, when the old list is the new one, or
+    when the server has no server.toml. The words it wrote, or None."""
+    import tomllib
+    from . import actions
+    was = [w for w in was if w in actions.DEFAULT_ACTIONS] if isinstance(was, list) else []
+    path = paths.at(paths.SERVER_TOML)
+    try:
+        with open(path, "rb") as f:
+            text = f.read().decode()
+        doc = tomllib.loads(text)
+    except (OSError, ValueError):
+        return None                        # no settings to keep, or ones this can't read: left alone
+    board = doc.get("board")
+    if (isinstance(board, dict) and "actions" in board) or was == list(actions.DEFAULT_ACTIONS):
+        return None
+    line = "actions = [" + ", ".join(json.dumps(w) for w in was) + "]"
+    note = ("# what the board's page may do: kept as it was before an upgrade gave the board more "
+            "(docs/board.md, \"What a session can do\")")
+    lines = text.splitlines()
+    at = next((i for i, x in enumerate(lines) if x.strip() == "[board]"), None)
+    if at is None:
+        lines += ([""] if lines and lines[-1].strip() else []) + ["[board]", note, line]
+    else:
+        lines[at + 1:at + 1] = [note, line]
+    st = os.stat(path)
+    tmp = f"{path}.bromigos-board.{os.getpid()}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, st.st_mode & 0o7777)
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    os.replace(tmp, path)
+    return line
+
+
+def cmd_keep_actions(a):
+    if needs_root():
+        return EXIT_CANT
+    try:
+        with open(a.file) as f:
+            was = json.load(f)
+    except (OSError, ValueError):
+        was = []                           # unreadable: the narrowest, nothing
+    line = keep_actions(was)
+    if line:
+        print(f"bromigos-board: kept what the board's page could do before this upgrade, in {paths.SERVER_TOML}: "
+              f"[board] {line}. The new default is wider; to have it, remove that line.")
+    return EXIT_OK
+
+
 def cmd_serve(a):
     import uvicorn
     from . import api
@@ -223,9 +277,11 @@ def main(argv=None):
     p = sub.add_parser("act")
     p.add_argument("id", nargs="?")
     sub.add_parser("activity-folder")
+    p = sub.add_parser("keep-actions")
+    p.add_argument("file")
     a = ap.parse_args(argv)
     if not a.cmd:
         print(USAGE, end="")
         return EXIT_USAGE
     return {"code": cmd_code, "sessions": cmd_sessions, "snapshot": cmd_snapshot, "serve": cmd_serve,
-            "act": cmd_act, "activity-folder": cmd_activity_folder}[a.cmd](a)
+            "act": cmd_act, "activity-folder": cmd_activity_folder, "keep-actions": cmd_keep_actions}[a.cmd](a)
