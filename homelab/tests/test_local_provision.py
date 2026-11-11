@@ -517,7 +517,7 @@ class ApplyTests(unittest.TestCase):
         self.net["up"] = True
         self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
         want = {"navidrome": ["/srv/apps/navidrome/data/navidrome.db"], "sonarr": ["/srv/apps/sonarr/config/*.db"],
-                "jellyfin": ["/srv/apps/jellyfin/config/data/*.db"], "prowlarr": ["/srv/apps/prowlarr/config/*.db"]}
+                "jellyfin": ["/srv/apps/jellyfin/config/data/data/*.db"], "prowlarr": ["/srv/apps/prowlarr/config/*.db"]}
         self.assertEqual({k: v["sqlite"] for k, v in self.hooks().items()}, want)
         # as an engine from before the hooks left it: every app installed and on record, no hook
         d = Path(self.root, "etc/bromigos/backup-databases.d")

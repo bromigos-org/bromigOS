@@ -25,6 +25,9 @@ lab="$repo/homelab/bin/bromigos-lab"
 PROVE=(navidrome prowlarr sonarr radarr lidarr bazarr jellyfin seerr autoscan audiobookshelf pinchflat uptime
        home-automation documents)
 (( $# )) && PROVE=("$@")
+# Apps that make no database until someone uses them: their hook finding nothing here is right,
+# and is reported, not failed. Uptime Kuma 2 makes kuma.db when its first page is filled in
+LATER=(uptime)
 
 install -Dm0644 "$repo/homelab/share/provision-catalogue.toml" /usr/share/bromigos/lab/provision-catalogue.toml
 rm -rf /usr/share/bromigos/lab/quadlet
@@ -50,9 +53,29 @@ for r in json.load(sys.stdin)["databases"]:
           ("own " + r["path"]) if r.get("own") else "failed " + r["reason"])' "$1"
 }
 
-proven=() missed=() never=()
+units_of() {
+    python3 -c 'import sys, tomllib; print(" ".join(tomllib.load(open(sys.argv[1], "rb")).get("units") or []))' \
+        "/etc/bromigos/backup-databases.d/$1.toml" 2>/dev/null
+}
+proven=() missed=() never=() later=()
 for id in "${PROVE[@]}"; do
-    [[ " ${added[*]} " == *" $id "* ]] || { never+=("$id"); continue; }
+    # an app whose add stopped at its health check (slow to answer) may still run: its hook is
+    # checked all the same once its services are up
+    read -ra units < <(units_of "$id")
+    if [[ " ${added[*]} " != *" $id "* ]]; then
+        up=""
+        for _ in $(seq 24); do
+            (( ${#units[@]} )) && systemctl is-active --quiet "${units[@]}" && { up=1; break; }
+            sleep 5
+        done
+        if [[ -z $up ]]; then
+            never+=("$id")
+            echo "::group::$id: not running"
+            for u in "${units[@]}"; do journalctl -u "$u" -n 25 --no-pager 2>&1 | tail -25; done
+            echo "::endgroup::"
+            continue
+        fi
+    fi
     echo "::group::$id"
     cat "/etc/bromigos/backup-databases.d/$id.toml"
     # an app makes its database as it starts; some take a minute after they answer
@@ -65,11 +88,12 @@ for id in "${PROVE[@]}"; do
     echo "$got"
     if grep -q '^copied ' <<<"$got"; then
         proven+=("$id")
+    elif [[ " ${LATER[*]} " == *" $id "* ]] && grep -q '^none ' <<<"$got"; then
+        later+=("$id")
     else
         missed+=("$id")
         echo "its folder, for the right path:"
         find "/srv/apps/$id" -xdev \( -name '*.db' -o -name '*.sqlite*' -o -name '*.blb' -o -name '*.db-wal' \) -printf '  %p %s bytes\n' 2>/dev/null | head -40
-        read -ra units < <(python3 -c 'import sys, tomllib; print(" ".join(tomllib.load(open(sys.argv[1], "rb")).get("units") or []))' "/etc/bromigos/backup-databases.d/$id.toml")
         systemctl --no-pager --lines=0 status "${units[@]}" 2>&1 | grep -E 'Active:|●' || true
     fi
     echo "::endgroup::"
@@ -82,7 +106,8 @@ echo "::endgroup::"
     echo "## The database hooks on the real apps"
     echo
     echo "- Proven (a database copied through its hook): ${proven[*]:-none}"
-    echo "- Copied nothing (the hook's path is wrong, or the app makes no database until it is used): ${missed[*]:-none}"
+    echo "- No database yet, as expected (it makes one when it is first used): ${later[*]:-none}"
+    echo "- Copied nothing (the hook's path is wrong): ${missed[*]:-none}"
     echo "- Not installed here (the image or the app didn't come up): ${never[*]:-none}"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 (( ${#missed[@]} == 0 && ${#never[@]} == 0 ))
