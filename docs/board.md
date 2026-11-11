@@ -276,6 +276,9 @@ Content-Security-Policy.
   - Unsafe addresses never become links. A part that throws costs that part only.
 - **The shapes** (`tests/shapes.spec.ts`): every fixture document has the service's keys
   and types.
+- **The layout** (`tests/layout.spec.ts`): the rail's two small marks on a machine (its
+  update arrow, its state) stay small, in their corners and apart; and the activity strip
+  never covers the end of a page or of a sheet, at either width.
 - **The pages** (`routes`, `a11y`, `motion`, `phone`, `shell`, `home`, `machine`, `data`,
   `supply`), at 1280 and 390 pixels wide: every route in seven page states with no error
   and no request to another site; a hint and an accessible name on every control, and axe;
