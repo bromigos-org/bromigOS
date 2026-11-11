@@ -222,7 +222,9 @@ if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]] && (( ${want[move]:-0} )); the
         sudo cp -a /srv/data/apps/. /srv/apps/
         sudo find /srv/data/apps -mindepth 1 -delete
         # the media library and the backups folder as the old engine made them: folders on the
-        # system disk. The old installer made no media subvolume at all
+        # system disk, the library's own folders (music, films, ...) among them, which an app that
+        # plays from the library mounts. The old installer made no media subvolume at all
+        sudo cp -a /srv/data/media/. /srv/media/
         sudo mkdir -p /srv/media/movies /srv/backups/data
         echo 'a film the library had before the move' | sudo tee /srv/media/movies/isotest-marker >/dev/null
         echo 'a backup another machine sent before the move' | sudo tee /srv/backups/data/isotest-marker >/dev/null
