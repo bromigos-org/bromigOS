@@ -1,9 +1,10 @@
 """VECTOR: his brain (the model and where it runs), his voice (his own mute, auto or a
-pinned voice), the conversation mode, his keys, his emergency switch, and what he
-remembers (docs/settings.md, "VECTOR").
+pinned voice, the local voice and where he speaks from now), the conversation mode, his
+keys, his emergency switch, and what he remembers (docs/settings.md, "VECTOR").
 
 His state is read the way he keeps it, without starting him: the voice's mute through
-`bromigos-holo mute status` (that form never starts him), the pinned voice from
+`bromigos-holo mute status` (that form never starts him), the local voice and where he speaks
+from through `bromigos-holo local-voice status --json` (never starts him either), the pinned voice from
 ~/.local/state/bromigos/vector-voice-mode, the emergency switch from its markers (the same
 files his terminal and tools read before every command: vector's holo/vector/switch.py),
 and, while he runs, what he publishes in $XDG_RUNTIME_DIR/bromigos-vector.json (the
@@ -114,8 +115,9 @@ class VectorPage:
     def __init__(self, ctx):
         self.ctx = ctx
         self.page = ctx.page()
-        self.page.set_reset(self.reset, what="His voice back to auto and unmuted. His keys are on the Shortcuts "
-                                             "page; his emergency switch is never changed by a reset.")
+        self.page.set_reset(self.reset, what="His voice back to auto and unmuted, and the local voice back to "
+                                             "auto. His keys are on the Shortcuts page; his emergency switch is "
+                                             "never changed by a reset.")
         self.key_rows = []
         self.mem_rows = []
         self.mem = None
@@ -154,6 +156,19 @@ class VectorPage:
             hint="Hands-free: he listens on the echo-cancelled microphone and answers without a key "
                  "(SUPER+SHIFT+E). Turning it on starts him if he isn't running",
             advanced={"runs": "bromigos-holo conversation", "reads": "$XDG_RUNTIME_DIR/bromigos-vector.json"})
+        self.local_row = ctx.switch_row(
+            g, "Local voice", "", key="local-voice", on_toggle=self._local_voice,
+            hint="His own voice from this computer's NVIDIA card, and his hearing on the processor. It steps "
+                 "aside while you play a game, and the lab speaks meanwhile. Auto: on with an NVIDIA card of "
+                 "8 GB or more, off elsewhere. Never starts him",
+            advanced={"file": "~/.local/state/bromigos/vector-local-voice",
+                      "runs": "bromigos-holo local-voice on|off|auto",
+                      "reads": "$XDG_RUNTIME_DIR/bromigos-vector-voice.json"})
+        self.from_row = ctx.row(
+            g, "Speaking from", "Asking…", key="speaking-from",
+            hint="Where his voice comes from right now (this computer, the lab, or the processor's stand-in "
+                 "voice), and why the local voice isn't speaking when it isn't",
+            advanced={"runs": "bromigos-holo local-voice status", "reads": "$XDG_RUNTIME_DIR/bromigos-vector-voice.json"})
         ctx.row(g, "The desktop's mute and sounds", "Mute everything, the output device, the cues",
                 hint="Opens the Sound page", key="sound", activate=lambda: ctx.open_page("sound"))
 
@@ -189,6 +204,7 @@ class VectorPage:
     def refresh(self):
         self._sync_local()
         self.ctx.run([HOLO, "mute", "status"], self._got_mute)
+        self.ctx.json([HOLO, "local-voice", "status", "--json"], self._got_local_voice)
         self.ctx.json(["bromigos", "target", "--json"], self._got_targets)
         self.ctx.json(["bromigos", "keys", "list", "--all", "--json"], self._got_keys)
         self.ctx.json(MEMORY + ["--json"], self._got_memory)
@@ -197,6 +213,7 @@ class VectorPage:
         if self.page.get_mapped():
             self._sync_local()
             self.ctx.run([HOLO, "mute", "status"], self._got_mute)
+            self.ctx.json([HOLO, "local-voice", "status", "--json"], self._got_local_voice)
         return True
 
     def _sync_local(self):
@@ -226,6 +243,20 @@ class VectorPage:
         else:
             self.mute_row.set_sensitive(False)
             self.mute_row.set_subtitle("bromigos-holo isn't installed (bromigos-vector)")
+
+    def _got_local_voice(self, doc, _err):
+        if not doc or "enabled" not in doc:
+            self.local_row.set_sensitive(False)
+            self.local_row.set_subtitle("This VECTOR is older than the local voice (bromigos-vector)")
+            self.from_row.set_subtitle("Unknown")
+            return
+        self.local_voice = doc
+        self.local_row.set_sensitive(True)
+        self.local_row.set_quiet(bool(doc["enabled"]))
+        why = str(doc.get("why") or "")
+        self.local_row.set_subtitle(_esc(why[:1].upper() + why[1:]))
+        where = str(doc.get("where") or "")
+        self.from_row.set_subtitle(_esc(where[:1].upper() + where[1:]))
 
     def _got_targets(self, doc, err):
         ctx = self.ctx
@@ -336,11 +367,20 @@ class VectorPage:
                 self.ctx.toast(said, undo=undo)
             self._sync_local()
             self.ctx.run([HOLO, "mute", "status"], self._got_mute)
+            self.ctx.json([HOLO, "local-voice", "status", "--json"], self._got_local_voice)
         self.ctx.run([HOLO] + args, done)
 
     def _mute(self, on):
         self._holo(["mute", "on" if on else "off"], f"His voice {'muted' if on else 'unmuted'}",
                    undo=lambda: self._holo(["mute", "off" if on else "on"], "Undone"))
+
+    def _local_voice(self, on):
+        doc = getattr(self, "local_voice", None) or {}
+        if bool(doc.get("enabled")) == on:
+            return
+        old = doc.get("setting") or "auto"
+        self._holo(["local-voice", "on" if on else "off"], f"Local voice {'on' if on else 'off'}",
+                   undo=lambda: self._holo(["local-voice", old], "Undone"))
 
     def _voice_mode(self, mode):
         old = (live() or {}).get("voice_mode") or pinned() or "auto"
@@ -412,10 +452,12 @@ class VectorPage:
                         done=lambda d: self._got_memory(d, ""))
 
     def reset(self):
-        """His voice back to auto and unmuted (never the emergency switch)."""
+        """His voice back to auto and unmuted, the local voice back to auto (never the emergency switch)."""
         old_mode = (live() or {}).get("voice_mode") or pinned() or "auto"
         if old_mode != "auto":
             self._holo(["voice", "auto"], "Voice: auto")
+        if (getattr(self, "local_voice", None) or {}).get("setting", "auto") != "auto":
+            self._holo(["local-voice", "auto"], "Local voice: auto")
         self._holo(["mute", "off"], "His voice: auto, unmuted")
         return None
 
@@ -443,6 +485,10 @@ PAGE = Page(
         Entry("mute", "Mute VECTOR's voice", ["vector mute", "silence vector", "quiet"], "His voice"),
         Entry("voice", "VECTOR's voice", ["pinned voice", "auto voice", "robot", "scientist", "floor"], "His voice"),
         Entry("conversation", "Conversation mode", ["hands-free", "listen", "SUPER+SHIFT+E"], "His voice"),
+        Entry("local-voice", "VECTOR's local voice", ["gpu voice", "offline voice", "nvidia", "games", "gaming",
+                                                       "lab voice"], "His voice"),
+        Entry("speaking-from", "Where VECTOR speaks from", ["voice status", "local voice status", "lab"],
+              "His voice"),
         Entry("keys", "VECTOR's keys", ["push to talk", "talk key", "wake key", "SUPER+V", "SUPER+E"], "His keys"),
         Entry("switch", "VECTOR's emergency switch", ["kill switch", "turn vector off", "stop vector", "shell",
                                                        "terminal", "commands", "SUPER+CTRL+ESCAPE"],
