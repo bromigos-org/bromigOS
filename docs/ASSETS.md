@@ -67,6 +67,8 @@ names, in backticks, with an explicit decision: **yes** (who, date) or **no**
 | Revolver Lynx voice | A copy of a Fish library voice | **no** | A third-party upload |
 | Any cloned voice of a real person or character | | **never** | |
 | Kokoro, Qwen3-TTS, Whisper and Qwen3 embedding models | Apache-2.0 or MIT | yes, downloaded at install | Never vendor the weights |
+| VECTOR's local voice: Qwen3-TTS 12 Hz 0.6B Base as 8-bit GGUF | Qwen, Apache-2.0; converted with qwentts.cpp (MIT) | yes, downloaded on first use | Pinned by revision and sha256 into `~/.cache/bromigos/local-voice`, never vendored. [See the notes](#vectors-local-voice) |
+| VECTOR's local hearing: NVIDIA Parakeet TDT 0.6B v2, int8 ONNX | NVIDIA, CC-BY-4.0 | yes, downloaded on first use, **with attribution** | Pinned the same way. The credit is below and in VECTOR's docs. [See the notes](#vectors-local-voice) |
 | VECTOR's skills (`skills/*.md` in the vector repository) | Written for the desktop | yes, the generic ones | Anything naming a person's hosts stays in their dotfiles |
 | Peripheral modules (`peripherals/`) | Written for the operator's desktop, generalised | yes, as code | Dependencies aren't vendored. No keymap file ships |
 | The README's header emblem (`themes/wick/emblem/emblem-512.png`) | The Wick's emblem kit | yes, as a brand asset | Shown at the top of the README |
@@ -198,6 +200,26 @@ needs its own row.
 - **The operator's personal voice cast**: four voices designed in Fish Audio from text,
   with references rendered once by `make-refs.py`. They belong to another product, not
   bromigOS. Fish's terms would apply if that ever changed.
+
+### VECTOR's local voice
+
+VECTOR's local voice runs on the user's own NVIDIA card. Neither model ships in a package.
+On first use, each file is fetched from one pinned revision and checked against its sha256
+(`holo/local_models.py` in the vector repository). A file that doesn't match is deleted.
+
+- **Speech: Qwen3-TTS 12 Hz 0.6B Base**, by the Qwen team, Apache-2.0
+  (<https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base>). We converted Qwen's official
+  safetensors to 8-bit GGUF with qwentts.cpp's own tools (MIT,
+  <https://github.com/ServeurpersoCom/qwentts.cpp>). Our files matched the qwentts.cpp
+  author's published conversion byte for byte, so that copy is fetched and checked against
+  our hashes. The vector repository's `tools/convert-local-voice.sh` repeats the
+  conversion. It speaks with the user's own reference voice.
+- **Hearing: Parakeet TDT 0.6B v2**, by NVIDIA, licensed under
+  [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+  (<https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2>). The int8 ONNX export is
+  <https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx>, CC-BY-4.0, used unchanged.
+  The licence asks for credit: this note, VECTOR's `docs/configuration.md` and any About
+  text that lists his models carry it.
 
 ### Other assets
 
