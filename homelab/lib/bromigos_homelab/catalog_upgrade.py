@@ -162,7 +162,9 @@ def evaluate(cat=None, hw=None, have=None, policy=None, goal="balanced", licence
                    "speed_text": C.fmt_speed(cat, cap, o.speed), "licence": v.model.licence.name,
                    "licence_plain": v.model.licence.plain(), "licence_changed": lic_changed,
                    "runtime": v.runtime, "workflow": v.workflow, "stack": v.stack,
-                   "voice": cap in ("tts", "stt")}
+                   "voice": cap in ("tts", "stt"), **C._eff(cat, v)}
+            cur_tier = cat.effective(cur)["tier"]
+            row["tier_changed"] = row["effective_tier"] != cur_tier
             row["reason"] = (f"{row['to']} is {k if k != 'better model' else 'a stronger model'} for {cap} "
                              f"(+{gain:.0f} quality, {o.per_gpu:.1f} GiB of {d.give():.0f} on the {d.name})"
                              + (f"; its licence is {v.model.licence.name}: {v.model.licence.plain()}"
@@ -176,6 +178,9 @@ def evaluate(cat=None, hw=None, have=None, policy=None, goal="balanced", licence
             else:
                 row["action"] = "apply (Phase 2: lab models replace)" + (
                     "" if out["in_quiet_hours"] else f", in quiet hours {pol['quiet_hours']}")
+            if row["tier_changed"] or row["effective_tier"] != "clean":
+                row["reason"] += f"; {C._tier_words(row) or 'effective tier clean'}" + (
+                    f" (now {cur_tier})" if row["tier_changed"] else "")
             if row["voice"]:
                 row["reason"] += "; the voice service changes only while VECTOR is quiet"
             out["proposals"].append(row)

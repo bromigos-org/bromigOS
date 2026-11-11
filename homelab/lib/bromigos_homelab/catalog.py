@@ -56,6 +56,8 @@ SETUPS = {
     "mac-512": ("Apple M3 Ultra", 1, 512),
 }
 GOALS = ("quality", "balanced", "speed", "throughput")   # throughput: many agents on one LLM
+TIERS_LICENCE = ("clean", "conditional", "non-commercial")   # a licence's tier, worst last
+TIER_ORDER = {t: i for i, t in enumerate(TIERS_LICENCE)}
 LICENCE_FILTERS = ("any", "commercial", "permissive")
 PRIORITIES = ("balanced", "brain", "media", "voice", "resident")
 # how much each capability counts in a plan (VECTOR's brain and voice first); models.toml's
@@ -95,6 +97,9 @@ class Licence:
     outputs: str = ""
     permissive: bool = False         # OSI or CC-BY class: no use restrictions beyond attribution
     hub: tuple = ()                  # the Hugging Face licence ids it appears as (the refresh compares them)
+    tier_set: str = ""               # models.toml's `tier`, when the derived one isn't right
+    tier_reason: str = ""            # why, in plain words ("use restrictions: no military uses, …")
+    decision: str = ""               # terms too unclear to call: what the owner has to decide
 
     def allows(self, filt="any", region=None):
         """(ok, why). filt: any | commercial | permissive. region: the user's ("EU", "UK", …)."""
@@ -109,12 +114,25 @@ class Licence:
     @property
     def tier(self):
         """clean (no conditions beyond keeping a notice or simple credit) | conditional (use
-        restrictions, caps, territory, attribution in the product) | non-commercial."""
+        restrictions, caps, territory, attribution in the product, an API's output terms) |
+        non-commercial."""
+        if self.tier_set:
+            return self.tier_set
         if self.commercial == "no":
             return "non-commercial"
         if self.permissive and self.commercial == "yes" and not self.territory:
             return "clean"
         return "conditional"
+
+    @property
+    def why(self):
+        """The tier's reason in plain words."""
+        if self.tier_reason:
+            return self.tier_reason
+        bits = [self.conditions] if self.conditions else []
+        if self.territory:
+            bits.append("not licensed in " + ", ".join(self.territory))
+        return "; ".join(bits) or self.plain()
 
     def plain(self):
         if self.commercial == "yes" and not self.territory:
@@ -189,6 +207,7 @@ class Variant:
     notes: str = ""
     caps: tuple = ()                 # only these of its model's capabilities (default: all)
     parts: bool = None               # mesh: separate parts (None: the model's)
+    built_on: tuple = ()             # parts only this variant brings (an official runtime's extras)
 
     @property
     def key(self):
@@ -252,6 +271,29 @@ class Model:
     variants: list = dataclasses.field(default_factory=list)
     parts: bool = False              # mesh: makes separate, named parts (part-aware 3D)
     in_use: tuple = ()               # where bromigOS's own work uses it: ({where, what}, …)
+    built_on: tuple = ()             # its parts with their own licences: (Part, …)
+    aliases: tuple = ()              # other names it goes by in provenance logs ("rife 4.9")
+
+
+@dataclasses.dataclass
+class Part:
+    """Something a model is built on: an encoder, a backbone, a VAE, a text encoder, a LoRA.
+    Either a [licence] of its own, or `model`, another catalog model (its chain counts too)."""
+    name: str
+    part: str = ""                   # encoder | backbone | vae | text encoder | lora | …
+    licence: "Licence" = None
+    model: str = ""
+    cite: str = ""
+
+
+@dataclasses.dataclass
+class Api:
+    """A model used through someone's API (nolgia routes), for the asset check: its terms."""
+    id: str
+    name: str
+    licence: "Licence"
+    route: str = ""
+    cite: str = ""
 
 
 class Catalog:
@@ -265,9 +307,19 @@ class Catalog:
         self.version = int(doc.get("version", 0))
         self.licences = {}
         for lid, t in (doc.get("licence") or {}).items():
+            tier = {"no": "non-commercial"}.get(t.get("tier", ""), t.get("tier", ""))
+            if tier and tier not in TIERS_LICENCE:
+                raise CatalogError(f"{path}: licence {lid}: tier {tier!r} isn't {', '.join(TIERS_LICENCE)}")
             self.licences[lid] = Licence(lid, t.get("name", lid), t.get("url", ""), t.get("commercial", "no"),
                                          t.get("conditions", ""), tuple(t.get("territory", ())), t.get("outputs", ""),
-                                         bool(t.get("permissive", False)), tuple(t.get("hub", ())))
+                                         bool(t.get("permissive", False)), tuple(t.get("hub", ())), tier,
+                                         t.get("tier_reason", ""), t.get("decision", ""))
+        self.apis = {}
+        for aid, t in (doc.get("api") or {}).items():
+            lic = self.licences.get(t.get("licence"))
+            if lic is None:
+                raise CatalogError(f"{path}: api {aid}: unknown licence {t.get('licence')!r}")
+            self.apis[aid] = Api(aid, t.get("name", aid), lic, t.get("route", ""), t.get("cite", ""))
         self.caps = {}
         self.notes = []
         tables = doc.get("capability") or {}
@@ -319,7 +371,9 @@ class Catalog:
                         state_mib_per_seq=float(m.get("state_mib_per_seq", 0)),
                         max_context=int(m.get("max_context", 0)), serving=tuple(m.get("serving", ())),
                         features=tuple(m.get("features", ())), cite=tuple(m.get("cite", ())), notes=m.get("notes", ""),
-                        parts=bool(m.get("parts", False)), in_use=tuple(dict(x) for x in m.get("in_use", ())))
+                        parts=bool(m.get("parts", False)), in_use=tuple(dict(x) for x in m.get("in_use", ())),
+                        built_on=self._parts(path, m.get("id"), m.get("built_on", ())),
+                        aliases=tuple(m.get("aliases", ())))
             if mod.id in self.models:
                 raise CatalogError(f"{path}: model {mod.id} twice")
             for v in m.get("variant") or []:
@@ -333,12 +387,77 @@ class Catalog:
                     v.get("workflow", ""), v.get("quality_delta"), float(v.get("weights_gib", 0)),
                     tuple(v.get("match", ())), v.get("notes", ""),
                     tuple(c for c in (ALIASES.get(c, c) for c in v.get("capabilities", ())) if c in self.caps),
-                    v.get("parts")))
+                    v.get("parts"), self._parts(path, f"{m.get('id')}/{v.get('id')}", v.get("built_on", ()))))
             self.models[mod.id] = mod
         self.pending = list(doc.get("pending") or [])
         self.archived = list(doc.get("archived") or [])    # pending entries that waited too long, or were added
         self.combos = list(doc.get("combo") or [])
         self._speed_range = {}
+
+    def _parts(self, path, owner, rows):
+        out = []
+        for r in rows or ():
+            lic = None
+            if r.get("licence"):
+                lic = self.licences.get(r["licence"])
+                if lic is None:
+                    raise CatalogError(f"{path}: {owner}: built_on {r.get('name')!r}: unknown licence {r['licence']!r}")
+            out.append(Part(r.get("name", "?"), r.get("part", ""), lic, r.get("model", ""), r.get("cite", "")))
+        return tuple(out)
+
+    # ---- licence lineage
+    def effective(self, what, _seen=None):
+        """The effective licence tier of a model or a variant, over its whole chain: its own
+        licence and everything it's built on (other catalog models' chains too). ->
+        {"tier", "reason", "reasons": [plain words], "chain": [{name, part, licence, tier}],
+        "decision": [what to decide]}. The tier is the worst of the chain."""
+        seen = _seen if _seen is not None else set()
+        model = what.model if isinstance(what, Variant) else what
+        extra = what.built_on if isinstance(what, Variant) else ()
+        chain, reasons, decide = [], [], []
+        worst = "clean"
+
+        def add(name, part, lic, via=""):
+            nonlocal worst
+            chain.append({"name": name, "part": part, "licence": lic.name, "licence_id": lic.id, "tier": lic.tier,
+                          "via": via})
+            if TIER_ORDER[lic.tier] > TIER_ORDER[worst]:
+                worst = lic.tier
+            if lic.tier != "clean":
+                what_ = f"built on {name}" if part else name
+                reasons.append(f"{what_}: {lic.why}" if part else f"{lic.name}: {lic.why}")
+            if lic.decision:
+                decide.append(f"{name}: {lic.decision}")
+
+        add(model.name, "", model.licence)
+        seen.add(model.id)
+        for p in tuple(model.built_on) + tuple(extra):
+            if p.licence is not None:
+                add(p.name, p.part or "part", p.licence)
+            if p.model and p.model in self.models and p.model not in seen:
+                sub = self.effective(self.models[p.model], seen)
+                for c in sub["chain"]:
+                    chain.append(dict(c, via=c.get("via") or p.name))
+                if TIER_ORDER[sub["tier"]] > TIER_ORDER[worst]:
+                    worst = sub["tier"]
+                reasons += [r if r.startswith("built on") else f"built on {r}" for r in sub["reasons"]]
+                decide += sub["decision"]
+        reasons = list(dict.fromkeys(reasons))
+        return {"tier": worst, "reason": "; ".join(reasons) if reasons else "every part is Apache, MIT, BSD or CC-BY",
+                "reasons": reasons, "chain": chain, "decision": list(dict.fromkeys(decide))}
+
+    def allows(self, what, filt="any", region=None):
+        """Licence.allows over the whole chain: (ok, why)."""
+        model = what.model if isinstance(what, Variant) else what
+        ok, why = model.licence.allows(filt, region)
+        if not ok or filt == "any" and not region:
+            return ok, why
+        for c in self.effective(what)["chain"]:
+            lic = self.licences[c["licence_id"]]
+            ok, why = lic.allows(filt, region)
+            if not ok:
+                return False, f"built on {c['name']}: {why}"
+        return True, ""
 
     # ---- lookups
     def variants(self, cap):
@@ -787,7 +906,7 @@ def options(cat, cap, hw, licence="any", region=None, unsupported=False, why=Non
             if why is not None:
                 why.setdefault("needs support", []).append(f"{v.key}: {v.stack}")
             continue
-        ok, w = v.model.licence.allows(licence, region)
+        ok, w = cat.allows(v, licence, region)
         if not ok:
             if why is not None:
                 why.setdefault("licence", []).append(f"{v.key}: {w}")
@@ -932,7 +1051,7 @@ def pick(capability, vram_gib=None, ram_gib=64.0, vendor="nvidia", licence="any"
         have = max((d.give() for d in hw.gpus()), default=0)
         better = []
         for v in cat.variants(cap):
-            if not v.ready or not v.model.licence.allows(licence, region)[0] or (parts and not v.has_parts):
+            if not v.ready or not cat.allows(v, licence, region)[0] or (parts and not v.has_parts):
                 continue
             if v.vram_gib / max(v.gpus, 1) > have and v.quality(cap) > (uniq[0].quality if uniq else 0) + 2:
                 better.append((v.vram_gib, v))
@@ -967,8 +1086,24 @@ def _odoc(cat, o, hw=None):
             "licence_plain": v.model.licence.plain(), "licence_conditions": v.model.licence.conditions,
             "offload": v.offload, "fast": v.fast, "stack": v.stack, "vram_note": v.vram_note,
             "notes": v.notes or v.model.notes, "released": v.model.released, "parts": v.has_parts,
-            "in_use": [dict(x) for x in v.model.in_use],
+            "in_use": [dict(x) for x in v.model.in_use], **_eff(cat, v),
             "serving": o.serving, "published": [dict(x) for x in v.model.serving][:3]}
+
+
+def _eff(cat, what):
+    """effective_tier, effective_reason and effective_decision for a pick's document."""
+    e = cat.effective(what)
+    return {"effective_tier": e["tier"], "effective_reason": e["reason"], "effective_decision": e["decision"]}
+
+
+def _tier_words(d):
+    """ "effective tier conditional (built on DINOv3: …)" for the plain output, or "" when clean."""
+    if d.get("effective_tier", "clean") == "clean" and not d.get("effective_decision"):
+        return ""
+    s = f"effective tier {d['effective_tier']} ({d['effective_reason']})"
+    if d.get("effective_decision"):
+        s += "; needs a decision: " + "; ".join(d["effective_decision"])
+    return s
 
 
 def _reason(cat, cap, doc, goal):
@@ -1475,12 +1610,12 @@ def recommend(cat=None, hw=None, inv=None, goal="balanced", licence="any", regio
                                  "to": f"{best.variant.model.name} {best.variant.quant}",
                                  "gain": round(best.quality - cur_q, 1), "vram_gib": round(best.per_gpu * len(unit), 1),
                                  "licence": best.variant.model.licence.name,
-                                 "licence_plain": best.variant.model.licence.plain()})
+                                 "licence_plain": best.variant.model.licence.plain(), **_eff(cat, best.variant)})
             rows.append(row)
         for v, h in [(cat.variant(h["key"]), h) for h in here]:
             if not v:
                 continue
-            ok, why = v.model.licence.allows(licence, region)
+            ok, why = cat.allows(v, licence, region)
             if not ok:
                 w = {"device": " + ".join(d.key for d in unit), "model": f"{h['name']} {h['quant']}", "why": why}
                 if w not in warnings:
@@ -1720,7 +1855,8 @@ USAGE = """bromigos lab models recommend|plan|pick|tiers|upgrades|refresh|review
                                                     newer or better candidates (flagged for review, never applied)
   review [--json] [--all]                           what the weekly refresh found, each with adopt, watch or ignore
   review accept|ignore ID [--reason TEXT]           decide one (edits models.toml in a bromigOS checkout)
-  check                                             the catalog's data is consistent
+  check [--json] [--no-assets]                      the catalog's data is consistent; in a checkout, what made
+                                                    the shipped assets has a clean licence or a decision in docs/ASSETS.md
 Capabilities: """ + " ".join(CAPABILITIES) + """, and those models.toml adds (bromigos lab models pick lists them)"""
 
 
@@ -1743,7 +1879,7 @@ def _arg(argv, name, default=None, many=False):
 
 VALUED = {"--catalog", "--goal", "--licence", "--region", "--vendor", "--gpu", "--gpus", "--ram", "--hw", "--budget",
           "--always", "--want", "--clients", "--context", "--prompt", "--output", "--priority", "--since", "--repo",
-          "--reason", "--report", "--issues", "--today"}
+          "--reason", "--report", "--issues", "--today", "--repo"}
 
 
 def _positional(argv):
@@ -1838,16 +1974,18 @@ def _print_recommend(doc):
             flag = "  UPGRADE" if r.get("upgrade") else ""
             print(f"  {r['capability']:<10} runs: {have:<40} best fit: {b['name']} {b['quant']} "
                   f"({b['vram_gib']:.1f} GiB, {b['speed_text']}, {b['licence_plain']}){flag}")
+            if _tier_words(b):
+                print(f"  {'':<10} {_tier_words(b)}")
     if doc.get("not_running"):
         print("\nnothing in the lab runs these yet; the best fit on the biggest GPU:")
         for m in doc["not_running"]:
             print(f"  {m['capability']:<10} {m['name']} {m['quant']} on {m['device']} ({m['vram_gib']:.1f} GiB, "
-                  f"{m['speed_text']}, {m['licence_plain']})")
+                  f"{m['speed_text']}, {m['licence_plain']})" + (f"; {_tier_words(m)}" if _tier_words(m) else ""))
     if doc["upgrades"]:
         print("\nupgrades that fit:")
         for u in doc["upgrades"]:
             print(f"  {u['device']} {u['capability']}: {u['from']} -> {u['to']} (+{u['gain']} quality, "
-                  f"{u['vram_gib']:.1f} GiB, {u['licence_plain']})")
+                  f"{u['vram_gib']:.1f} GiB, {u['licence_plain']})" + (f"; {_tier_words(u)}" if _tier_words(u) else ""))
     for w in doc.get("licence_warnings") or []:
         print(f"licence: {w['model']} on {w['device']}: {w['why']}")
     print("\nA whole configuration (what stays resident, what swaps): bromigos lab models plan")
@@ -1868,6 +2006,8 @@ def _print_pick(doc):
         print(f"  or {a['name']} {a['quant']} · {a['runtime']} · {a['vram_gib']:.1f} GiB · {a['speed_text']} · "
               f"quality {a['quality']:.0f} · {a['licence_plain']}" + (" · separate parts" if a.get("parts") else ""))
     print("  " + doc["reason"])
+    if _tier_words(b):
+        print("  licence: " + _tier_words(b))
     for u in b.get("in_use") or []:
         print(f"  bromigOS uses it: {u.get('what', '')} ({u.get('where', '')})")
 
@@ -1883,11 +2023,24 @@ def main(argv):
         if cmd == "check":
             cat = load(_arg(rest, "--catalog"))
             problems = validate(cat)
+            # in a bromigOS checkout: what made the shipped assets, against docs/ASSETS.md's decisions
+            from . import catalog_assets as A
+            root = None if "--no-assets" in rest else (_arg(rest, "--repo") or A.repo_root(cat.path))
+            assets = A.check(cat, root) if root else None
+            if assets:
+                problems += assets["problems"]
+            if js:
+                print(json.dumps({"catalog": cat.path, "models": len(cat.models), "problems": problems,
+                                  "assets": assets}, indent=1))
+                return 1 if problems else 0
             for p in problems:
                 print("problem:", p)
+            for n in (assets or {}).get("notes", []):
+                print("note:", n)
             print(f"{cat.path}: {len(cat.models)} models, "
                   f"{sum(len(m.variants) for m in cat.models.values())} variants, researched {cat.researched}"
-                  + ("" if problems else ", consistent"))
+                  + ("" if problems else ", consistent")
+                  + (f"; {len(assets['assets'])} provenance logs checked against docs/ASSETS.md" if assets else ""))
             return 1 if problems else 0
         if cmd == "refresh":
             from . import catalog_refresh
@@ -1992,6 +2145,13 @@ def validate(cat):
             bad = [x for x in v.vendors if x not in ("nvidia", "amd", "apple", "intel", "cpu")]
             if bad:
                 out.append(f"{v.key}: unknown vendors {bad}")
+        for p in m.built_on + tuple(x for v in m.variants for x in v.built_on):
+            if p.model and p.model not in cat.models:
+                out.append(f"{m.id}: built_on {p.name!r}: no model {p.model!r} in the catalog")
+            if p.licence is None and not p.model:
+                out.append(f"{m.id}: built_on {p.name!r}: needs a licence or a model")
+            if not p.cite and p.licence is not None:
+                out.append(f"{m.id}: built_on {p.name!r}: cite the card or LICENSE it was read from")
     for c in cat.cap_ids:
         if not cat.variants(c):
             out.append(f"{c}: no models")
