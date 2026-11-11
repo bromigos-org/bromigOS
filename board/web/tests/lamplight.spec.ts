@@ -153,6 +153,6 @@ test("the station's script doesn't arrive: the hero's frame keeps the lab's plai
   await page.waitForTimeout(1000);
   await expect(frame).toBeVisible(); // it stays: the station never mounted
   await expect(page.locator(".lamp .lp")).toHaveCount(0);
-  await expect(page.locator(".hm-needs .lb-need")).toHaveCount(2);
+  await expect(page.locator(".hm-needs > .lb-need")).toHaveCount(2);
   expect(await page.locator(".broken").count()).toBe(0);
 });

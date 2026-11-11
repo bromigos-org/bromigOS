@@ -212,8 +212,9 @@ function hardware(v: unknown): Hardware | null {
   const o = obj(v);
   if (!o) return null;
   return {
-    cpu: num(o.cpu), ram_gb: num(o.ram_gb), gpu: bool(o.gpu), gpu_name: strOrNull(o.gpu_name), gpu_vram_gb: num(o.gpu_vram_gb),
-    drives: each(o.drives, (d) => (str(d.device) ? { device: str(d.device), model: str(d.model), size_bytes: num(d.size_bytes) ?? 0, kind: str(d.kind) } : null)),
+    cpu: num(o.cpu), ram_gb: num(o.ram_gb), disk_gb: num(o.disk_gb),
+    // a card is there only when the scan said so; its kind and memory only as the scan said them
+    gpu: o.gpu === true, gpu_kind: strOrNull(o.gpu_kind), gpu_name: strOrNull(o.gpu_name), gpu_vram_gb: num(o.gpu_vram_gb),
   };
 }
 
@@ -253,7 +254,7 @@ function need(o: Obj): NeedsYou | null {
 
 function fixedRow(o: Obj): Fixed | null {
   const id = str(o.id);
-  return id ? { id, machine: str(o.machine), words: str(o.words), at: num(o.at) } : null;
+  return id ? { id, machine: str(o.machine), title: strOrNull(o.title), words: str(o.words), at: num(o.at) } : null;
 }
 
 function channel(o: Obj): Channel | null {
@@ -320,6 +321,7 @@ export function readBoard(doc: unknown): Board {
     storage: parts.drives as DriveHealth | null,
     backups: parts.backups as BackupsStatus | null,
     updates: parts.updates as UpdatesStatus | null,
+    hardwareWhy: obj(sources.budget)?.ok === false ? (strOrNull(obj(sources.budget)?.why) ?? "the scan didn't answer") : null,
     unread, why,
     actions: strs(d.actions),
     actionsSaid: Array.isArray(d.actions),

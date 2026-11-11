@@ -77,6 +77,25 @@ function Needs({ b }: { b: Board }) {
           VECTOR's plans for these <Planned hint="Planned: VECTOR's plans you approve (IA.md, item 4)" />
         </p>
       )}
+      {b.fixed.length > 0 && (
+        <div className="hm-fixed" title="What bromigOS put right by itself: each job that failed and put things back, and how to look closer">
+          <p className="over">FIXED BY ITSELF · {b.fixed.length}</p>
+          {b.fixed.map((f) => (
+            <div className="lb-need" key={f.id} title={`On ${f.machine}: ${f.title ?? "a job"}. ${f.words}`}>
+              <span className="hm-ic" title={`On ${f.machine}`}>
+                <Icon id="i-undo" size={20} />
+              </span>
+              <span>
+                {f.title ?? "A job"} · {f.machine}
+                <span className="d">{f.words}</span>
+              </span>
+              <a className="ib" href={`#job/${f.id}`} title="Look closer: the job's steps, and how it ended" aria-label={`Look closer: ${f.title ?? f.words}`}>
+                <Icon id="i-open" move="out" />
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

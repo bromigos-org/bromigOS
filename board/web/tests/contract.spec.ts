@@ -142,7 +142,7 @@ test("what the page says of the board the service sends today", async ({ page })
 /** What each real board must make the page say (and never say). */
 const SAYS: Record<string, { at: string; has?: [string, string | RegExp][]; never?: [string, string | RegExp][] }[]> = {
   needs_you: [
-    { at: "home", has: [[verdict, "1 MACHINE NEEDS YOU"], [".hm-needs", "A drive is getting worse"]] },
+    { at: "home", has: [[verdict, "1 MACHINE NEEDS YOU"], [".hm-needs", "A drive is getting worse"], [".hm-fixed", "Updating Photos · myserver"]] },
     { at: "m/myserver", has: [[verdict, "2 THINGS NEED YOU"], [".panel:has-text('FIXED BY ITSELF')", "Updating Photos"]] },
     { at: "data", has: [[verdict, "1 GETTING WORSE"], ["#view", "8 reallocated sectors appeared in the last 3 days"]] },
   ],
@@ -188,6 +188,10 @@ const SAYS: Record<string, { at: string; has?: [string, string | RegExp][]; neve
     { at: "m/myserver/vitals", has: [[".panel:has-text('WATCHES')", "can't check"]] },
   ],
   activity_missing: [{ at: "home", has: [[verdict, "COULDN'T READ THE JOBS"], [".hm-needs", "can't check"]] }],
+  hardware_gpu: [{ at: "m/myserver/hardware", has: [[".hw-part:has-text('GRAPHICS CARD')", "An NVIDIA card · 12 GB of its own memory"]] }],
+  budget_missing: [
+    { at: "m/myserver/hardware", has: [[".hw-part:has-text('PROCESSOR')", "couldn't be read on the server: bromigos: no such command"]], never: [[".hw-part:has-text('GRAPHICS CARD')", "found no graphics card"]] },
+  ],
 };
 
 for (const name of Object.keys(real.boards))

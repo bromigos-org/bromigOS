@@ -18,12 +18,28 @@ test("healthy: all machines nominal, nothing needs you", async ({ page }) => {
 test("needs you: the verdict, the item and where it is fixed", async ({ page }) => {
   await open(page, "needs-you", "home");
   await expect(page.locator(VERDICT)).toHaveText("1 MACHINE NEEDS YOU");
-  const need = page.locator(".hm-needs .lb-need");
+  const need = page.locator(".hm-needs > .lb-need");
   await expect(need).toHaveCount(2);
   await expect(need.first()).toContainText("A drive is getting worse: WDC WD40EFRX-68N32N0 (sdb) · myserver");
   await expect(need.nth(1)).toContainText("Replacing a drive: sdb · myserver");
   await need.first().getByRole("link").click();
   await expect(page.locator(".sh-crumb")).toHaveText(/Data › Drives$/);
+});
+
+test("what fixed itself, under what needs you: the job's own title, its machine, and the job", async ({ page }) => {
+  await open(page, "needs-you", "home");
+  const fixed = page.locator(".hm-fixed");
+  await expect(fixed).toContainText("FIXED BY ITSELF · 1");
+  await expect(fixed.locator(".lb-need")).toHaveCount(1);
+  await expect(fixed.locator(".lb-need")).toContainText("Updating Photos · myserver");
+  await expect(fixed.locator(".lb-need")).toContainText("It failed and put things back by itself.");
+  await fixed.getByRole("link").click();
+  await expect(page.getByRole("dialog", { name: "Updating Photos" })).toBeVisible();
+});
+
+test("nothing fixed itself: no such list", async ({ page }) => {
+  await open(page, "healthy", "home");
+  await expect(page.locator(".hm-fixed")).toHaveCount(0);
 });
 
 test("This week is planned and shows no number", async ({ page }) => {

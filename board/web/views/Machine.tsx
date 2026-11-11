@@ -23,7 +23,6 @@ import { Tabs } from "@/shell/Shell";
 
 const GB = 1024 ** 3;
 const gb = (b: number) => (b / GB >= 10 ? Math.round(b / GB) : Math.round((b / GB) * 10) / 10);
-const sizeWords = (b: number) => (b >= 1e12 ? `${Math.round(b / 1e11) / 10} TB` : `${Math.round(b / 1e9)} GB`);
 
 /** A part of the board the server couldn't read this time: said plainly, with why when it said. */
 export function Unread({ what, why }: { what: string; why?: string }) {
@@ -339,16 +338,16 @@ function Overview({ b, m, now }: { b: Board; m: M; now: number }) {
                 <span>FIXED BY ITSELF · {fixed.length}</span>
               </h2>
               {fixed.map((f) => (
-                <div className="lb-need" key={f.id} title={`${title(f.id) ?? "A job"}: ${f.words}${f.at ? `, ${when(f.at, now)}` : ""}`}>
+                <div className="lb-need" key={f.id} title={`${f.title ?? title(f.id) ?? "A job"}: ${f.words}${f.at ? `, ${when(f.at, now)}` : ""}`}>
                   <Icon id="i-undo" size={20} />
                   <span>
-                    {title(f.id) ?? "A job"}
+                    {f.title ?? title(f.id) ?? "A job"}
                     <span className="d">
                       {f.words}
                       {f.at ? ` · ${when(f.at, now)}` : ""}
                     </span>
                   </span>
-                  <IconLink icon="i-open" href={`#job/${f.id}`} label={`Look closer: ${title(f.id) ?? f.words}`} hint="Look closer: the job's steps, and how it ended" />
+                  <IconLink icon="i-open" href={`#job/${f.id}`} label={`Look closer: ${f.title ?? title(f.id) ?? f.words}`} hint="Look closer: the job's steps, and how it ended" />
                 </div>
               ))}
             </section>
@@ -678,14 +677,19 @@ function cellsOf(pct: number) {
   return <span className="cells" aria-hidden="true"><i style={{ "--lit": `${Math.max(0, Math.min(100, Math.round(pct / 5) * 5))}%` } as CSSProperties} /></span>;
 }
 
+/** The card's kind as the scan says it; its model isn't printed by any command yet. */
+const GPU_KIND: Record<string, string> = { nvidia: "An NVIDIA card", amd: "An AMD card", intel: "An Intel card" };
+
 function HardwareTab({ b, m, now }: { b: Board; m: M; now: number }) {
   const hw = m.hardware;
   // a reading older than it may be is not shown as how busy the machine is now
   const r = m.readings && !stale(m.readings.at, m.readings.max_age_s, now) ? m.readings : null;
   const unmeasured = m.readings ? `read ${ago(m.readings.at, now)}` : "not measured";
+  // the drives are the drive-health report's (this server's only: it reads the drives it is on)
   const storage = m.here ? b.storage : null;
   const worst = storage ? worstDrive(storage.drives) : null;
-  const drives = hw?.drives ?? [];
+  const drives = storage ? storage.drives.filter((d) => d.present) : null;
+  const notRead = hw ? null : m.here && b.hardwareWhy ? `couldn't be read on the server: ${b.hardwareWhy}` : "not read";
   return (
     <>
       <div className="hw-parts">
@@ -703,6 +707,7 @@ function HardwareTab({ b, m, now }: { b: Board; m: M; now: number }) {
             </span>
             {r?.cpu_pct != null && cellsOf(r.cpu_pct)}
             <span className="s">{r?.cpu_pct != null ? `${r.cpu_pct} % busy` : unmeasured}</span>
+            {notRead && <span className="s">{`What is in the box: ${notRead}`}</span>}
           </div>
           <a className="hw-go" href={href("machine", "vitals", m.name)} title="Vitals: how busy, over time">
             <Icon id="i-gauge" size={16} />
@@ -738,11 +743,22 @@ function HardwareTab({ b, m, now }: { b: Board; m: M; now: number }) {
             {worst && <State shape={DRIVE_SHAPE[worst.verdict]} word={worst.words} />}
           </h2>
           <div className="rd">
-            <span className={`v${drives.length ? "" : " q"}`}>
-              {drives.length || "·"}
+            <span className={`v${drives?.length ? "" : " q"}`}>
+              {drives?.length || "·"}
               <small>drives</small>
             </span>
-            <span className="s">{drives.map((d) => `${d.device} ${sizeWords(d.size_bytes)}`).join(" · ") || "not read"}</span>
+            {drives?.length ? (
+              <ul className="hw-drives">
+                {drives.map((d) => (
+                  <li key={d.key} title={`${d.device}: ${d.model}. ${d.words}`}>
+                    <b>{d.device}</b> {d.model}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="s">{drives ? "none connected" : m.here ? (b.unread.includes("drives") ? `couldn't be read${b.why.drives ? `: ${b.why.drives}` : ""}` : "not read") : "not read from here"}</span>
+            )}
+            {hw?.disk_gb != null && <span className="s" title="The free space where apps keep their data (/srv/apps), as the app manager's scan measured it">{`${hw.disk_gb} GB free for apps' data`}</span>}
           </div>
           <a className="hw-go" href="#data" title="Data › Drives: every drive's health">
             <Icon id="i-storage" size={16} />
@@ -755,9 +771,11 @@ function HardwareTab({ b, m, now }: { b: Board; m: M; now: number }) {
               <Icon id="i-gpu" size={16} />
               GRAPHICS CARD
             </span>
-            {!hw?.gpu && <State shape="unknown" word="none" />}
+            {/* "none" only when the scan was read and found none */}
+            {hw && !hw.gpu && <State shape="unknown" word="none" hint="The app manager's scan found no graphics card in this box" />}
+            {!hw && <State shape="unknown" word="not read" hint="What is in the box couldn't be read this time" />}
           </h2>
-          <p className="hw-no small">{hw?.gpu ? `${hw.gpu_name ?? "A graphics card"}${hw.gpu_vram_gb ? ` · ${hw.gpu_vram_gb} GB` : ""}` : hw ? "No graphics card for it here" : "Not read"}</p>
+          <p className="hw-no small">{hw?.gpu ? `${hw.gpu_name ?? GPU_KIND[hw.gpu_kind ?? ""] ?? "A graphics card"}${hw.gpu_vram_gb ? ` · ${hw.gpu_vram_gb} GB of its own memory` : ""}` : hw ? "The scan found no graphics card" : "Not read"}</p>
           <div className="seg hw-owner" title="Who the card is given to: the desktop, apps or virtual machines (Settings › Graphics on a desktop; hw vfio). Planned on this page.">
             <span className="chip">Desktop</span>
             <span className="chip">Apps</span>

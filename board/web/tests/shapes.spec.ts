@@ -35,7 +35,7 @@ function learn(s: Seen, v: unknown): Seen {
  *  sections): the only places a fixture may hold more than a real answer does. */
 const ASKED = [
   /^board\.actions$/, // the verbs the page may send to POST /api/actions
-  /^board\.machines\[\]\.(readings|hardware|updates)$/, // a machine's readings, its hardware, its pending updates
+  /^board\.machines\[\]\.(readings|updates)$/, // a machine's readings and its pending updates (its hardware is sent)
   /^board\.apps\[\]\.(reading|update)$/, // a tile's one reading and its update (DESIGN §3; null in every real answer today)
 ];
 /** Maps whose keys are names (a command, a drive's reading), not fields: any key may be there. */

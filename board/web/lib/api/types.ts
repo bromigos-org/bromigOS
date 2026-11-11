@@ -120,14 +120,20 @@ export interface MachineReadings {
   max_age_s: number;
 }
 
-/** What is in the box: the salvage scan's own keys (provcatalog.py). */
+/** What is in the box, as the app manager's scan has it (`bromigos lab apps budget --json`, its
+ *  `hardware`). The drives aren't here: `storage.drives` lists them, and no command prints their
+ *  sizes yet. */
 export interface Hardware {
   cpu: number | null;
   ram_gb: number | null;
+  /** The free space where apps keep their data. */
+  disk_gb: number | null;
   gpu: boolean;
+  /** "nvidia", "amd", or null when the scan didn't say. */
+  gpu_kind: string | null;
+  /** Always null today: the scan doesn't print the card's name. */
   gpu_name: string | null;
   gpu_vram_gb: number | null;
-  drives: { device: string; model: string; size_bytes: number; kind: string }[];
 }
 
 export interface Machine {
@@ -159,6 +165,8 @@ export interface NeedsYou {
 export interface Fixed {
   id: string;
   machine: string;
+  /** The job's own title ("Updating Photos"); null from a service that doesn't send it. */
+  title: string | null;
   words: string;
   at: number | null;
 }
@@ -287,6 +295,8 @@ export interface Board {
   storage: DriveHealth | null;
   backups: BackupsStatus | null;
   updates: UpdatesStatus | null;
+  /** Why the machines' hardware couldn't be read (the budget command's reason), or null. */
+  hardwareWhy: string | null;
   /** The parts the server couldn't read this time, each with why when it said. */
   unread: Part[];
   why: Partial<Record<Part, string>>;

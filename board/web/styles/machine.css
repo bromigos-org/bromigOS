@@ -153,3 +153,5 @@ a.panel:hover { border-color: var(--lit); }
 .tile .nm a:hover b { text-shadow: 0 0 10px var(--glow); }
 .vt-s:empty::before { content: "\00a0"; }
 .chip.part { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; } .unread { margin: 6px 0 0; max-width: none; }
+.hw-drives { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12px; line-height: 1.35; color: var(--static); }
+.hw-drives b { color: var(--soft); font-weight: 700; margin-right: 6px; }
