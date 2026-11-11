@@ -110,7 +110,8 @@ volume = 60              # a screen's volume until you set one (the sound starts
 duck = 30                # percent of it while VECTOR speaks or a codec call plays
 refresh_minutes = 15     # how often a channel's list is read again (YouTube: hourly)
 max_playing = 3          # how many screens decode at once (each its own channel); past it, posters
-cover_opacity = 0.9      # a window at least this opaque over a muted screen pauses it (with sound: plays on)
+pause_covered = false    # true: a window over a muted screen pauses it, to save the GPU. Off: a TV plays on behind windows
+cover_opacity = 0.9      # with pause_covered: a window at least this opaque counts as covering
 # screens = ["big"]      # the screens a channel goes on when it doesn't say (default: every screen)
 # [tv.start]             # each screen's channel until you change it (a channel's name)
 # big = "Saturday"

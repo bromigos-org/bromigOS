@@ -18,9 +18,10 @@ channel show the same moment from one player. A screen nobody has tuned starts o
                   item's picture.
     pausing       each screen on its own: it decodes only while the live layer draws and the
                   screen is in view. No frames drawn for a second (locked, a fullscreen
-                  window, a deck, the screensaver), or an opaque window over a muted screen
-                  (one with the sound on keeps playing behind windows; a see-through window,
-                  under [tv] cover_opacity, never counts) pauses it. Coming back, the channel
+                  window, a deck, the screensaver) pauses it. A screen plays on behind windows,
+                  muted or not, as a TV does; with [tv] pause_covered = true, an opaque window
+                  over a muted screen pauses it (a see-through window, under [tv]
+                  cover_opacity, never counts). Coming back, the channel
                   jumps to where it would be now. Still motion (or no GPU) shows the item's
                   poster instead; reduced motion a still frame, renewed every 30 s, unless
                   the sound is on.
@@ -448,8 +449,8 @@ class TV(Controls, Bumps, Hold, Tracks, Links):
 
     # ------------------------------------------------------------------ the app's tick (0.5 s)
     def tick(self, covered=None, quiet=False, ducked=False, motion="full", software=False):
-        """Each screen: play or pause. Frames drawn in the last second, not covered by an
-        opaque window (unless its sound is on), within max_playing, not still."""
+        """Each screen: play or pause. Frames drawn in the last second, within max_playing,
+        not still; with [tv] pause_covered, also not under an opaque window unless its sound is on."""
         self.controls_tick()
         self.tracks_tick()
         self.links_tick()
@@ -462,6 +463,9 @@ class TV(Controls, Bumps, Hold, Tracks, Links):
         media = [s for s, _ in self.media_screens()]
         order = ([snd] if snd else []) + [s for s in media if s != snd]
         cap = self.max_playing()
+        # a window over a screen pauses it only when [tv] pause_covered asks: a TV plays on behind
+        # windows, muted or not, as a TV does (off by default since 2026-11-11)
+        pause_covered = self.conf().get("pause_covered", False) is True
         self.follows = self._sharing(media, snd)
         decoding = [s for s in order if s not in self.follows]
         for s in TVL.SCREENS:
@@ -474,7 +478,7 @@ class TV(Controls, Bumps, Hold, Tracks, Links):
                 continue
             d.capped = decoding.index(s) >= cap
             sound_on = s == snd
-            want = (drawing and not software and not d.capped and (s not in self.covered or sound_on)
+            want = (drawing and not software and not d.capped and (s not in self.covered or sound_on or not pause_covered)
                     and (motion == "full" or (motion == "reduced" and sound_on)))
             was = d.allowed
             d.allowed = want

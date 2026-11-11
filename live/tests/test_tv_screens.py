@@ -293,8 +293,22 @@ class ScreensTest(unittest.TestCase):
         tv.command("sound on --screen wave")
         self.assertEqual(json.loads(tv.command("state --json"))["sound_from"], "wave")
 
-    def test_covered_pauses_only_a_muted_screen(self):
+    def test_a_covered_screen_plays_on_muted_or_not(self):
+        # a TV plays on behind windows, muted or not (the owner, 2026-11-11: "That's the whole
+        # point of a TV")
         tv = self.tv
+        for s in TV.SCREENS:
+            tv.tune_to(s, 2)
+        tv.set_sound("big", on=True)
+        self.tick(covered={"big", "wave"})
+        for s in ("big", "wave", "emblem"):
+            self.assertTrue(tv.decks[s].allowed, s)
+        self.assertFalse(tv.decks["big"].player.paused())
+        self.assertFalse(tv.decks["wave"].player.paused(), "muted and covered: plays on")
+
+    def test_pause_covered_pauses_only_a_muted_screen(self):
+        tv = self.tv
+        tv.cfg.setdefault("tv", {})["pause_covered"] = True
         for s in TV.SCREENS:
             tv.tune_to(s, 2)
         tv.set_sound("big", on=True)

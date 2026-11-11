@@ -328,8 +328,9 @@ files = "~/Videos/Home"    # a folder, searched through, or a list of files
 
 The `[tv]` table in `config.toml` has the rest: the stream's quality, full screen's, how
 much the den's phosphor tints the picture, the volume a screen starts at, the ducking,
-`max_playing` (how many screens decode at once), `cover_opacity` (how opaque a window must
-be to count as covering a screen), `screens` (the screens a channel goes on when it
+`max_playing` (how many screens decode at once), `pause_covered` (whether a window over a
+muted screen pauses it; off by default), `cover_opacity` (how opaque a window must be to
+count as covering a screen), `screens` (the screens a channel goes on when it
 doesn't say: every screen) and `start` (each screen's first channel).
 
 - **Where a screen starts.** `[tv.start]` names a channel for each screen. A screen nobody
@@ -430,9 +431,10 @@ decides; `live/tvbumps.py` plays them.
   left on the screen, even while the screen is paused.
 - **Pausing, screen by screen.** A screen decodes only while it's drawn and in view. A
   second without a frame pauses every screen, so the lock screen, a fullscreen window, a
-  deck and the screensaver all stop them. A window over a screen pauses it only when the
-  screen is muted. A screen with its sound on plays on behind windows, since you're
-  listening. A window more see-through than `[tv] cover_opacity` (0.9) doesn't count.
+  deck and the screensaver all stop them. A screen plays on behind windows, muted or not,
+  as a TV does. To save the graphics card instead, `[tv] pause_covered = true` pauses a
+  muted screen while a window covers it (one with its sound on still plays on, since you're
+  listening); a window more see-through than `[tv] cover_opacity` (0.9) doesn't count.
   Hyprland's own opacity is what counts: a terminal that draws its own see-through
   background looks opaque to it. Coming back, the channel jumps to where it would be now.
 - **Motion.** With still motion, or no GPU, each screen shows its item's poster and
