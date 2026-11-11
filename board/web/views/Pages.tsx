@@ -8,6 +8,7 @@ import { Sheet, Tabs } from "@/shell/Shell";
 import { Home } from "./Home";
 import { Machine } from "./Machine";
 import { Data } from "./Data";
+import { Supply } from "./Supply";
 
 const PLACE_ICON: Record<Place, string> = {
   home: "i-home",
@@ -119,6 +120,8 @@ export function Pages() {
           <Machine name={route.id ?? ""} tab={route.tab} />
         </Page>
       );
+    case "supply":
+      return <Supply tab={route.tab} sheet={route.sheet} sheetId={route.sheetId} />;
     case "data":
       return (
         <Page label="Data">
