@@ -84,6 +84,9 @@ for id in "${PROVE[@]}"; do
                 cat "/etc/containers/systemd/${u%.service}.container" 2>/dev/null
             done
             podman secret ls 2>&1 | head -12
+            echo "== Podman's secret driver, as the engine set it up, and the keys it holds"
+            podman --version; cat /etc/containers/containers.conf.d/50-bromigos-secrets.conf 2>&1
+            ls -la /etc/credstore.encrypted 2>&1 | head -12
             echo "::endgroup::"
             continue
         fi

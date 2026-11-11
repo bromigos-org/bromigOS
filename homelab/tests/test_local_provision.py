@@ -333,6 +333,35 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(Path(self.root, "etc/systemd/system/vaultwarden.service.d/50-bromigos.conf").read_text(),
                          "[Service]\nEnvironmentFile=/etc/bromigos/lab/vaultwarden.env\n")
 
+    def test_an_app_whose_key_podman_did_not_take_fails_its_install_and_says_why(self):
+        # Prowlarr's unit names its key as a Podman secret. When Podman didn't take the copy, the
+        # install went on and the container stopped at each start ("no such secret"): the app
+        # never ran, and nothing said why
+        self.m.fail.add("podman secret create")
+        plan = L.build_plan(["prowlarr"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 1)
+        self.assertEqual(self.states("prowlarr")[-1], "failed")
+        (err,) = [l for l in self.lines if l.startswith("::error prowlarr ")]
+        self.assertIn("Podman didn't take prowlarr/api-key (podman secret create bromigos-prowlarr-api-key: failed on purpose)", err)
+        self.assertEqual(self.m.ran("systemctl start prowlarr") + self.m.ran("systemctl restart prowlarr"), [],
+                         "a unit that can't start isn't started")
+        # Podman takes it the next time: the key made then is the one it gets, and the app starts
+        self.m.fail.clear()
+        self.lines.clear()
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertIn("bromigos-prowlarr-api-key", self.m.podman_secrets)
+        self.assertTrue(self.m.ran("systemctl restart prowlarr.service") or self.m.ran("systemctl start prowlarr.service"))
+
+    def test_a_secret_podman_lost_is_given_again_or_the_install_stops(self):
+        plan = L.build_plan(["prowlarr"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.m.podman_secrets.clear()                              # Podman's own store lost, the key kept
+        Path(self.root, L.STATE).unlink()
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertIn("bromigos-prowlarr-api-key", self.m.podman_secrets, "given to Podman again from the store")
+
     def test_litellm_is_given_its_config_file(self):
         # its config.yaml is a file the engine writes and the container mounts read-only: never a folder
         plan = L.build_plan(["litellm", "ollama"], hw=HW)

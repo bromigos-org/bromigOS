@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from bromigos_homelab import secretstore as S
 from provfake import FakeMachine, VaultStub
@@ -76,6 +77,26 @@ class LocalTests(unittest.TestCase):
         self.assertIn("bromigos-x-y", self.m.podman_secrets)
         self.assertIn('driver = "shell"', p.read_text())
         self.assertIn("systemd-creds decrypt", p.read_text())
+
+    def test_a_podman_copy_that_podman_did_not_take_is_said(self):
+        # A container that names a secret Podman doesn't have stops at each start with "no such
+        # secret". The copy's failure was silent: the app's install went on, and the app never ran
+        p = Path(self.root, S.PODMAN_DROPIN)
+        p.parent.mkdir(parents=True)
+        p.write_text(S.podman_driver_conf())
+        self.m.fail.add("podman secret create")
+        with self.assertRaises(S.SecretError) as e:
+            self.store.put("prowlarr/api-key", "0123456789abcdef")
+        self.assertEqual(str(e.exception), "Podman didn't take prowlarr/api-key (podman secret create "
+                         "bromigos-prowlarr-api-key: failed on purpose)")
+        self.assertNotIn("0123456789abcdef", str(e.exception))
+        self.assertTrue(self.store.exists("prowlarr/api-key"), "the key itself is kept, encrypted, to give Podman again")
+        # a server without Podman (a cluster node) has nothing to give it to
+        self.m.fail.clear()
+        real = self.m.__call__
+        with mock.patch.object(self.store, "run", side_effect=lambda argv, *a, **k: (127, "", "podman: not installed")
+                               if argv[0] == "podman" else real(argv, *a, **k)):
+            self.store.put("x/y", "no-podman-here")
 
     def test_recovery_bundle_and_restore(self):
         self.store.put("gluetun/password", "pw-for-the-vpn")
