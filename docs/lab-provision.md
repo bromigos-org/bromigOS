@@ -586,6 +586,15 @@ signed in. Autoscan reads its keys from that file alone, so the file is its acco
 step. The engine writes the file again only while it's as the engine wrote it (a digest on
 its second line), so your changes stay.
 
+Sonarr and Radarr have to call those triggers. After the apps are installed, the engine
+wires them together through their own APIs, with the keys it made for them (`wire_media`):
+their download clients, their root folders, and, when Autoscan is installed, a connection
+named Autoscan in each. It is a Webhook to `http://autoscan:3030/triggers/sonarr` (or
+`radarr`) for every event that changes a folder: an import, an upgrade, a rename, a
+delete. So with Sonarr or Radarr, Autoscan and a media server installed, nothing is left
+to do by hand but the media server's key. A connection that is there by that name is left
+as it is. An app that doesn't answer yet gets a note, and is connected at the next apply.
+
 **Backups.** On a bromigOS Server the Server's own nightly backup covers the apps
 ([server.md](server.md#backups)). Anywhere else, the Backups item (`step_backups`) writes
 `bromigos-lab-backup.service`, which runs `restic backup --one-file-system` over `/etc`,

@@ -1289,13 +1289,32 @@ def http_json(method, url, body=None, headers=None, timeout=10):
         return json.loads(data) if data else None
 
 
+# What Sonarr and Radarr tell Autoscan about, as their own Webhook connection names each event
+AUTOSCAN_EVENTS = {"sonarr": ("onDownload", "onUpgrade", "onRename", "onSeriesDelete", "onEpisodeFileDelete",
+                              "onEpisodeFileDeleteForUpgrade"),
+                   "radarr": ("onDownload", "onUpgrade", "onRename", "onMovieDelete", "onMovieFileDelete",
+                              "onMovieFileDeleteForUpgrade")}
+
+
+def autoscan_connection(app):
+    """Sonarr's (or Radarr's) connection to Autoscan: a Webhook to Autoscan's trigger of the app's
+    name (prepare_autoscan writes that trigger), on the apps' own network, for every event that
+    changes a folder. Autoscan then tells the media servers to rescan just that folder."""
+    return {"name": "Autoscan", "implementation": "Webhook", "configContract": "WebhookSettings",
+            **{event: True for event in AUTOSCAN_EVENTS[app]},
+            "fields": [{"name": "url", "value": f"http://autoscan:3030/triggers/{app}"}, {"name": "method", "value": 1}],
+            "tags": []}
+
+
 def wire_media(host, http=None):
-    """Download clients (with their categories) and root folders in Sonarr, Radarr and Lidarr.
-    Idempotent: what's there by name is left alone. No sources are added, ever."""
+    """Download clients (with their categories) and root folders in Sonarr, Radarr and Lidarr, and
+    Sonarr's and Radarr's connection to Autoscan when all are here. Idempotent: what's there by
+    name is left alone. No sources are added, ever."""
     http = http or http_json
     done = []
     clients = [c for c in ("qbittorrent", "sabnzbd") if c in host.selected]
     downloader_host = "gluetun" if host.selected_for("gluetun") else None
+    scans = "autoscan" in host.selected
     for app, (cat, field, port, ver) in CATEGORIES.items():
         if app not in host.selected or not host.store.exists(f"{app}/api-key"):
             continue
@@ -1331,8 +1350,14 @@ def wire_media(host, http=None):
                     body.update(name="Music", defaultQualityProfileId=1, defaultMetadataProfileId=1)
                 http("POST", base + "/rootfolder", body, hdr)
                 done.append(f"{app}: {folder}")
+            if scans and app in AUTOSCAN_EVENTS:
+                if "Autoscan" not in {n.get("name") for n in http("GET", base + "/notification", headers=hdr) or []}:
+                    # forceSave: saved without the app first trying it, so Autoscan needn't be up yet
+                    http("POST", base + "/notification?forceSave=true", autoscan_connection(app), hdr)
+                    done.append(f"{app}: Autoscan")
         except (urllib.error.URLError, OSError, ValueError):
-            host.emit(f"::note {app} {host.cat[app]['name']} didn't answer yet; its download clients are added on the next run.")
+            host.emit(f"::note {app} {host.cat[app]['name']} didn't answer yet; its download clients "
+                      + ("and its connection to Autoscan " if scans and app in AUTOSCAN_EVENTS else "") + "are added on the next run.")
     if "sabnzbd" in host.selected:
         sab_servers(host, http)
     return done
