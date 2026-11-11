@@ -694,7 +694,21 @@
      "present": true,
      "verdict": "worse",
      "words": "getting worse",
-     "summary": "reallocated sectors rose from 0 to 8 in the last 3 days"
+     "summary": "reallocated sectors rose from 0 to 8 in the last 3 days",
+     "advice": "Back up now, and plan to replace it.",
+     "since": 1794088920000,
+     "alert": "needs_you",
+     "reasons": [
+      {
+       "level": "needs_you",
+       "text": "8 reallocated sectors appeared in the last 3 days",
+       "counter": "reallocated",
+       "value": 8,
+       "rise": 8,
+       "days": 3,
+       "since": 1794088920000
+      }
+     ]
     }
    ]
   },
@@ -730,9 +744,32 @@
     "ts": 1793311320
    },
    "snapshots": {
-    "count": 41
+    "count": 17
    },
-   "drives": [],
+   "drives": [
+    {
+     "name": "Go Bag",
+     "uuid": "5c1e-77a0",
+     "label": "GOBAG",
+     "model": "Extreme 55AE",
+     "size": 1000204886016,
+     "fstype": "ext4",
+     "added_at": "2026-10-30",
+     "plugged_in": false,
+     "running": false,
+     "last_copy": {
+      "phase": "ok",
+      "ts": 1794002520
+     },
+     "last_good_copy": {
+      "ts": 1794002520
+     },
+     "last_test": null,
+     "remind_days": 14,
+     "stale": false,
+     "stale_s": null
+    }
+   ],
    "restore": null,
    "running": null,
    "checked_at": "2026-11-10T22:01:40Z",

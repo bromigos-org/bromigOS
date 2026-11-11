@@ -83,13 +83,17 @@ const STORAGE = { schema: 1, checked_at: NOW - 12 * MIN, history: "/var/lib/brom
   drive("nvme0", "Samsung SSD 970 EVO Plus 500GB", "nvme", "healthy", "healthy", "nothing to report"),
   drive("sda", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report"),
   drive("sdb", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report")] };
-const STORAGE_WORSE = { ...STORAGE, drives: STORAGE.drives.map((d) => (d.device === "sdb" ? { ...d, verdict: "worse", words: "getting worse", summary: "reallocated sectors rose from 0 to 8 in the last 3 days" } : d)) };
+const STORAGE_WORSE = { ...STORAGE, drives: STORAGE.drives.map((d) => (d.device === "sdb" ? { ...d, verdict: "worse", words: "getting worse", summary: "reallocated sectors rose from 0 to 8 in the last 3 days",
+  advice: "Back up now, and plan to replace it.", since: NOW - 3 * D, alert: "needs_you",
+  reasons: [{ level: "needs_you", text: "8 reallocated sectors appeared in the last 3 days", counter: "reallocated", value: 8, rise: 8, days: 3, since: NOW - 3 * D }] } : d)) };
 const S = (ms) => Math.round(ms / 1000);
 const BACKUPS = { schema: 1, ok: true, server: true, configured: true, to: "s3:backups.example.org/myserver", destination: {},
   health: { state: "ok", verdict: "Backups are healthy: the last copy was made today and checks out.", problems: [] },
   last_backup: { phase: "ok", ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 }, last_success: { ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 },
   last_check: null, last_check_passed: null, last_read_back: null, last_test: { phase: "ok", ts: S(NOW - 12 * D) }, last_test_passed: { ts: S(NOW - 12 * D) },
-  snapshots: { count: 41 }, drives: [], restore: null, running: null, checked_at: "2026-11-10T22:01:40Z", now: S(NOW) };
+  snapshots: { count: 17 }, drives: [{ name: "Go Bag", uuid: "5c1e-77a0", label: "GOBAG", model: "Extreme 55AE", size: 1000204886016, fstype: "ext4",
+    added_at: "2026-10-30", plugged_in: false, running: false, last_copy: { phase: "ok", ts: S(NOW - 4 * D) }, last_good_copy: { ts: S(NOW - 4 * D) },
+    last_test: null, remind_days: 14, stale: false, stale_s: null }], restore: null, running: null, checked_at: "2026-11-10T22:01:40Z", now: S(NOW) };
 const UPDATES = { hold: null, waiting: null, phase: "ok", started: "2026-11-10 03:18", finished: "2026-11-10 03:21", finished_ts: S(Date.UTC(2026, 10, 10, 11, 21)),
   pre: 40, post: 41, packages: 12, reason: "", kernel: false, auto: true, mode: "auto", window: "03:00-05:00", channel: "stable", notify: true,
   cluster_reboots: false, timer: "active", rollbacks: [] };

@@ -34,7 +34,13 @@ server, how it is built and packaged, and how it is tested. The service that ans
   range; power is planned. Hardware: processor, memory, drives and the graphics card;
   system versions and the docked phone are planned. Set-up stands in for Overview on a
   first run.
-- **Not built yet.** The places' own pages (Data, Supply, Activity,
+- **Data.** Drives: each drive on the holo-table with its verdict from
+  `bromigos storage health --json`, and for a drive that isn't healthy what changed, why and
+  what to do. The pool's layout, a new disk with files on it and replacing a drive are
+  planned. Backups: the last good copy, where the copies go (the nightly destination and the
+  Go Bag drive), and the last proven test restore, from `bromigos lab backups status --json`.
+  Getting files back from the page, a friend's lab and Move in are planned.
+- **Not built yet.** The places' own pages (Supply, Activity,
   People, Den, Network, Settings) show their tabs and a PLANNED mark. They come one change
   at a time. Nothing is ever shown as a reading unless the server measured it.
 
@@ -171,6 +177,7 @@ test copy served with the board's Content-Security-Policy:
 - Home's verdict, NEEDS YOU, the machines' tiles and their stale readings, and first run;
 - a machine's hero, needs and tiles, its hologram (one WebGL context at most), Vitals' gauges
   and trend (and the planned state without trends), Hardware, and Set-up;
+- Data's drives, what changed on one, the backups, their destinations and the proof;
 - every route renders in four page states, with no error, no policy violation and no
   request to another site;
 - every control has a hint and an accessible name, and axe finds nothing, on every route,
