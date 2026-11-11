@@ -129,6 +129,40 @@ def drives_and_alerts():
     check(m, DAY)
     out["watch"] = read(m)
     m.close()
+    # the healthy machine again, with two channels of its own (`bromigos alerts channels`,
+    # lib/bromigos_notify.py): Discord with quiet hours, and a webhook that picks its sources, whose
+    # last message didn't go and one of whose settings is wrong. The addresses are stand-ins, kept
+    # where the command keeps them; the document only ever says "set".
+    import bromigos_notify as N
+    m = machine(last - 40 * DAY)
+    plug(m, "nvme0", T.nvme())
+    plug(m, "sda", T.sata(serial="FAKE0SATA000002"))
+    plug(m, "sdb", T.sata(serial="FAKE0SATA000003"))
+    check(m)
+    for _ in range(37):
+        check(m, DAY)
+    check(m, 3 * DAY)
+    m.rootfile(A.SETTINGS, '[notify]\nboard = "https://myserver.local"\n\n'
+               '[channels.discord]\ntype = "discord"\nquiet = "22:00-07:00"\ncritical_in_quiet = true\n\n'
+               '[channels.ops]\ntype = "webhook"\nseverities = ["critical"]\nsources = ["drives", "backups", "job-results"]\n'
+               'resolved = true\nquiet = "late"\n\n'
+               '[channels.spare]\ntype = "discord"\non = false\n')
+    e = m.env()
+    N.write_secret(e, "discord", "url", "https://discord.com/api/webhooks/1/stand-in")
+    N.write_secret(e, "ops", "url", "https://hooks.example/alerts")
+    N.write_secret(e, "ops", "key", "stand-in")
+    st = {}
+    N._worked(st, last - 2 * DAY)
+    N.save_state(e, "discord", st)
+    st = {}
+    N._worked(st, last - 9 * DAY)
+    N._failed(st, last - 3 * HOUR, "the channel answered 404 (the address is gone)")
+    N.save_state(e, "ops", st)
+    out["channels"] = read(m)
+    m.close()
+    names = [c["name"] for c in out["channels"]["alerts"]["channels"]["channels"]]
+    assert names == ["discord", "ops", "spare", "brodec"], names
+
     for k, want in (("healthy", {"healthy"}), ("worse", {"healthy", "worse"}), ("watch", {"healthy", "watch", "unknown"})):
         got = {d["verdict"] for d in out[k]["storage"]["drives"]}
         assert got == want, (k, got)
@@ -427,6 +461,7 @@ def build(args):
             "backups_missing": {"missing": ("backups-status.json",)},
             "system_missing": {"missing": ("server-status.json",)},
             "alerts_missing": {"missing": ("alerts.json",)},
+            "alerts_channels": {"drives": "channels"},
             "activity_missing": {"missing": ("activity-list.json",)},
             "stale": {"at": NOW - 5 * MIN},
         }

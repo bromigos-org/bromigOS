@@ -139,6 +139,8 @@ const F = {
   setup: { about: "Signed in to a server with nothing installed yet (first run).", door: real.doors.no_snapshot, session: session(1),
     board: real.boards.setup, activity: jobsOf("activity_setup") },
   stale: { about: "Signed in, but the server's reading is five minutes old.", door: doorOf(healthy), session: session(), board: board("stale"), activity: jobsOf("activity_healthy") },
+  channels: { about: "Signed in; alerts go to Discord (with quiet hours) and to a webhook whose last message didn't go; a third channel is off.", door: doorOf(healthy), session: session(),
+    board: { ...healthy, alerts: real.boards.alerts_channels.alerts }, activity: jobsOf("activity_healthy") },
   cameras: { about: "Signed in; a machine runs the Cameras app, so Cameras is in the rail.", door: doorOf(healthy), session: session(),
     board: { ...healthy, apps: [...healthy.apps, { ...healthy.apps.find((t) => t.id === "photos"), id: "cameras", job: "Cameras", app: "Frigate", holo: "", group: "cameras",
       version: "0.16.2", reading: null, update: null, open: { url: "https://cameras-myserver.local", port: 5000 } }] }, activity: [] },

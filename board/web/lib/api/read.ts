@@ -9,6 +9,7 @@ import type {
   ActionAnswer, ActivityEvent, BackupsStatus, Board, Browser, CarriedDrive, Door, DoorTile, Drive, DriveHealth, DriveVerdict, Fixed,
   Hardware, JobRecord, JobState, JobStep, Machine, MachineKind, MachineReadings, NeedsYou, Part, Reading, SeriesName, Session, Shape,
   StepState, Tile, TileState, UpdatesStatus, Vitals, VitalsRange,
+  Channel, Check, Notify,
 } from "./types";
 import { JOB_STATES, STEP_STATES } from "./types";
 
@@ -255,6 +256,37 @@ function fixedRow(o: Obj): Fixed | null {
   return id ? { id, machine: str(o.machine), words: str(o.words), at: num(o.at) } : null;
 }
 
+function channel(o: Obj): Channel | null {
+  const name = str(o.name);
+  if (!name) return null;
+  const e = obj(o.last_error);
+  return {
+    name, type: str(o.type, name), label: str(o.label, name), on: o.on === true, read_only: o.read_only === true,
+    rules: strOrNull(o.rules), detail: strOrNull(o.detail), severities: strs(o.severities), sources: strs(o.sources),
+    quiet: str(o.quiet), critical_in_quiet: o.critical_in_quiet === true, address: strOrNull(o.address),
+    last_ok: num(o.last_ok), last_error: e && str(e.why) ? { at: num(e.at), why: str(e.why) } : null, problems: strs(o.problems),
+  };
+}
+
+function check(o: Obj): Check | null {
+  const name = str(o.check);
+  if (!name) return null;
+  return { check: name, state: oneOf(o.state, ["ran", "skipped", "failed"] as const, "unknown"), ran_at: num(o.ran_at), error: strOrNull(o.error) };
+}
+
+/** `bromigos alerts --json`: its channels, its checks, and how many alerts each check raised. */
+function notify(v: unknown): Notify | null {
+  const a = obj(v);
+  if (!a) return null;
+  const ch = obj(a.channels);
+  const raised: Record<string, number> = {};
+  for (const x of arr(a.alerts)) {
+    const c = str(obj(x)?.check);
+    if (c) raised[c] = (raised[c] ?? 0) + 1;
+  }
+  return { channels: ch && Array.isArray(ch.channels) ? each(ch.channels, channel) : null, checks: each(a.checks, check), checked_at: num(a.system_checked_at), raised };
+}
+
 export function readBoard(doc: unknown): Board {
   const d = obj(doc) ?? {};
   const lab = obj(d.lab) ?? {}, server = obj(d.server) ?? {}, status = obj(d.status) ?? {}, sources = obj(d.sources) ?? {};
@@ -290,6 +322,9 @@ export function readBoard(doc: unknown): Board {
     updates: parts.updates as UpdatesStatus | null,
     unread, why,
     actions: strs(d.actions),
+    actionsSaid: Array.isArray(d.actions),
+    settings: obj(d.settings) ? { door: obj(d.settings)!.door !== false, world: str(obj(d.settings)!.world, "wick") } : null,
+    notify: notify(d.alerts),
   };
 }
 

@@ -52,8 +52,16 @@ package.
   its sign-in ends. Each has a sign-out, this browser's too. Beside them, the three steps
   that sign another browser in with a one-time code. The list is read again each time the
   tab is opened.
+- **Settings**, read-only: how the server is set, each with the file or command that changes
+  it. Lab: the lab's name and address, whether the door shows the apps, the world the page
+  wears, and what root lets the page do. Notifications: each channel alerts go to as
+  `bromigos alerts channels` lists it (what it takes, its quiet hours, when it last sent,
+  its last problem, a setting the server doesn't use), and the checks with whether each
+  could look. Mascot: STATIC's three modes and `bromigos mascot`. No address or key of a
+  channel is ever on the page, and nothing here is a switch.
 - **Planned, and marked so on the page:** an app's restore points, the Stacks sheet, People ›
-  Household, Den, Network and Settings; Activity's History, Reports and upcoming jobs; and inside
+  Household, Den, Network, and Settings' Power, Recovery and About; Activity's History,
+  Reports and upcoming jobs; and inside
   the built pages: This week, VECTOR's plans, power, system versions, the pool's layout, a
   new disk, replacing a drive, getting files back, a friend's lab, Move in, and the apps'
   updates. A machine's processor, memory, heat and network, its hardware and its trends
@@ -95,7 +103,7 @@ places to it; the chip in the top bar lets go.
 | `#network` | Network › Devices (Ad blocking and Away are planned) |
 | `#people`, `#people/ways` | People: Household (planned), Ways in |
 | `#activity` | Activity › Now (History and Reports are planned). `#job/ID` opens one job over it |
-| `#settings`, `#settings/mascot` | Settings: Notifications, Mascot (Lab, Power, Recovery and About are planned) |
+| `#settings`, `#settings/lab`, `#settings/mascot` | Settings: Notifications, Lab, Mascot (Power, Recovery and About are planned) |
 | `#signin` | The sign-in sheet over the door, when signed out. Signed in, it is Home |
 
 An address the page doesn't know opens Home. So does one that isn't an address at all, such
@@ -260,7 +268,8 @@ by hand. `scripts/make-contract.py` makes it:
 It holds the answers of each request, and a board for each state the commands can leave it
 in: healthy; a drive getting worse with a job asking; a job running; drives on watch and
 unreadable; backups that need a look, are off, carry a Go Bag, or aren't a server's; an app
-down; nothing installed; a stale reading; and each command missing or printing an error.
+down; nothing installed; a stale reading; alerts with three channels of the server's own;
+and each command missing or printing an error.
 
 ```sh
 python3 board/web/scripts/make-contract.py           # write it again
@@ -291,6 +300,7 @@ send yet. The package's build leaves fixture mode out.
 | `setup`, `stale` | Nothing installed yet; a reading five minutes old |
 | `actions` | The server lets the page add apps |
 | `lab`, `cameras` | Four machines in the rail; a machine that runs Cameras |
+| `channels` | Alerts go to Discord with quiet hours and to a webhook that needs a look; a third channel is off |
 
 ### The tests
 
@@ -320,6 +330,11 @@ Content-Security-Policy.
   out with the service's `DELETE`, and this one; a browser that signed out by itself
   meanwhile (the service's 404, in its words, and the list read again); the steps for a
   code; and that Household shows no made-up person.
+- **Settings** (`tests/settings.spec.ts`): the channels of a real `bromigos alerts` document
+  that has three (one with quiet hours, one whose last message didn't go and with a
+  setting the server doesn't use, one off); quiet hours only of channels that are on; no
+  address on the page; the checks; what the page may do, not claimed until the server
+  says, and "not allowed" when it says so; and each of these parts in broken shapes.
 - **The shapes** (`tests/shapes.spec.ts`): every fixture document has the service's keys
   and types.
 - **The layout** (`tests/layout.spec.ts`): the rail's two small marks on a machine (its

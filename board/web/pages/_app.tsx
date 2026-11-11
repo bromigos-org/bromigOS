@@ -7,6 +7,7 @@ import "@/styles/shell.css";
 import "@/styles/activity.css";
 import "@/styles/home.css";
 import "@/styles/machine.css";
+import "@/styles/settings.css";
 import "@/styles/data.css";
 import "@/styles/people.css";
 import "@/styles/supply.css";

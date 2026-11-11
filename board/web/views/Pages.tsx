@@ -11,6 +11,7 @@ import { Home } from "./Home";
 import { Machine } from "./Machine";
 import { Ways } from "./People";
 import { Data } from "./Data";
+import { Settings, SETTINGS_BUILT } from "./Settings";
 import { Supply } from "./Supply";
 
 const PLACE_ICON: Record<Place, string> = {
@@ -152,6 +153,14 @@ export function Pages() {
       return (
         <Page label="People › Ways in">
           <Ways />
+        </Page>
+      );
+    case "settings": // read-only: how the server is set, and the file or command that changes it
+      if (!SETTINGS_BUILT.includes(route.tab)) return <Placeholder place="settings" />;
+      return (
+        <Page label={`Settings › ${TABS.settings?.find((t) => t.id === route.tab)?.label ?? ""}`}>
+          <Tabs place="settings" label="Settings" />
+          <Settings tab={route.tab} />
         </Page>
       );
     default:

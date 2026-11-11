@@ -221,6 +221,49 @@ export interface UpdatesStatus {
   rollbacks: number;
 }
 
+/** A channel alerts go to, as `bromigos alerts channels --json` lists it (docs/alerts.md). The
+ *  address and the signing key are never in it: only whether the address is set. */
+export interface Channel {
+  name: string;
+  /** discord, webhook, or brodec (the paired phone: its own rules, set on the phone). */
+  type: string;
+  label: string;
+  on: boolean;
+  read_only: boolean;
+  /** A read-only channel's rules, in its own words. */
+  rules: string | null;
+  detail: string | null;
+  severities: string[];
+  sources: string[];
+  /** "22:00-07:00" by the server's clock, or "" for none. */
+  quiet: string;
+  critical_in_quiet: boolean;
+  /** "set", "not set", or "unknown" (only root may look); null when the server didn't say. */
+  address: string | null;
+  last_ok: number | null;
+  last_error: { at: number | null; why: string } | null;
+  /** Settings the server found wrong and doesn't use, in its words. */
+  problems: string[];
+}
+
+/** One check of the alerts' last pass: whether it could look. */
+export interface Check {
+  check: string;
+  state: "ran" | "skipped" | "failed" | "unknown";
+  ran_at: number | null;
+  error: string | null;
+}
+
+/** Where alerts go and what raises them: `bromigos alerts --json`, as the board carries it. */
+export interface Notify {
+  /** The channels; null when this server's alerts don't list them. */
+  channels: Channel[] | null;
+  checks: Check[];
+  checked_at: number | null;
+  /** How many alerts each check has raised now. */
+  raised: Record<string, number>;
+}
+
 /** A part of the board the server reads with one command. */
 export type Part = "apps" | "drives" | "backups" | "updates" | "alerts" | "jobs";
 
@@ -250,6 +293,12 @@ export interface Board {
   /** What the server lets the page do, in the words of root's [board] actions: "add", "restart",
    *  "remove", and "delete-data" (removing an app with its data). Empty until the service says. */
   actions: string[];
+  /** Whether the server said what the page may do at all (an empty list is an answer too). */
+  actionsSaid: boolean;
+  /** Root's [board] table, as the server read it: the door and the world. null when it didn't say. */
+  settings: { door: boolean; world: string } | null;
+  /** The alerts' channels and checks; null when the alerts couldn't be read. */
+  notify: Notify | null;
 }
 
 // ---------------------------------------------------------------- a machine's trends
