@@ -7,6 +7,7 @@ import { PLACE_NAME, TABS, type Place } from "@/lib/routes";
 import { Sheet, Tabs } from "@/shell/Shell";
 import { Home } from "./Home";
 import { Machine } from "./Machine";
+import { Data } from "./Data";
 
 const PLACE_ICON: Record<Place, string> = {
   home: "i-home",
@@ -116,6 +117,12 @@ export function Pages() {
       return (
         <Page label={`${route.id}`}>
           <Machine name={route.id ?? ""} tab={route.tab} />
+        </Page>
+      );
+    case "data":
+      return (
+        <Page label="Data">
+          <Data tab={route.tab} />
         </Page>
       );
     case "app":

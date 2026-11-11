@@ -14,6 +14,7 @@ import { useLab } from "@/lib/lab";
 import { href } from "@/lib/routes";
 import { ago, clock, stale, when } from "@/lib/time";
 import { Tabs } from "@/shell/Shell";
+import { DRIVE_SHAPE } from "./Data";
 
 // ---------------------------------------------------------------- shared
 
@@ -139,7 +140,6 @@ function Hero({ b, m, apps, now }: { b: Board; m: M; apps: Tile[]; now: number }
 
 // ---------------------------------------------------------------- Overview: the reading tiles
 
-const DRIVE_SHAPE: Record<DriveHealth["drives"][number]["verdict"], Shape> = { healthy: "ok", watch: "ok", checking: "warn", worse: "warn", replace: "down", unknown: "unknown" };
 const RANK: Shape[] = ["ok", "unknown", "warn", "down"];
 
 function StorageTile({ doc }: { doc: DriveHealth | null }) {

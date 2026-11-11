@@ -761,9 +761,32 @@
     "ts": 1793311320
    },
    "snapshots": {
-    "count": 41
+    "count": 17
    },
-   "drives": [],
+   "drives": [
+    {
+     "name": "Go Bag",
+     "uuid": "5c1e-77a0",
+     "label": "GOBAG",
+     "model": "Extreme 55AE",
+     "size": 1000204886016,
+     "fstype": "ext4",
+     "added_at": "2026-10-30",
+     "plugged_in": false,
+     "running": false,
+     "last_copy": {
+      "phase": "ok",
+      "ts": 1794002520
+     },
+     "last_good_copy": {
+      "ts": 1794002520
+     },
+     "last_test": null,
+     "remind_days": 14,
+     "stale": false,
+     "stale_s": null
+    }
+   ],
    "restore": null,
    "running": null,
    "checked_at": "2026-11-10T22:01:40Z",
