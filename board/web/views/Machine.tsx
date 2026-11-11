@@ -282,7 +282,7 @@ export function AppTile({ t, now }: { t: Tile; now: number }) {
         <Icon id={ic.id} className={shape === "busy" ? "pulse" : ""} />
       </span>
       <span className="nm">
-        <a href={href("app", "", t.id)} title={`${t.job} (${t.app}): its page, with restart, logs, roll back and remove`}>
+        <a href={href("app", "", t.id)} title={`${t.job} (${t.app}): its page: what it takes, where its data lives, its logs, restart and remove`}>
           <b>{t.job}</b>
         </a>
         <State shape={shape} word={t.state_word ?? "Unknown"} />
@@ -328,7 +328,7 @@ function Overview({ b, m, now }: { b: Board; m: M; now: number }) {
                     {n.words}
                     {n.detail && <span className="d">{n.detail}</span>}
                   </span>
-                  <IconLink icon="i-open" href={n.go ? `#${n.go}` : "#activity"} label={`Open: ${n.words}`} hint="Open it where it is fixed" />
+                  <IconLink icon="i-open" href={n.job ? `#job/${n.job}` : n.go ? `#${n.go}` : "#activity"} label={`Open: ${n.words}`} hint="Open it where it is fixed" />
                 </div>
               ))}
             </section>
@@ -348,7 +348,7 @@ function Overview({ b, m, now }: { b: Board; m: M; now: number }) {
                       {f.at ? ` · ${when(f.at, now)}` : ""}
                     </span>
                   </span>
-                  <IconLink icon="i-open" href="#activity" label={`Look closer: ${title(f.id) ?? f.words}`} hint="Look closer: the job's steps in Activity" />
+                  <IconLink icon="i-open" href={`#job/${f.id}`} label={`Look closer: ${title(f.id) ?? f.words}`} hint="Look closer: the job's steps, and how it ended" />
                 </div>
               ))}
             </section>

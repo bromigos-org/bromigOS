@@ -56,7 +56,7 @@ export interface Lab {
   /** The server's clock, in ms: every "ago" on the page is measured against it. */
   now(): number;
   /** Add, restart or remove an app, when the server lets the page (board.actions). */
-  act(verb: "add" | "restart" | "remove", app: string): Promise<ActionAnswer>;
+  act(verb: "add" | "restart" | "remove", app: string, more?: { delete_data: true; code: string }): Promise<ActionAnswer>;
   drawer: "activity" | "depth" | null;
   setDrawer(d: "activity" | "depth" | null): void;
 }
@@ -228,6 +228,14 @@ export function LabProvider({ children }: { children: ReactNode }) {
   }, [route]);
 
   const doc = board.state === "ok" ? board.doc : null;
+  // every job the page knows: the stream's, and the ones the board's own list has that the stream
+  // doesn't (or has older); a record with the later change wins
+  const listed = doc?.jobs ?? null;
+  const everyJob = useMemo(() => {
+    const by = new Map((listed ?? []).map((j) => [j.id, j]));
+    for (const j of jobs) if (!by.has(j.id) || j.updated_at >= by.get(j.id)!.updated_at) by.set(j.id, j);
+    return [...by.values()].sort(byNewest);
+  }, [jobs, listed]);
   const stale = !!doc && (doc.stale || (now() - doc.at) / 1000 > doc.max_age_s);
 
   const lab: Lab = {
@@ -237,8 +245,8 @@ export function LabProvider({ children }: { children: ReactNode }) {
     lost,
     stale,
     settling,
-    jobs,
-    jobsKnown,
+    jobs: everyJob,
+    jobsKnown: jobsKnown || listed !== null,
     live,
     route,
     scope,
@@ -267,9 +275,9 @@ export function LabProvider({ children }: { children: ReactNode }) {
     },
     refresh: () => pollNow.current(),
     now,
-    async act(verb, app) {
+    async act(verb, app, more) {
       if (!a) throw new ApiError(0, "unreachable", "The server isn't answering.");
-      const said = await a.act(verb, app);
+      const said = await a.act(verb, app, more);
       pollNow.current();
       return said;
     },

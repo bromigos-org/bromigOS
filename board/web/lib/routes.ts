@@ -143,8 +143,8 @@ export function parse(hash: string): Route {
     case "app":
       if (!NAME.test(a)) return r("supply");
       return r("app", "", a, b === "remove" ? "remove" : null);
-    case "job":
-      return NAME.test(a) ? r("activity", "", null, "job", a) : r("activity");
+    case "job": // a job's id: its time, its kind, what it is about, four letters
+      return /^[a-z0-9][a-z0-9._-]{0,160}$/i.test(a) ? r("activity", "", null, "job", a) : r("activity");
     case "supply":
       if (a === "add") return r("supply", "browse", null, "add", NAME.test(b) ? b : null);
       if (a === "stacks") return r("supply", "browse", null, "stacks");

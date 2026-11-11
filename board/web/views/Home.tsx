@@ -13,7 +13,8 @@ import { PART_WORDS } from "@/lib/words";
 import { KIND_ICON } from "@/shell/Rail";
 
 function NeedRow({ n, machine }: { n: NeedsYou; machine?: Machine }) {
-  const go = n.go ? `#${n.go}` : href("machine", "", n.machine);
+  // a job that asks opens as that job; anything else opens where its fact lives
+  const go = n.job ? `#job/${n.job}` : n.go ? `#${n.go}` : href("machine", "", n.machine);
   return (
     <div className="lb-need" title={`On ${n.machine}: ${n.words}.${n.detail ? ` ${n.detail}` : ""}`}>
       <span className="hm-ic" title={`On ${n.machine}`}>

@@ -4,10 +4,12 @@ import "@/styles/fonts.css";
 import "@/styles/tokens.css";
 import "@/styles/base.css";
 import "@/styles/shell.css";
+import "@/styles/activity.css";
 import "@/styles/home.css";
 import "@/styles/machine.css";
 import "@/styles/data.css";
 import "@/styles/supply.css";
+import "@/styles/app.css";
 import "@/lib/lamplight/lamplight.css";
 
 export default function App({ Component, pageProps }: AppProps) {

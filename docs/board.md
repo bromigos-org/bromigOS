@@ -16,6 +16,11 @@ package.
   places, and Settings at the foot. The top bar: where you are, Ask or search, Depth and
   You. The activity strip along the bottom, which rises into the drawer of jobs. At phone
   width the rail becomes a bar along the bottom with the places only.
+- **Activity.** Every job the page knows, from the live stream and from the list the board
+  read: the ones that ask, the ones that run or wait, and the ones that ended. Each shows
+  its steps, what it asks, how it ended, and the command that looks closer
+  (`bromigos activity show ID`). `#job/ID` opens one job. The page is read-only: see
+  [What the page may do](#what-the-page-may-do).
 - **The door and signing in.** Signed out, every address shows the door: the ways in and
   the apps to open, nothing else. **Sign in** takes the one-time code that
   `sudo bromigos server board code` prints at the server.
@@ -35,8 +40,15 @@ package.
   server. The Add sheet shows the exact command, and adds the app from the page on a server
   that lets the page (see [What the page may do](#what-the-page-may-do)). Updates: the
   system's update, and each app with one waiting.
-- **Planned, and marked so on the page:** one app's own page, the Stacks sheet, Activity's
-  own page (the strip and its drawer work), People, Den, Network and Settings; and inside
+- **One app** (`#app/ID`). What it is and the version installed, its state and since when,
+  where it answers, the memory and data it uses beside what its recipe asks for, its folder
+  (`/srv/apps/ID`) with its size, the server's backups, its update when it reports one, the
+  apps that need it, the jobs about it that haven't ended, and the commands for its logs
+  and a closer look. Restart, and the Remove sheet with its two separate choices, are
+  controls on a server that lets the page (see
+  [What the page may do](#what-the-page-may-do)); otherwise they are commands.
+- **Planned, and marked so on the page:** an app's restore points, the Stacks sheet, People,
+  Den, Network and Settings; Activity's History, Reports and upcoming jobs; and inside
   the built pages: This week, VECTOR's plans, power, system versions, the pool's layout, a
   new disk, replacing a drive, getting files back, a friend's lab, Move in, and the apps'
   updates. A machine's processor, memory, heat and network, its hardware and its trends
@@ -75,11 +87,11 @@ places to it; the chip in the top bar lets go.
 | `#den`, `#den/library`, `#den/requests`, `#den/play` | Den |
 | `#cameras` | Cameras. Its rail entry shows only when a machine runs the Cameras app |
 | `#supply`, `#supply/browse`, `#supply/updates` | Supply. `#supply/add/ID` opens the Add sheet over Browse |
-| `#app/ID` | One app |
+| `#app/ID` | One app. `#app/ID/remove` opens the Remove sheet over it |
 | `#data`, `#data/backups`, `#data/move` | Data: Drives, Backups, Move in (Shares is planned) |
 | `#network` | Network › Devices (Ad blocking and Away are planned) |
 | `#people`, `#people/ways` | People: Household, Ways in |
-| `#activity` | Activity › Now (History and Reports are planned) |
+| `#activity` | Activity › Now (History and Reports are planned). `#job/ID` opens one job over it |
 | `#settings`, `#settings/mascot` | Settings: Notifications, Mascot (Lab, Power, Recovery and About are planned) |
 | `#signin` | The sign-in sheet over the door, when signed out. Signed in, it is Home |
 
@@ -98,10 +110,10 @@ which the page never reads. Every request that changes something carries the hea
 | `GET /api/session` | Whether this browser is signed in, and the signed-in browsers |
 | `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it |
 | `DELETE /api/session`, `DELETE /api/session/ID` | Signing this browser out, or another one |
-| `GET /api/board` | The board: the machines, what needs you, what fixed itself, a tile per catalogue item, and the drive, backup and update documents as their commands print them |
+| `GET /api/board` | The board: the machines, what needs you, what fixed itself, the jobs as `bromigos activity list` printed them, a tile per catalogue item, and the drive, backup and update documents as their commands print them |
 | `GET /api/activity` | The jobs, live: a stream of Server-Sent Events |
 | `GET /api/vitals?machine=NAME&range=24h` | A machine's trends. The service doesn't serve it yet, and the chart is marked planned |
-| `POST /api/actions` `{"verb": "add", "app": ID}` | Adding an app, on a server that lets the page |
+| `POST /api/actions` `{"verb": "add", "app": ID}` | Adding an app, on a server that lets the page. `"restart"` and `"remove"` the same way |
 
 ### Nothing arrives trusted
 
@@ -125,6 +137,11 @@ An address the server sends becomes a link only when it is `http:` or `https:`
 - **The board** is read every 15 seconds, and **the jobs** arrive on the activity stream.
   Both stop while the tab is hidden, so a forgotten tab doesn't keep the server reading
   itself. When the tab is looked at again they start with an immediate read.
+- **The jobs come from two places**: the stream, and the list the board read
+  (`activity.jobs`). They are joined, and the newer record of a job wins. With the stream
+  refused and the board's list read, the strip and Activity show that list and say "not
+  live · reconnecting". With neither read, they say the jobs couldn't be read, and never
+  "nothing running".
 - **How old a reading is** comes from the server: its `age_s` and `stale`. The page keeps
   the server's time and adds what has passed since the answer came. This browser's clock
   is never compared with the server's, so a wrong clock here changes nothing.
@@ -154,10 +171,22 @@ alerts and the jobs were read.
 
 - **Jobs.** The page shows a job's question and its answers, with the command that answers
   it (`sudo bromigos activity answer ID CHOICE`). It has no Answer, Cancel or Retry control:
-  the service has no route for them yet.
+  the service has no route for them yet. On the Activity page a job that says stopping is
+  safe shows `sudo bromigos activity cancel ID`, and one that can be started again shows
+  `sudo bromigos activity retry ID`.
 - **Adding an app.** The Add sheet's control appears only when the board says the page may
   add (`actions` holds `"add"`) and the app's tile says it can be added. Otherwise the
   sheet shows the command and a planned mark. The service doesn't send `actions` yet.
+- **Restarting and removing an app.** The same rule, with `"restart"` and `"remove"`:
+  the control is there when `actions` holds the word and the app's tile lists it in `can`.
+  Removing keeps the app's data. An app the server won't remove (another app needs it, or
+  it is one of the lab's own parts) has no Remove, and its sheet says why.
+- **Deleting an app's data** has its own word, `"delete-data"`, as root's `[board] actions`
+  has. The sheet then asks for two things: the app's id, typed, and a fresh code from
+  `sudo bromigos server board code`. The page sends
+  `{"verb": "remove", "app": ID, "delete_data": true, "code": CODE}`, and root checks the
+  code and uses it up. The code that signed the browser in doesn't count. Without the
+  word, the sheet shows `sudo bromigos lab apps remove ID --delete-data` and no field.
 
 ## Lamplight, the station
 
@@ -367,8 +396,19 @@ Content-Security-Policy.
     signed-out.
   - A hidden tab asks nothing. A browser clock that is wrong changes nothing.
   - Unsafe addresses never become links. A part that throws costs that part only.
+- **Activity** (`tests/activity.spec.ts`): the three groups and what each job says; a job
+  that runs and ends; one job by its address; the stream's and the board's lists joined;
+  the jobs unread; and that nothing but a GET is sent.
+- **One app** (`tests/app.spec.ts`): what the page says of a tile, from the fixtures and
+  from the service's real answers; an app that measures nothing is "not measured", never
+  zero; restart and remove offered only with the server's leave, and sent as the service
+  asks; deleting data only with its own leave, the id typed and a code; a refusal in the
+  server's words.
 - **The shapes** (`tests/shapes.spec.ts`): every fixture document has the service's keys
   and types.
+- **The layout** (`tests/layout.spec.ts`): the rail's two small marks on a machine (its
+  update arrow, its state) stay small, in their corners and apart; and the activity strip
+  never covers the end of a page or of a sheet, at either width.
 - **The pages** (`routes`, `a11y`, `motion`, `phone`, `shell`, `home`, `machine`, `data`,
   `supply`), at 1280 and 390 pixels wide: every route in seven page states with no error
   and no request to another site; a hint and an accessible name on every control, and axe;

@@ -397,6 +397,8 @@ test("a stream the server refuses (502 while it restarts) is opened again, on a 
   const s = new Service();
   let refusals = 3;
   s.activity = () => (refusals-- > 0 ? new Answer(502, { text: "Bad Gateway" }) : live("activity_running"));
+  // the board that answers carries no list of jobs, so nothing has read them yet
+  s.board = real.boards.activity_missing;
   await page.clock.install();
   await openReal(page, s, "home", { quiet: /EventSource|event-stream/ });
   // never "nothing running" before the jobs have been read
@@ -405,6 +407,16 @@ test("a stream the server refuses (502 while it restarts) is opened again, on a 
   await expect.poll(() => s.count("/api/activity")).toBe(4);
   await expect(page.locator(".sh-strip .strip")).toContainText("Backing up this server");
   await expect(page.locator(".sh-strip .strip")).not.toContainText("not live");
+});
+
+test("the stream refused, the board's list read: the strip shows that list, and says it isn't live", async ({ page }) => {
+  const s = new Service();
+  s.activity = new Answer(502, { text: "Bad Gateway" });
+  await openReal(page, s, "home", { quiet: /EventSource|event-stream/ });
+  const strip = page.locator(".sh-strip .strip");
+  await expect(strip).toContainText("Backing up this server");
+  await expect(strip).toContainText("not live · reconnecting");
+  await expect(strip).not.toContainText("Reading the jobs");
 });
 
 test("a hidden tab asks nothing; looked at again, it reads at once", async ({ page }) => {
