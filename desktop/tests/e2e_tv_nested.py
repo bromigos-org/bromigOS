@@ -24,7 +24,7 @@ keyboard (vkbd.py) drive it. It checks:
     screen's channel, sound and volume remembered across a restart;
   - every screen playing its own channel at once (three players), the sound moving from
     screen to screen (one PipeWire stream, the others silent), and a screen with its sound
-    on playing on behind a window while a muted one pauses;
+    on playing on behind a window, and a muted one too;
   - the channel guide (the standalone Den TV app, driven by den_tv_guide_driver.py): a channel
     added, dragged, moved to another screen, tuned, removed and put back, and the live
     layer following each without a restart;
@@ -456,7 +456,7 @@ def scenarios(n, r, measure=0):
     n.ctl_live("screensaver close")
     r.check("closing it gives the sound back", wait_for(lambda: n.tv_stream() is not None, 8), n.streams())
 
-    # -- a window over the TV: a screen with its sound on plays on; a muted one pauses
+    # -- a window over the TV: a screen plays on behind it, its sound on or muted (a TV)
     p = subprocess.Popen(["kitty"] if shutil.which("kitty") else ["foot"], env=n.env, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
     r.check("a window over it: covered", wait_for(lambda: "big" in (n.state().get("covered") or []), 10),
@@ -466,8 +466,9 @@ def scenarios(n, r, measure=0):
             (n.state().get("playing") or {}).get("paused") is False and n.tv_stream() is not None,
             (n.state().get("playing"), n.streams()))
     n.tv("sound", "off", "--screen", "big")
-    r.check("a muted screen behind a window pauses decoding",
-            wait_for(lambda: (n.state()["screens"]["big"].get("playing") or {}).get("paused"), 10),
+    time.sleep(2)
+    r.check("a muted screen behind a window plays on",
+            (n.state()["screens"]["big"].get("playing") or {}).get("paused") is False,
             n.state()["screens"]["big"].get("playing"))
     time.sleep(3)
     os.killpg(p.pid, signal.SIGTERM)
