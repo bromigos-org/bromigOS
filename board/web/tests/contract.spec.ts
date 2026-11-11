@@ -53,6 +53,36 @@ test("signing in: the service's own refusal, then the code, sent as the service 
   await expect(page.locator(verdict)).toHaveText("ALL MACHINES NOMINAL");
 });
 
+/** The service's answer when many codes were being checked at once (board-contracts.md, "after the
+ *  second review"): the code was never checked, so the same one works when sent again. */
+const BUSY = new Answer(503, { headers: { "retry-after": "5" }, body: { error: { code: "busy", words: "The server is checking many codes at once. Try again in a moment." } } });
+
+test("signing in while the server is busy: said so, the code kept, and the same code works next time", async ({ page }) => {
+  const s = new Service();
+  s.signedIn = false;
+  s.signinFirst = [BUSY];
+  await openReal(page, s, "signin", { quiet: /503/ });
+  const field = page.getByRole("textbox", { name: "One-time code" });
+  await field.fill("abcd-efgh");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator("#signin-why")).toHaveText("The server is busy. Try again in a moment.");
+  await expect(field).toHaveValue("abcd-efgh");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator(".sh-crumb")).toHaveText(/Home$/);
+  const posts = s.seen.filter((x) => x.method === "POST" && x.path === "/api/session");
+  expect(posts.map((x) => JSON.parse(x.body!))).toEqual([{ code: CODE }, { code: CODE }]);
+});
+
+test("a 503 without the service's words is not called busy: it may be the service restarting", async ({ page }) => {
+  const s = new Service();
+  s.signedIn = false;
+  s.signinFirst = [new Answer(503, { text: "Service Unavailable" })];
+  await openReal(page, s, "signin", { quiet: /503/ });
+  await page.getByRole("textbox", { name: "One-time code" }).fill("abcd-efgh");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator("#signin-why")).toHaveText("The server couldn't answer just now.");
+});
+
 test("signing out sends the header too, and lands on the door", async ({ page }) => {
   const s = new Service();
   await openReal(page, s, "home");

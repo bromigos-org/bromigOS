@@ -50,6 +50,8 @@ export class Service {
   /** The signed-in browsers, when a test needs more than the real answer's one. The service's
    *  own rules are kept: ending one answers the new list, an unknown id its real 404. */
   browsers: { id: string; current: boolean }[] | null = null;
+  /** Sign-in's next answers before the code is checked (the service's 503 `busy`, say), one each. */
+  signinFirst: Answer[] = [];
   /** Milliseconds /api/session waits before answering. */
   sessionDelay = 0;
   seen: Seen[] = [];
@@ -102,6 +104,8 @@ export class Service {
       if (q.headers()["x-bromigos-board"] !== "1") return this.real(route, "signin_no_header");
       if (!(q.headers()["content-type"] ?? "").startsWith("application/json")) return this.send(route, new Answer(415, { body: { error: { code: "not-json", words: "Send JSON (Content-Type: application/json)." } } }));
       if (method === "POST") {
+        const first = this.signinFirst.shift();
+        if (first) return this.send(route, first);
         if (JSON.parse(q.postData() ?? "{}").code !== CODE) return this.real(route, "signin_wrong_code");
         this.signedIn = true;
         return this.real(route, "signin");

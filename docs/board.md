@@ -125,7 +125,7 @@ which the page never reads. Every request that changes something carries the hea
 |---|---|
 | `GET /api/door` | The door: the server's name, its world, the apps to open, the ways in |
 | `GET /api/session` | Whether this browser is signed in, and the signed-in browsers |
-| `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it |
+| `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it. Its 503 `busy` (many codes being checked at once) reads "The server is busy. Try again in a moment.", and the code stays in the field: it wasn't checked, so it works when sent again. A coded deletion's `busy` reads the same |
 | `DELETE /api/session`, `DELETE /api/session/ID` | Signing this browser out, or another one (People › Ways in) |
 | `GET /api/board` | The board: the machines, what needs you, what fixed itself, the jobs as `bromigos activity list` printed them, a tile per catalogue item, and the drive, backup and update documents as their commands print them |
 | `GET /api/activity` | The jobs, live: a stream of Server-Sent Events |
