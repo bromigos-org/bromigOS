@@ -17,11 +17,13 @@ bromigos server board sessions [--end ID | --end-all] [--json]
     the browsers signed in to the board, newest first; --end signs one out, --end-all every one.
     Needs root
 
-systemd runs these two (bromigos-board.service, bromigos-board-snapshot.service):
+systemd runs these (bromigos-board.service, bromigos-board-snapshot.service, bromigos-board-act.service):
 bromigos-board serve        the API on the socket systemd hands it (bromigos-board.socket)
 bromigos-board snapshot [--once]
                             read the server and write /run/bromigos-board/board.json every 15
                             seconds while a browser is connected; --once: one reading
+bromigos-board act [ID]     (root, bromigos-board-act.service) take the page's requests out of
+                            their folder, check each again and start its job; ID: that one only
 """
 
 EXIT_OK, EXIT_PROBLEM, EXIT_USAGE, EXIT_CANT = 0, 1, 2, 3
@@ -80,12 +82,23 @@ def folder_trouble(e):
 
 
 def cmd_code(a):
+    if needs_root():
+        return EXIT_CANT
+    # root's own note of the code first, in a folder only root reads: without it no code can
+    # approve deleting an app's data (actions.use_delete_code). Then root steps down
+    from . import actions
+    now, code = paths.now_ms(), auth.fresh_code()
+    try:
+        actions.note_code(code, now + auth.CODE_MS, now)
+    except OSError as e:
+        print(f"bromigos-board: root's note of the code couldn't be written ({e}): no code was made", file=sys.stderr)
+        return EXIT_CANT
     stop = as_board_user()
     if stop is not None:
         return stop
     try:
         own_folders()
-        code, exp = auth.new_code()
+        code, exp = auth.new_code(now, code)
     except OSError as e:
         return folder_trouble(e)
     if a.json:
@@ -142,6 +155,44 @@ def cmd_snapshot(a):
     return snapshot.run(once=a.once)
 
 
+def cmd_act(a):
+    """Root, from bromigos-board-act.service (started by bromigos-board-act.path when the requests
+    folder isn't empty): take every request out of the folder, check each again and start its
+    job. With an ID, that one request only.
+
+    It ends 0 once the answers are written, a refusal included: the refusal is the answer, and a
+    unit that failed for each one would stay failed (the Server's update check counts failed
+    units)."""
+    if needs_root():
+        return EXIT_CANT
+    from . import actions
+    try:
+        if a.id:
+            out = actions.act(a.id)
+            print(out["words"], file=sys.stdout if out["ok"] else sys.stderr)
+        else:
+            n = actions.drain()
+            print(f"bromigos-board: {n} request{'s' if n != 1 else ''} handled", file=sys.stderr)
+    except Exception as e:              # nothing a request holds may fail root's unit
+        print(f"bromigos-board: the helper stopped early: {type(e).__name__}: {e}", file=sys.stderr)
+    return EXIT_OK
+
+
+def cmd_activity_folder(a):
+    """Root, before the helper's sandbox is put up (the unit's ExecStartPre=+): make sure the
+    activity records' folder is there, where bromigos-core puts it, so the sandbox can be given
+    that folder and no more."""
+    if needs_root():
+        return EXIT_CANT
+    try:
+        import bromigos_activity
+        os.umask(0o022)             # the records, and the folders they're in, are for everyone to read
+        bromigos_activity.Env().ensure_dir()
+    except Exception as e:
+        print(f"bromigos-board: the activity folder couldn't be made: {e}", file=sys.stderr)
+    return EXIT_OK
+
+
 def cmd_serve(a):
     import uvicorn
     from . import api
@@ -169,8 +220,12 @@ def main(argv=None):
     p = sub.add_parser("snapshot")
     p.add_argument("--once", action="store_true")
     sub.add_parser("serve")
+    p = sub.add_parser("act")
+    p.add_argument("id", nargs="?")
+    sub.add_parser("activity-folder")
     a = ap.parse_args(argv)
     if not a.cmd:
         print(USAGE, end="")
         return EXIT_USAGE
-    return {"code": cmd_code, "sessions": cmd_sessions, "snapshot": cmd_snapshot, "serve": cmd_serve}[a.cmd](a)
+    return {"code": cmd_code, "sessions": cmd_sessions, "snapshot": cmd_snapshot, "serve": cmd_serve,
+            "act": cmd_act, "activity-folder": cmd_activity_folder}[a.cmd](a)

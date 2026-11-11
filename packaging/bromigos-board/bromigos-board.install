@@ -10,6 +10,10 @@ post_install() {
 post_upgrade() {
   post_install
   systemctl try-restart bromigos-board.service >/dev/null 2>&1 || true
+  # a server set up before the page could act: its helper's watch starts with the rest
+  if systemctl is-enabled -q bromigos-board.socket 2>/dev/null; then
+    systemctl enable --now bromigos-board-act.path >/dev/null 2>&1 || true
+  fi
 }
 
 # Removing it: its units stop, and its site comes out of Caddy first. The site imports a file of
@@ -18,10 +22,11 @@ post_upgrade() {
 # they'd be good for 30 days if the package came back.
 pre_remove() {
   systemctl disable --now bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path \
-    bromigos-board-snapshot.service >/dev/null 2>&1 || true
+    bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service >/dev/null 2>&1 || true
   if [ -e etc/caddy/conf.d/bromigos-board.caddy ]; then
     rm -f etc/caddy/conf.d/bromigos-board.caddy
     systemctl reload caddy.service >/dev/null 2>&1 || true
   fi
-  rm -f var/lib/bromigos-board/sessions/*.json var/lib/bromigos-board/codes/*.json 2>/dev/null || true
+  rm -f var/lib/bromigos-board/sessions/*.json var/lib/bromigos-board/codes/*.json \
+    var/lib/bromigos-board-root/codes/*.json 2>/dev/null || true
 }

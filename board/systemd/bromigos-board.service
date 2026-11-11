@@ -18,13 +18,15 @@ UMask=0077
 # what it may use of the machine: a household's page needs little
 MemoryMax=256M
 TasksMax=128
-# read-only everything, but what it writes: its own sessions and codes, and the two files it
-# marks to ask root's reader for a reading (tmpfiles made them; the folder they're in is root's)
+# read-only everything, but what it writes: its own sessions and codes, the two files it marks
+# to ask root's reader for a reading (tmpfiles made them; the folder they're in is root's), and
+# its own folder of requests for root's helper
 ProtectSystem=strict
 # /run too, said outright: on some systemd versions (seen on 255) ProtectSystem=strict leaves
 # /run writable once ProtectProc= or ProtectKernelTunables= is set
 ReadOnlyPaths=/run
 ReadWritePaths=/var/lib/bromigos-board /run/bromigos-board/wanted /run/bromigos-board/door
+ReadWritePaths=/run/bromigos-board/requests
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

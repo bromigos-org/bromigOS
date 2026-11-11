@@ -514,11 +514,12 @@ Two users work for the board, and each stays out of the other's folder.
 | Who | Does what | Writes where |
 |---|---|---|
 | `bromigos-board` | Runs the API | `/var/lib/bromigos-board`, its own (0700): sessions and codes |
-| root | Runs the reader, and `bromigos server board code` and `sessions` | `/run/bromigos-board`, root's (0750, group `bromigos-board`): `board.json` |
+| root | Runs the reader, the helper for [actions](#actions), and `bromigos server board code` and `sessions` | `/run/bromigos-board`, root's (0750, group `bromigos-board`): `board.json`, and the helper's answers in `results` |
 
 - **Root never writes where the board's user can.** The board's user can read
   `/run/bromigos-board` and can't put a file, a link or anything else in it. The two files it
-  marks there, `wanted` and `door`, are made by tmpfiles, as root's.
+  marks there, `wanted` and `door`, are made by tmpfiles, as root's. One folder inside it is
+  the board's user's, `requests`: root only reads and deletes there.
 - **Root becomes the board's user before it touches the board's folder.**
   `sudo bromigos server board code` and `sessions` drop root for good first: no extra
   groups, then the board's group, then its user. A link planted where `codes` or `sessions`
@@ -703,6 +704,7 @@ Every answer is JSON with `Cache-Control: no-store`. An error is
 | `DELETE /api/session/<id>` | signed in | Signs that browser out |
 | `GET /api/board` | signed in | The board, worked out from the reader's `board.json` |
 | `GET /api/activity` | signed in | The jobs, live, as server-sent events |
+| `POST /api/actions` | signed in | Restarts, adds or removes an app, as a job ([Actions](#actions)) |
 
 The status codes:
 
@@ -819,11 +821,135 @@ Times are milliseconds since 1970, UTC.
 
 A comment line, `: keep-alive`, comes every 20 seconds.
 
+### Actions
+
+Signed in, the page can restart an app, add one, or remove one. Each is an activity job
+([activity.md](activity.md)), so it carries on when the page closes, and the strip shows its
+steps. The page asks:
+
+```json
+POST /api/actions
+{"verb": "restart", "app": "photos"}
+```
+
+#### What a session can do, and how to turn it off
+
+A signed-in browser can do all of this until its session ends, 30 days later at most:
+
+- see everything the board shows;
+- restart any app this server runs;
+- add any app in the catalogue, file sharing and game servers included;
+- remove an app, keeping its data.
+
+It can't delete an app's data, run a command, read a file or change a setting. Deleting
+data needs a fresh code from the server each time ([below](#deleting-an-apps-data)).
+
+So a stolen session cookie can add and remove apps. If that is more than you want from a
+browser, say which actions the page may use, as root, in `/etc/bromigos/server.toml`:
+
+```toml
+[board]
+actions = ["restart"]        # only restarts; [] turns every action off
+```
+
+Left out, it means `["restart", "add", "remove", "delete-data"]`. The page then only shows
+what the server is doing, and you add and remove apps with `sudo bromigos lab apps`.
+`sudo bromigos server board sessions --end-all` signs every browser out at once.
+
+#### How a request reaches root
+
+The API runs as an ordinary user. It can't do any of this itself, and it has no right to
+start anything: there is no polkit rule and no `sudo`. Two folders carry a request across
+and its answer back, and each side writes only one of them.
+
+| Folder | Whose | Holds |
+|---|---|---|
+| `/run/bromigos-board/requests` | the board's user's | `<id>.json`, a request, where `<id>` is 16 random hex digits |
+| `/run/bromigos-board/results` | root's; the board's group reads it | `<id>.json`, root's answer |
+
+1. The API checks the request's shape and writes it, whole, into `requests`.
+2. `bromigos-board-act.path` sees that the folder isn't empty and starts
+   `bromigos-board-act.service`: `bromigos-board act`, as root, in a sandbox.
+3. The helper takes every request out of the folder, one at a time. It reads each once and
+   deletes it, then checks it again:
+   - it's a plain, small file that the board's user wrote, at most a minute old. A link is
+     never followed and a FIFO never waited on;
+   - the verb is one of `restart`, `add` and `remove`, the commands of `bromigos lab apps`;
+   - the app is an id in the provisioning catalogue;
+   - root's `[board] actions` lists the verb.
+4. It builds the command itself, from those checked words only, and starts it as a job:
+
+   ```bash
+   /usr/lib/bromigos/bin/bromigos-activity run --kind app.restart --title "Restarting Photos" \
+     --subject app:photos:Photos --lock apps --via board --device "Firefox on Linux" --detach --json \
+     -- /usr/bin/bromigos lab apps restart photos
+   ```
+
+5. It writes its answer into `results`, and the API passes it on. The answer's words are
+   fixed for each outcome: nothing the request said is ever quoted in it.
+6. It waits three seconds for more requests, then ends. A request that arrives while it
+   runs is handled in the same run. One that arrives as it ends starts it again, because
+   the path unit looks at the folder when the service stops. Each request is handled once,
+   since reading it deletes it.
+
+No word of the request reaches a shell, and there is no "run this" request. Anything else
+the helper finds in the folder is removed: a link, a folder, a request left half-written a
+minute ago.
+
+**The helper's sandbox.** It is root, and the unit lets it write five places only: the two
+folders above, the board's own folder and root's (for the codes, below), and the activity
+records (`/var/lib/bromigos/activity`, or `/var/lib/bromigos/server/activity` on a Server,
+where that folder lives). `/etc`, `/usr` and the rest of the system are read-only to it,
+and `/home` and `/root` are out of sight. It has no network but the socket it tells systemd
+to start the job with. The job itself runs in a unit of its own, outside this sandbox.
+
+**A refusal is an answer, not a failure.** The helper ends with status 0 once its answers
+are written, and its unit isn't kept once it has ended (`CollectMode=inactive-or-failed`).
+A failed unit would count against the next update's health check
+([server.md](server.md#how-health-is-judged)).
+
+#### Deleting an app's data
+
+Removing an app keeps its data. To delete the data too, the request carries
+`"delete_data": true` and a code from `sudo bromigos server board code`, typed again for
+it. The session alone isn't enough.
+
+Root keeps its own note of every code it makes, in `/var/lib/bromigos-board-root/codes`,
+which only root can read or write. The board's own record of the code is in
+`/var/lib/bromigos-board/codes`. The helper takes a code for a deletion only when both
+records are there, and removes both. So:
+
+- a code the board's user made itself deletes nothing, because root never noted it;
+- a code that signed a browser in deletes nothing, because signing in removed the board's
+  record;
+- a code works for one deletion, and can't sign a browser in afterwards.
+
+Then the helper runs `bromigos lab apps remove <app> --delete-data --yes`.
+
+One limit: root can't see a sign-in. It trusts the board's record to say a code is unused.
+If the API itself were taken over, it could keep a code that you typed to sign in and
+spend it on a deletion instead. It could never make a code of its own.
+
+#### The answers
+
+| Code | `error.code` | Means |
+|---|---|---|
+| 202 | | Started: `{"ok": true, "job": "<activity id>", "words": "Restarting Photos."}`. `job` is null when root hadn't answered within 10 seconds; the job still shows in the activity stream |
+| 400 | `unknown-verb`, `unknown-app`, `needs-code`, `bad-request` | The request isn't one the board makes |
+| 403 | `unknown-app` | The app isn't in the catalogue |
+| 403 | `not-allowed` | `[board] actions` doesn't list it |
+| 403 | `needs-code` | The code for deleting data is wrong, used, out of date, or one that signed a browser in |
+| 403 | `too-old`, `bad-request`, `job-failed` | Root's helper refused the request, or the job didn't start |
+| 429 | `too-many` | Too many wrong codes from this address |
+| 503 | `no-actions` | The requests folder isn't there: actions aren't set up |
+
+A wrong code for a deletion is counted and slowed like a wrong code at sign-in.
+
 ### The files
 
 | Path | What |
 |---|---|
-| `/usr/lib/bromigos/board/bromigos-board` | The board's own command: `serve`, `snapshot`, `code`, `sessions` |
+| `/usr/lib/bromigos/board/bromigos-board` | The board's own command: `serve`, `snapshot`, `code`, `sessions`, `act` |
 | `/usr/lib/bromigos/lib/bromigos_board/` | Its library |
 | `/usr/share/bromigos-board/caddy/site.caddy` | The site's rules, imported by the server's Caddy site |
 | `/etc/caddy/conf.d/bromigos-board.caddy` | The site, written by the catalogue's `board` step for `<server>.local` and `home-<server>.local` |
@@ -832,6 +958,9 @@ A comment line, `: keep-alive`, comes every 20 seconds.
 | `/run/bromigos-board/board.json` | The reader's last reading |
 | `/run/bromigos-board/wanted`, `door` | The two files the API marks to ask for readings |
 | `/var/lib/bromigos-board/` | Sessions and codes, the board's user's only |
+| `/run/bromigos-board/requests/` | The page's actions, waiting for root's helper. The board's user's |
+| `/run/bromigos-board/results/` | The helper's answers. Root's |
+| `/var/lib/bromigos-board-root/codes/` | Root's own note of each code it made. Root's only |
 
 ### The service's tests
 
@@ -850,11 +979,14 @@ root under its real systemd. It installs the board where the package puts it, th
 what a stand-in root can't show: who owns each folder once tmpfiles made them, that the
 board's user can put nothing in root's folder, that root's files in the board's folder are
 the board's user's, that a link planted there is refused, and that each unit works inside
-its sandbox. Never run it on a computer you use.
+its sandbox. For actions it checks that the board's user can start nothing, that a burst of
+requests is each handled once with none lost, that a refusal fails no unit, and that a code
+the board's user made deletes nothing. Never run it on a computer you use.
 
 ### Not built yet, on the server's side
 
-- Actions: restarting, updating or removing an app from the page.
+- Updating an app or putting its last version back: `bromigos lab apps` doesn't do those yet.
+- Answering, cancelling or retrying a job from the page.
 - Signing in from the phone, or with a Bromigos account.
 - The lab's own address, and the lab's other machines on one server's page.
 - Moving servers that run the start page onto the board.

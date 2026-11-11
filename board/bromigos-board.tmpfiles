@@ -7,8 +7,16 @@
 d /run/bromigos-board 0750 root bromigos-board -
 f /run/bromigos-board/wanted 0660 root bromigos-board -
 f /run/bromigos-board/door 0660 root bromigos-board -
+# Actions: the API puts a request in `requests`, its own folder; root's helper takes it out and
+# leaves its answer in `results`, root's. Each side writes one folder and only reads the other.
+d /run/bromigos-board/requests 0750 bromigos-board bromigos-board -
+d /run/bromigos-board/results 0750 root bromigos-board -
 # /var/lib/bromigos-board is the board's user's own: sessions and sign-in codes. Root works in
 # it only after it has become that user (bromigos server board code, sessions).
 d /var/lib/bromigos-board 0700 bromigos-board bromigos-board -
 d /var/lib/bromigos-board/sessions 0700 bromigos-board bromigos-board -
 d /var/lib/bromigos-board/codes 0700 bromigos-board bromigos-board -
+# Root's own note of each sign-in code it made, which the board's user can't read or write:
+# only a code noted here can approve deleting an app's data.
+d /var/lib/bromigos-board-root 0700 root root -
+d /var/lib/bromigos-board-root/codes 0700 root root -

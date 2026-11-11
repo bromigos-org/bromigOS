@@ -10,6 +10,10 @@
 #   the reader            bromigos-board-snapshot.path starts bromigos-board-snapshot.service
 #                         (root) while a browser is connected: board.json every 15 seconds
 #   the commands          bromigos server board code|sessions (bromigos-server runs these)
+#   actions               bromigos-board-act.path starts bromigos-board-act.service (root, in
+#                         a sandbox) when the API has left a request in its folder: the helper
+#                         checks each request again and starts its job. The API itself has no
+#                         right over systemd: there is no polkit rule
 #   the site              /usr/share/bromigos-board/caddy/site.caddy, which the lab's Caddy
 #                         step imports for <server>.local and home-<server>.local
 #   the page              /usr/share/bromigos-board/web is bromigos-board-web's (the pages). Should
