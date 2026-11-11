@@ -71,7 +71,8 @@ for id in "${PROVE[@]}"; do
         up=""
         for _ in $(seq 24); do
             # every one of them (is-active with several units is true when any one is)
-            (( ${#units[@]} )) && ! systemctl is-active "${units[@]}" | grep -vqx active && { up=1; break; }
+            states=$( (( ${#units[@]} )) && systemctl is-active "${units[@]}")
+            [[ -n $states ]] && ! grep -vqx active <<<"$states" && { up=1; break; }
             sleep 5
         done
         if [[ -z $up ]]; then
