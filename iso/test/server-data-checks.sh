@@ -111,6 +111,33 @@ if [[ -n ${want[app]:-} ]]; then
         check "$app's data is on the system disk (no data disks)" bash -c "[[ \$(sudo findmnt -no UUID -T /srv/apps/$app) == \"\$(findmnt -no UUID /)\" ]]"
     fi
 fi
+if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]]; then
+    # The nightly backup on a server whose /srv/apps is a mount of the data disks' apps subvolume:
+    # the real bromigos-server backup run, to a folder, and what the newest backup holds, read
+    # back with the real restic. A backup that didn't cross into that mount would hold none of it
+    app=${want[app]}
+    check "the nightly backup holds $app's data from the data disks$( (( ${want[passwords]:-0} )) && echo ", and the vault's database copied whole")" bash -c "
+        set -e
+        sudo cp /etc/bromigos/server.toml /root/isotest-server.toml
+        # whatever happens below, the server's settings are put back and the test's backup removed
+        trap 'sudo cp /root/isotest-server.toml /etc/bromigos/server.toml; sudo rm -rf /var/tmp/isotest-backup' EXIT
+        sudo python3 -c 'import re, sys; p = \"/etc/bromigos/server.toml\"; s = re.sub(r\"(?ms)^\\[backup\\]\\n.*?(?=^\\[|\\Z)\", \"\", open(p).read()); open(p, \"w\").write(s + \"\\n[backup]\\nto = \\\"/var/tmp/isotest-backup\\\"\\n\")'
+        sudo bromigos server backup run
+        # everything the newest backup holds under a folder (restic ls lists one level unless told)
+        ls_latest() { sudo env RESTIC_REPOSITORY=/var/tmp/isotest-backup RESTIC_PASSWORD_FILE=/etc/bromigos/server/backup.key restic ls --recursive latest \"\$@\"; }
+        ls_latest /srv/apps/$app > /tmp/isotest-ls-app
+        grep -x /srv/apps/$app /tmp/isotest-ls-app
+        echo \"\$(grep -c '^/srv/apps/$app/' /tmp/isotest-ls-app) files and folders of $app's in the backup\"
+        grep -q '^/srv/apps/$app/' /tmp/isotest-ls-app
+        if (( ${want[passwords]:-0} )); then
+            ls_latest /var/lib/bromigos/backup-databases > /tmp/isotest-ls-db
+            cat /tmp/isotest-ls-db
+            grep -x /var/lib/bromigos/backup-databases/passwords/db.sqlite3 /tmp/isotest-ls-db
+            sudo python3 -c 'import sqlite3; c = sqlite3.connect(\"/var/lib/bromigos/backup-databases/passwords/db.sqlite3\"); assert c.execute(\"PRAGMA quick_check\").fetchone()[0] == \"ok\"; print(c.execute(\"SELECT count(*) FROM sqlite_master\").fetchone()[0], \"tables in the vault copy\")'
+        fi
+        sudo bromigos server backup check
+        bromigos lab backups --json | python3 -c 'import json, sys; d = json.load(sys.stdin); print(d[\"health\"]); sys.exit(0 if d[\"health\"][\"state\"] == \"ok\" else 1)'"
+fi
 if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]] && (( ${want[move]:-0} )); then
     # A server set up before the installer mounted the data disks' apps subvolume at /srv/apps:
     # that subvolume empty, /srv/apps a folder on the system disk with the app's data in it, the

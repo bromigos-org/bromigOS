@@ -586,6 +586,19 @@ signed in. Autoscan reads its keys from that file alone, so the file is its acco
 step. The engine writes the file again only while it's as the engine wrote it (a digest on
 its second line), so your changes stay.
 
+**Backups.** On a bromigOS Server the Server's own nightly backup covers the apps
+([server.md](server.md#backups)). Anywhere else, the Backups item (`step_backups`) writes
+`bromigos-lab-backup.service`, which runs `restic backup --one-file-system` over `/etc`,
+`/srv`, `/srv/apps`, `/var/lib/bromigos` and `/var/lib/vaultwarden`, each one that is there
+(restic 0.19 fails a run that names a path that isn't). `--one-file-system`
+keeps it off other disks: `/srv/data` isn't read a second time, and `/srv/backups`, where
+its own repository is by default, isn't backed up into itself. So `/srv/apps`, a disk of
+its own on a server with data disks, is named by itself. Before restic, `bromigos lab
+backups copy-databases` copies the apps' databases whole; after it, `bromigos lab backups
+holds` fails the unit when the backup lacks `/srv/apps` or a copy failed. The engine writes
+a hook for each app with a database file (`DATABASES`: passwords and documents) to
+`/etc/bromigos/backup-databases.d/<item>.toml`.
+
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
 installer mounted it there, `bromigos lab app-data move` puts it on the data disks, and
 the media library, the backups folder and a vault in the package's folder with it
