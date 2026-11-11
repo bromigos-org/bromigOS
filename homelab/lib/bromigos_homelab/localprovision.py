@@ -620,12 +620,15 @@ def install_quadlet(host, it):
     for f in files:
         text = render(f.read_text(), it, host)
         changed = host.write(QUADLET_DIR + "/" + f.name, text) or changed
+        # a container that runs as an account of its own (User=, as Navidrome and slskd do) writes
+        # its data as that account: the folder is that account's, or the app can't make its database
+        account = re.search(r"^User=(\d+):(\d+)$", text, re.M)
         for line in text.splitlines():
             m = re.match(r"^Volume=(/[^:]+):", line)
             # a folder the app keeps data in is made; a file it is given (LiteLLM's config.yaml,
             # written by its prepare step) is mounted as it is
             if m and m.group(1).startswith("/" + APPS) and not host.path(m.group(1)).is_file():
-                host.mkdir(m.group(1))
+                host.mkdir(m.group(1), owner=f"{account.group(1)}:{account.group(2)}" if account else None)
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     for u in units:
         host.must(["systemctl", "restart" if changed else "start", u], f"start {u}")

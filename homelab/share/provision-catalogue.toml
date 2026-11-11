@@ -1055,6 +1055,8 @@ what = "Plex's settings, watch history, artwork and what it knows about the libr
 
 [[item]]
 id = "navidrome"
+# 2: its data folder belongs to the account its container runs as. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "Navidrome (music)"
 job = "Music"
@@ -1534,6 +1536,8 @@ what = "Its settings and the torrents it is working on."
 
 [[item]]
 id = "slskd"
+# 2: its data folder belongs to the account its container runs as. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "slskd (Soulseek)"
 job = "Soulseek"

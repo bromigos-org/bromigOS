@@ -534,6 +534,25 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(L.Runner(self.host(L.build_plan(["sonarr", "jellyfin"], hw=HW))).run(), 0)
         self.assertEqual(sorted(self.hooks()), ["jellyfin", "mine", "prowlarr", "sonarr"])
 
+    def test_a_container_with_an_account_of_its_own_owns_its_data_folder(self):
+        # Navidrome and slskd run as the media account (User= in their units). Their data folder
+        # was root's, so the app couldn't make its database in it
+        plan = L.build_plan(["navidrome", "slskd", "sonarr"], hw=HW)
+        self.net["up"] = True
+        made = []
+        mkdir = L.Host.mkdir
+
+        def recorded(host, rel, mode=None, owner=None):
+            made.append((str(rel).lstrip("/"), owner))
+            return mkdir(host, rel, mode, owner)
+
+        with mock.patch.object(L.Host, "mkdir", recorded):
+            self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        owners = dict(made)
+        self.assertIn("User=1000:1000\n", Path(self.root, L.QUADLET_DIR, "navidrome.container").read_text())
+        self.assertEqual((owners["srv/apps/navidrome/data"], owners["srv/apps/slskd/app"]), ("1000:1000", "1000:1000"))
+        self.assertIsNone(owners["srv/apps/sonarr/config"], "an image that drops to its own account itself is left as it was")
+
     def test_a_recipe_whose_revision_was_raised_is_set_up_again(self):
         # what the engine writes for an item changed (the lab's backup unit, the vault's settings
         # file, Autoscan's config.yml): the catalogue's `version` is in the fingerprint, so a
@@ -541,7 +560,7 @@ class ApplyTests(unittest.TestCase):
         # keeps the fingerprint it had
         cat = PC.by_id()
         host = self.host(L.build_plan(["passwords", "backups", "photos"], hw=HW))
-        for i in ("passwords", "backups", "autoscan"):
+        for i in ("passwords", "backups", "autoscan", "navidrome", "slskd"):
             self.assertEqual(cat[i]["version"], 2, i)
             self.assertNotEqual(L.fingerprint(cat[i], host), L.fingerprint(dict(cat[i], version=1), host), i)
         self.assertEqual(cat["photos"]["version"], 1)

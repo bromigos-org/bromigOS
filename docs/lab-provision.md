@@ -638,7 +638,12 @@ item mounts.
 otherwise. It is part of the item's fingerprint when it isn't 1, so raising it has the
 engine set the item up again at the next apply on a server that has it. That is how a
 change to what the engine writes for an item (a unit, a settings file) reaches servers set
-up before it. Backups, Passwords and Autoscan are at 2.
+up before it. Backups, Passwords, Autoscan, Navidrome and slskd are at 2.
+
+**A container with an account of its own.** A unit with `User=` (Navidrome and slskd run
+as the `bromigos-media` account) writes its data as that account, so the engine makes the
+unit's folders under `/srv/apps` that account's. The linuxserver images start as root and
+change account themselves; their folders are left as they are.
 
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
 installer mounted it there, `bromigos lab app-data move` puts it on the data disks, and
