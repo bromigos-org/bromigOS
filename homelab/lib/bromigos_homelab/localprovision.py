@@ -830,6 +830,38 @@ def caddy_routes(host):
     return "\n\n".join(blocks) + "\n"
 
 
+def mdns_names(host):
+    """The names published over mDNS: each web app's, and the Lab board's home-<server>.local
+    (<server>.local is the machine's own name already)."""
+    names = [name for _, name, _ in web_apps(host)]
+    if "board" in host.selected:
+        names.append(f"home-{host.hostname}.local")
+    return names
+
+
+BOARD_SNIPPET = "/usr/share/bromigos-board/caddy/site.caddy"
+
+
+def board_site(host):
+    """The Lab board's Caddy site (docs/board.md): this server's own name and the start page's
+    old one. What it serves, and the rule that refuses any address that isn't private, are the
+    package's (bromigos-board: board/caddy/site.caddy)."""
+    return ("# bromigos lab provision --local: the Lab board (bromigos-board; docs/board.md)\n"
+            f"{host.hostname}.local, home-{host.hostname}.local {{\n  tls internal\n  import {BOARD_SNIPPET}\n}}\n")
+
+
+def step_board(host, it):
+    """The Lab board: its package, its site in Caddy (written once the package that it imports is
+    there), its API socket and the reader that starts when a browser connects."""
+    pacman(host, ["bromigos-board"])
+    host.write("etc/caddy/conf.d/bromigos-board.caddy", board_site(host))
+    host.must(["systemctl", "daemon-reload"], "reload systemd")
+    enable(host, STEP_UNITS["board"])
+    host.must(["systemctl", "reload-or-restart", "caddy.service"], "load the Lab board's site")
+    note(host, it, f"The Lab board is at https://{host.hostname}.local. Sign in with a code from "
+                   "sudo bromigos server board code.")
+
+
 MDNS_UNIT = """[Unit]
 Description=bromigOS: the web apps' names on the local network (mDNS)
 Documentation=file:///usr/share/doc/bromigos/lab-provision.md
@@ -852,7 +884,7 @@ def step_caddy(host, it):
     host.write("etc/caddy/conf.d/bromigos-lab.caddy", caddy_routes(host))
     # each name published over mDNS, so phones and computers on the network find it
     pacman(host, ["avahi"])
-    host.write("etc/bromigos/lab/mdns-names", "".join(f"{name}\n" for _, name, _ in web_apps(host)))
+    host.write("etc/bromigos/lab/mdns-names", "".join(f"{name}\n" for name in mdns_names(host)))
     host.write("etc/systemd/system/bromigos-lab-mdns-names.service", MDNS_UNIT)
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["avahi-daemon.service", "bromigos-lab-mdns-names.service"], restart=True)
@@ -1103,21 +1135,22 @@ STEPS = {"k3s": step_k3s, "helm-chart": _helm, "openbao": step_openbao, "monitor
          "backups": step_backups, "caddy": step_caddy, "passwords": step_passwords, "file-sync": step_file_sync,
          "adblock": step_adblock, "smb": step_smb, "backup-target": step_backup_target, "wings": step_wings,
          "models": step_models, "lab-network": step_lab_network, "media-library": step_media_library,
-         "youtube-library": step_youtube_library, "den-tv": step_den_tv}
+         "youtube-library": step_youtube_library, "den-tv": step_den_tv, "board": step_board}
 STEP_UNITS = {"k3s": ["k3s.service"], "openbao": ["openbao.service", "bromigos-openbao-unseal.service"],
               "monitoring": ["prometheus.service", "grafana.service"], "backups": ["bromigos-lab-backup.timer"],
               "caddy": ["caddy.service"], "passwords": ["vaultwarden.service"], "file-sync": ["syncthing@syncthing.service"],
               "adblock": ["adguardhome.service"], "smb": ["smb.service"], "wings": ["docker.service", "wings.service"],
-              "lab-network": ["tailscaled.service"]}
+              "lab-network": ["tailscaled.service"], "board": ["bromigos-board.socket", "bromigos-board-snapshot.path"]}
 STEP_DOWNLOADS = {"k3s": ["k3s " + K3S_VERSION + " from get.k3s.io"], "helm-chart": ["package helm", "Helm chart"],
                   "openbao": ["package openbao"], "monitoring": ["package prometheus", "package grafana"],
                   "backups": ["package restic"], "caddy": ["package caddy"],
                   "passwords": ["package vaultwarden", "package vaultwarden-web"], "file-sync": ["package syncthing"],
                   "adblock": ["package adguardhome"], "smb": ["package samba"],
-                  "wings": ["package docker", "Wings " + WINGS[0] + " (pinned checksum)"], "models": ["the chosen models"]}
+                  "wings": ["package docker", "Wings " + WINGS[0] + " (pinned checksum)"], "models": ["the chosen models"],
+                  "board": ["package bromigos-board"]}
 STEP_PACKAGES = {"openbao": ["openbao"], "monitoring": ["prometheus", "grafana"], "backups": ["restic"], "caddy": ["caddy"],
                  "passwords": ["vaultwarden", "vaultwarden-web"], "file-sync": ["syncthing"], "adblock": ["adguardhome"],
-                 "smb": ["samba"], "wings": ["docker"], "helm-chart": ["helm"]}
+                 "smb": ["samba"], "wings": ["docker"], "helm-chart": ["helm"], "board": ["bromigos-board"]}
 STEP_PROBES = {k: (lambda pk: lambda host, it: bool(missing_packages(host, pk)))(v) for k, v in STEP_PACKAGES.items()}
 STEP_PROBES["lab-network"] = lambda host, it: host.plan.get("lab") == "join"
 STEP_PROBES["youtube-library"] = lambda host, it: False

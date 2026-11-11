@@ -1,4 +1,6 @@
 #!/bin/sh
+# bromigos:summary=smartd's warning hook (not a command for people: smartd runs it)
+# bromigos:hidden=true
 # smartd's warning hook (smartd.conf's -M exec): smartd runs it with no arguments and the
 # warning in SMARTD_* variables, which bromigos-server disk-alert keeps for `bromigos server`.
 exec /usr/lib/bromigos/server/bromigos-server disk-alert

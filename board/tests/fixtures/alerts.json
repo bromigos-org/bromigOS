@@ -1,0 +1,13 @@
+{
+ "schema": 1, "scope": "system", "role": "server", "checked_at": 1794290000000,
+ "checks": [{"check": "update.restart", "state": "ran", "error": null, "ran_at": 1794290000000}],
+ "alerts": [
+  {"id": "update.restart", "check": "update.restart", "severity": "needs_you",
+   "title": "A restart finishes the update", "detail": "The kernel was updated. Restart when it suits you.",
+   "source": "Updates", "subject": "", "since": 1794200000000, "actions": [], "evidence": {"lines": [], "facts": {}},
+   "fix": null, "link": null},
+  {"id": "disk.space:/srv", "check": "disk.space", "severity": "info", "title": "/srv is 71% full",
+   "detail": "Nothing to do yet.", "source": "Disk space", "subject": "/srv", "since": 1794100000000,
+   "actions": [], "evidence": {"lines": [], "facts": {}}, "fix": null, "link": null}
+ ]
+}

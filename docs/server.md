@@ -73,10 +73,10 @@ sudo bromigos server role remove storage    # and off again
 | Role | In plain words | What it adds |
 |---|---|---|
 | **Lab node** | Joins your lab and runs what it gives this computer. The lab sets it up from your desktop. | The `lab-cluster` rule set; NFS for the lab's NAS; the kernel settings container-dense nodes need; the lab workstation's account; k3s in the health check once the lab installs it |
-| **Storage** | Keeps files for the house and backups for the lab. | Samba and NFS (on, with no shares yet), btrbk, disk spin-down; the `smb` and `nfs` rule sets |
+| **Storage** | Keeps files for the house and backups for the lab. | Samba and NFS (on, with no shares yet), btrbk, disk spin-down; the `smb` and `nfs` rule sets; `web-lan` for the server's own page |
 | **Home services** | Runs apps for the household: photos, media, passwords. | Caddy on 80 and 443, local network only (`web-lan`) |
 | **Media** | Your own movies, shows, music and Den TV for every screen. | Jellyfin, requests and the library's upkeep, as containers the lab's engine sets up; `web-lan` and `media` (8096, and 7359/udp for the apps to find it), local network only; the `_bromigos-media._tcp` announcement, so desktops add it as a Den TV source by themselves |
-| **Game server** | Hosts games for friends, run from your phone. | The `games` rule set (Minecraft's 25565, from anywhere); the processor at full speed. Two ways, below |
+| **Game server** | Hosts games for friends, run from your phone. | The `games` rule set (Minecraft's 25565, from anywhere); `web-lan` for the server's own page; the processor at full speed. Two ways, below |
 | **Just a server** | The safe base and nothing else. | Nothing more |
 | **Cockpit** (an extra) | A web page for looking after the server, on your local network. | Cockpit with its Podman, storage and files pages, on 9090 (`cockpit`). Never its update page, which would update outside the snapshot and the check |
 
@@ -132,11 +132,11 @@ kind = "role"
 order = 40
 title = "Game server"
 summary = "Host game servers for friends, started and stopped from your phone."
-hint = "Players come in from the internet on the game's own port. Everything else stays closed."
+hint = "Players come in from the internet on the game's own port. The server's own page answers your local network only; everything else stays closed."
 offline = true
 packages = []
 services = []
-firewall = ["games"]
+firewall = ["games", "web-lan"]
 health = []
 health_optional = []
 requires = []
@@ -364,7 +364,14 @@ Everything else coming in is dropped. Traffic going out, and traffic passing thr
 containers and the cluster, is left alone.
 
 "The local network" means private addresses: `10.0.0.0/8`, `172.16.0.0/12`,
-`192.168.0.0/16`, `100.64.0.0/10`, and IPv6's `fc00::/7` and `fe80::/10`.
+`192.168.0.0/16`, and IPv6's `fc00::/7` and `fe80::/10`.
+
+`100.64.0.0/10` joins them only while this server is on your lab's private network
+([lab-network.md](lab-network.md)). That network hands out its addresses from this range,
+and so do some internet providers to their customers. So the range counts as local while
+the lab network's interface (`tailscale0`) is there or its service (`tailscaled`) runs, and
+not otherwise. The firewall loads itself again when that service starts and stops
+(`/usr/lib/systemd/system/tailscaled.service.d/bromigos-server.conf`).
 
 More can be let in. A role opens its own rule sets while it's on. You can open one
 yourself too:
@@ -373,7 +380,7 @@ yourself too:
 |---|---|---|
 | `lab-cluster` | k3s, from the local network: 6443 (the API), 10250 (the kubelet), 2379-2380 (etcd between servers) and 8472/udp (flannel) | Lab node |
 | `web` | 80 and 443, from anywhere | you, on purpose ([below](#opening-a-server-to-the-internet)) |
-| `web-lan` | 80 and 443, from the local network | Home services, Media |
+| `web-lan` | 80 and 443, from the local network | Home services, Media, Storage, Game server: Caddy, and the server's own page ([board.md](board.md)) |
 | `smb` | 445, from the local network | Storage |
 | `nfs` | 2049, from the local network | Storage |
 | `games` | 25565 (Minecraft), TCP and UDP, from anywhere | Game server |
@@ -405,10 +412,11 @@ No role opens anything to the internet except the Game server's game port.
 | Role | Opens | To whom |
 |---|---|---|
 | Lab node | `lab-cluster`: the k3s ports | the local network |
-| Storage | `smb` (445) and `nfs` (2049) | the local network |
+| Storage | `smb` (445) and `nfs` (2049), and `web-lan`: 80 and 443 (the server's own page) | the local network |
 | Home services | `web-lan`: 80 and 443 | the local network |
 | Media | `web-lan`: 80 and 443, and `media`: 8096 and 7359/udp | the local network |
 | Game server | `games`: 25565, TCP and UDP | everyone |
+| | `web-lan`: 80 and 443 (the server's own page) | the local network |
 | Game server with Wings | `wings`: 8080 and 2022 | the local network |
 | Just a server | nothing more | |
 

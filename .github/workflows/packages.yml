@@ -26,6 +26,8 @@ on:
       - "lib/**"
       - "packaging/**"
       - "apps/**"
+      - "board/**"
+      - "server/**"
       - "LICENSE-*"
       - "manual/**"
       - "board/**"

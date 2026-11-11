@@ -1,0 +1,8 @@
+  :root { color-scheme: dark light; --bg: #0b0f14; --fg: #d7e2ee; --dim: #8a9aab; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f4f6f8; --fg: #14202c; --dim: #4f5f70; } }
+  body { margin: 0; padding: 2rem 1rem; background: var(--bg); color: var(--fg); font: 16px/1.5 monospace; }
+  main { max-width: 40rem; margin: 0 auto; }
+  ul { padding: 0; list-style: none; }
+  li { margin: .5rem 0; }
+  a { color: inherit; }
+  p { color: var(--dim); }

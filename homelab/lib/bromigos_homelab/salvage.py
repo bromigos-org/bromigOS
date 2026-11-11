@@ -462,6 +462,10 @@ def cause(reason):
     return "other" if reason else None
 
 
+# catalogue items that serve a role's apps rather than being what the role is for
+SERVES_THE_REST = ("caddy", "board")
+
+
 def judge(hw, path=None):
     """Every role and every catalogue item against this hardware, through provcatalog alone:
     {roles: [{id, name, fit, reason, cause, items, left_out, budget}], items: [{id, name, group,
@@ -487,6 +491,10 @@ def judge(hw, path=None):
         ids = PC.recommend([rid], hw, lab=LAB, path=path)
         b = PC.budget(ids, hw, path)
         own = [it["id"] for it in ticks if it["id"] not in everywhere]        # what makes it this role
+        # ... which isn't the parts that serve the rest (the front door, the Lab board), when it
+        # has apps of its own: a Game server whose game doesn't fit doesn't fit, page or not
+        apps = [i for i in own if i not in SERVES_THE_REST]
+        own = apps or own
         names = ", ".join(it["name"] for it, _ in out)
         if not b["fits"]:
             fit, reason = "no", _short(b["notes"][0])

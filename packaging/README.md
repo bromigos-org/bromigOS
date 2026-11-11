@@ -22,6 +22,7 @@ packaging/
   bromigos-homelab/        optional desktop homelab plugins (homelab/)
   bromigos-lab-catalog/    the lab model catalog (homelab/share/lab/models.toml)
   bromigos-apps/           the app bundle's configs (apps/)
+  bromigos-board/          the Lab board's server side, bromigOS Server's web page (board/)
   bromigos-manual/         the manual (manual/), built as HTML to read offline
   bromigos-board-web/      the Lab board's page (board/web/), built with Node into plain files
   herdr/, ttf-geist-mono/, mediamtx/, 1password/, paru/, xpadneo-dkms/
@@ -68,6 +69,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-homelab` | Desktop decks, panels, VECTOR plugin and launcher entries; depends on `bromigos-lab` | `homelab/` |
 | `bromigos-lab-catalog` | The lab model catalog, `/usr/share/bromigos/homelab/lab/models.toml` | `homelab/share/lab/` |
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
+| `bromigos-board` | The Lab board's API, its sign-in, the reader that runs as root while a browser is connected, and the site Caddy imports ([docs/board.md](../docs/board.md)) | `board/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
 | `bromigos-board-web` | The Lab board's page in `/usr/share/bromigos-board/web/`, a static export the server's Caddy serves (docs/board.md) | `board/web/` |
 | `herdr`, `ttf-geist-mono`, `mediamtx`, `1password`, `paru`, `xpadneo-dkms` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |

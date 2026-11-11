@@ -320,8 +320,8 @@ class Verdict(unittest.TestCase):
                          "without Photos (Immich): Photos (Immich) needs 4 GB of memory; this server has 3.8 GB.")
         self.assertEqual(roles["home-services"]["left_out"], ["photos"])
         self.assertEqual(roles["game-server"]["reason"], "Minecraft server needs 4 GB of memory; this server has 3.8 GB.")
-        self.assertEqual(roles["media"]["reason"], "Together these need about 7.3 GB of memory, and this server has 3.8 GB.")
-        self.assertEqual(roles["storage"]["reason"], "Memory will be tight: about 3.4 of 3.8 GB.")
+        self.assertEqual(roles["media"]["reason"], "Together these need about 7.2 GB of memory, and this server has 3.8 GB.")
+        self.assertEqual(roles["storage"]["reason"], "Memory will be tight: about 3.7 of 3.8 GB.")
         items = by_id(d["verdict"]["items"])
         self.assertEqual((items["photos"]["fit"], items["photos"]["cause"]), ("no", "memory"))
         self.assertEqual(items["photos"]["reason"], "Photos (Immich) needs 4 GB of memory; this server has 3.8 GB.")
@@ -561,7 +561,7 @@ class ReportAndCommand(unittest.TestCase):
     def test_the_report_reads_top_to_bottom(self):
         text = "\n".join(S.report(doc("desktop-2012")))
         order = ["SALVAGE SCAN", "Read-only", "THIS COMPUTER", "Processor", "Memory", "Disks", "Graphics", "Network", "Firmware",
-                 "Idle power", "COULD NOT READ", "WHAT IT'S GOOD FOR", "Roles", "Apps and services (53 in the catalogue)",
+                 "Idle power", "COULD NOT READ", "WHAT IT'S GOOD FOR", "Roles", "Apps and services (54 in the catalogue)",
                  "Fit comfortably", "Fit with a trade-off", "Don't fit", "Whatever it runs", "WHAT WOULD CHANGE THE ANSWER", "NEXT STEP",
                  "bromigos hw salvage --answers", "bromigos hw salvage --save"]
         at = [text.index(w) for w in order]
@@ -571,7 +571,7 @@ class ReportAndCommand(unittest.TestCase):
         self.assertIn("Photos (Immich) (5 GB)", one)                          # with the system's 1 GB
         self.assertIn("Memory would be tight, with 3.8 GB here: External Secrets (3.2 GB)", one)
         self.assertIn("No graphics card is ready for AI: LiteLLM gateway, Model serving (Ollama), Model serving (vLLM) and Models.", one)
-        self.assertIn("Fit comfortably (38): all of Network (2), Storage (4) and BRODEC (1); Lab core except Argo CD and External Secrets;", one)
+        self.assertIn("Fit comfortably (39): all of Network (2), Storage (4) and BRODEC (1); Lab core except Argo CD and External Secrets;", one)
         self.assertIn("yes, but Home services: without Photos (Immich)", one)
         self.assertIn("Install bromigOS Server as Home services.", one)
         self.assertIn("an estimate from its instruction sets, not a date", one)

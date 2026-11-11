@@ -1,14 +1,14 @@
-# The Lab board's page
+# The Lab board
 
 The Lab board is bromigOS Server's own web page. You open it in any browser at home, at the
 server's name (`https://myserver.local`). Before you sign in it is **the door**: the
 household's apps, to open. After you sign in it is the whole board: Home, the machines,
 Den, Supply, Data, Network, People, Settings, and the activity strip along the bottom.
 
-This page covers the web app: the files in `board/web/`, how it reads the server, how it is
-built and packaged, and how it is tested. The server's side (the API, sign-in, the reader
-that gathers the readings, the Caddy site) is the board's service, the `bromigos-board`
-package.
+This page covers both halves. First the web app: the files in `board/web/`, how it reads
+the server, how it is built and packaged, and how it is tested. Then
+[the service](#the-service), the `bromigos-board` package: the API, sign-in, the reader that
+gathers the readings, the Caddy site, and what the page never shows.
 
 ## What is built
 
@@ -64,8 +64,9 @@ package.
   Reports and upcoming jobs; and inside
   the built pages: This week, VECTOR's plans, power, system versions, the pool's layout, a
   new disk, replacing a drive, getting files back, a friend's lab, Move in, and the apps'
-  updates. A machine's processor, memory, heat and network, its hardware and its trends
-  show as "not measured" until the service sends them.
+  updates. A machine's cores, memory and graphics card come from the service. How busy its
+  processor and memory are, its heat, its network and its trends show as "not measured"
+  until something on the server measures them.
 
 ## Where things are
 
@@ -353,8 +354,8 @@ by hand. `scripts/make-contract.py` makes it:
 
 - **the commands' documents** come from the libraries behind `bromigos storage health`,
   `bromigos alerts`, `bromigos lab backups status`, `bromigos activity list`,
-  `bromigos server status` and `bromigos lab apps list`, run on the stand-in machines their
-  own tests use;
+  `bromigos server status`, `bromigos lab apps list` and `bromigos lab apps budget`, run on
+  the stand-in machines their own tests use;
 - **the board, the door, the session and the stream** come from the service's own reader
   and API, asked over HTTP with its test client.
 
@@ -456,3 +457,404 @@ The package's build gives npm and the build a clean environment, and runs no dep
 install script: the lock file pins every package by its hash. It builds a copy of
 `board/web/`, so it names the repository's `mascot/` folder in `BOARD_MASCOT` for the
 station's crew.
+
+## The service
+
+The service is the server's side of the board: the `bromigos-board` package. It is the API
+the page reads, sign-in with a one-time code, the reader that gathers the readings as root,
+and the site Caddy serves. The page's files come from `bromigos-board-web`. Until that
+package is installed, Caddy serves a placeholder page that lists the door's apps.
+
+The manual's [bromigOS Server](../manual/src/server.md#the-lab-board) page is the user's
+side.
+
+### What gets it
+
+The provisioning catalogue's `board` item installs the `bromigos-board` package and sets it
+up. The Home services, Media, Storage and Game server roles tick it. "Just a server" and
+"Lab node" leave it off. The item needs Caddy, which the catalogue adds when it isn't
+ticked ([lab-provision.md](lab-provision.md#the-catalogue)).
+
+The board replaces the old start page (Homepage). Both answer at `home-<server>.local`, so
+the catalogue lists them as conflicting, and the start page is no longer ticked for new
+servers. A server that already runs the start page keeps it. Moving those servers to the
+board is a later change.
+
+### Who can reach it
+
+Only the home network and the lab's private network. Two places refuse any other address
+with 403, so a mistake in one doesn't open the other:
+
+- Caddy's site (`/usr/share/bromigos-board/caddy/site.caddy`) checks the address that
+  connected, never a header.
+- The API checks again (`bromigos_board/net.py`).
+
+The addresses always let in are private ones (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`), link-local (`169.254.0.0/16`, `fe80::/10`), IPv6's unique-local range
+(`fc00::/7`) and loopback. That holds even when the firewall's public `web` rule set is open
+for something else.
+
+The lab's private network ([lab-network.md](lab-network.md)) hands out addresses from
+`100.64.0.0/10`. Some internet providers give their customers addresses from the same range.
+So that range is let in only while this server is on the lab's network, which is while the
+network's interface, `tailscale0`, is there. Caddy asks the API each time
+(`GET /api/local`), and the firewall follows the same rule
+([server.md](server.md#the-firewall)).
+
+The roles that set the board up open the web ports to the local network only (the
+`web-lan` rule set). The page answers one more name, `home-<server>.local`, the old start
+page's. That name tells browsers to use HTTPS only from then on (HSTS). `<server>.local`
+doesn't: apps without a name of their own answer at `http://<server>.local:<port>`, and
+that header would turn their links into `https`.
+
+### Root and the board's user
+
+Two users work for the board, and each stays out of the other's folder.
+
+| Who | Does what | Writes where |
+|---|---|---|
+| `bromigos-board` | Runs the API | `/var/lib/bromigos-board`, its own (0700): sessions and codes |
+| root | Runs the reader, and `bromigos server board code` and `sessions` | `/run/bromigos-board`, root's (0750, group `bromigos-board`): `board.json` |
+
+- **Root never writes where the board's user can.** The board's user can read
+  `/run/bromigos-board` and can't put a file, a link or anything else in it. The two files it
+  marks there, `wanted` and `door`, are made by tmpfiles, as root's.
+- **Root becomes the board's user before it touches the board's folder.**
+  `sudo bromigos server board code` and `sessions` drop root for good first: no extra
+  groups, then the board's group, then its user. A link planted where `codes` or `sessions`
+  should be is refused, and nothing is deleted.
+- **Where root writes, it trusts nothing in the folder.** A file gets a random temporary
+  name, made exclusively and without following a link. Its mode and group are set on the
+  open file, never by path. Then it's renamed into place (`paths.write_at`).
+- **Each unit has only what it needs.** The API can write its own folder and mark the two
+  files, in 256 MB of memory at most. The reader has `/usr`, `/boot` and `/etc` read-only.
+
+The tests' stand-in switches (`BROMIGOS_ROOT`, `BROMIGOS_BOARD_HOSTNAME`,
+`BROMIGOS_BOARD_NOW_MS`, `BROMIGOS_BOARD_CLI`) aren't honoured by a process that is root.
+On a server, root's reader runs `/usr/bin/bromigos` by its whole path.
+
+### Signing in
+
+Signing in needs no account and no password. Run this at the server, at its console or over
+SSH:
+
+```bash
+sudo bromigos server board code
+```
+
+```text
+Sign-in code for the Lab board:  K7QM-3XPD
+
+Open https://myserver.local on your home network and type it in.
+It works once, until 2026-11-10 14:32 (10 minutes). Another code doesn't cancel this one.
+```
+
+Type the code on the board's page. The code works once and for ten minutes. A browser that
+signs in stays signed in for 30 days.
+
+To see the browsers signed in, and sign one out:
+
+```bash
+sudo bromigos server board sessions
+sudo bromigos server board sessions --end 3f9a0c1d2e4b5a67
+sudo bromigos server board sessions --end-all
+```
+
+Each command takes `--json`. `sessions` exits 1 when `--end` names no session.
+
+#### For power users: sessions and codes
+
+- A code is 8 letters from a 32-letter alphabet with no I, O, 0 or 1. It's shown as
+  `ABCD-EFGH`. Case, spaces and dashes don't matter when you type it.
+- Each code is kept as the SHA-256 of the code, in `/var/lib/bromigos-board/codes/`, with
+  when it runs out. Signing in deletes the file, so a code works once even when two browsers
+  send it at the same moment.
+- Wrong codes are slowed, and nobody is locked out by someone else's:
+  - one address may send five wrong codes a minute. Its sixth try waits a minute (429),
+    right or wrong;
+  - wrong codes are answered at most one every 200 ms, whoever sends them. A wrong answer
+    waits its turn, a second at most;
+  - a right code is never refused or held up because of another device's wrong ones.
+
+  A code is 40 bits and lives ten minutes. At five guesses a second for all ten minutes, the
+  chance of hitting one is about 3 in a billion.
+- A session is a random 256-bit token. The browser keeps it in the cookie
+  `__Host-bromigos-board`, which is `HttpOnly`, `Secure`, `SameSite=Strict` and lasts 30
+  days. The server keeps only its SHA-256, in `/var/lib/bromigos-board/sessions/<id>.json`,
+  with the browser's name ("Firefox on Linux") and when it was made. The file's own time is
+  when the session was last used. Deleting that file ends the session at once, and an ended
+  session never comes back.
+- Every request that changes something passes a check against cross-site request forgery
+  (CSRF), where another site makes your browser send a request:
+  - it must carry the header `X-Bromigos-Board: 1`. A page on another site can't add a header
+    without the API's permission, which the API never gives;
+  - it must be sent to one of the board's two names, `<server>.local` or
+    `home-<server>.local`, and its `Origin`, when the browser sends one, must be that same
+    name;
+  - its `Sec-Fetch-Site`, when sent, must be `same-origin`;
+  - its body must be JSON, which a plain HTML form can't send.
+
+### The door
+
+Before sign-in the page is the door: the server's name and the household's app tiles. A tile
+has an icon, the job ("Photos"), the app's name ("Immich") and the link that opens it. The
+door also says which world the page wears and which ways to sign in there are. It never shows a state, a reading, a version, an address other than an app's link, or
+anything from the server's own commands.
+
+The door is built key by key from an allow-list (`bromigos_board/door.py`), so a new field in
+the apps list never reaches it by itself. A tile is left out when:
+
+- the app isn't installed;
+- it's marked as not for the household (`household: false`; `null` counts as for it);
+- it has no page;
+- its link isn't a plain `http` or `https` address with a `.local` name.
+
+To turn the door off, so the page shows nothing before sign-in, add this to
+`/etc/bromigos/server.toml`:
+
+```toml
+[board]
+door = false
+```
+
+`world` in the same table picks the world the page wears, by its theme's name, such as
+`world = "tidewell"`. It's the Wick when left out.
+
+### Where the readings come from
+
+The board runs no command and reads no app itself. One reader does, as root:
+
+1. While a signed-in browser has the page open, the API marks `/run/bromigos-board/wanted`.
+2. `bromigos-board-snapshot.path` sees that and starts `bromigos-board-snapshot.service`.
+3. The reader runs the commands below, all at once, and writes what they said to
+   `/run/bromigos-board/board.json`. Only the board's group can read that file.
+4. It reads again every 15 seconds. When nobody has looked for 45 seconds, it stops.
+
+The door asks through a file of its own, `/run/bromigos-board/door`, for one reading, and
+only when the last is more than two minutes old. So a device that isn't signed in can't
+keep the reader running, and the door's tiles can be two minutes behind.
+
+| Part | Command |
+|---|---|
+| `system` | `bromigos server status --json` |
+| `storage` | `bromigos storage health --json` |
+| `backups` | `bromigos lab backups status --json` |
+| `activity` | `bromigos activity list --json` |
+| `alerts` | `bromigos alerts --json` |
+| `apps` | `bromigos lab apps list --json` |
+| `budget` | `bromigos lab apps budget --json` |
+
+A command that exits 1 with its JSON has still answered: 1 means it found a problem. A
+command that is missing, fails or prints no JSON leaves its part `null`, and `sources` says
+why. The page then says it can't check, rather than guessing.
+
+`bromigos lab apps list --json` is the apps list, one tile per catalogue app
+([lab.md](lab.md#apps-on-a-server)). On a server whose `bromigos` doesn't have it yet, the door
+lists the catalogue's web apps that `bromigos lab provision --local` set up, as the start page
+did.
+
+`bromigos lab apps budget --json` is read for its `hardware`: the cores, the memory, the free
+disk where apps keep their data, and whether there is a graphics card. It is the scan the
+app manager fits apps against, and the only shipped command that prints it. Nothing the
+reader runs measures how busy the machine is, so the board sends no such reading.
+
+**The filter is the second line, and best effort.** The first line is that these commands
+don't print secrets, and that only a signed-in browser sees `board.json`. The reader still
+filters what it writes, a failed command's error line included:
+
+- a value is dropped when its name says it's a secret: a password, a passphrase, a secret, a
+  token, a key, a PIN, a seed, a cookie, a recovery or join code. Only `true`, `false`,
+  `null` and the words `"set"` and `"not set"` stay under such a name: `"passwords": false`
+  says SSH takes no passwords, and holds none. A drive's `key` in the drive reports stays: it's the drive's id;
+- a name is read by its words, and its last word says what the value is. `api_key`,
+  `DB_PASSWORD` and `token_b64` are secrets. `last_test_passed`, `key_count`, `token_ttl`,
+  `secret_store` and `public_key` are a result, a count, a time, a place and a public key,
+  and they stay;
+- `{"name": "admin_token", "value": "…"}` loses its value;
+- in text, a `user:password@` part of an address is cut, and `NAME=value`, a secret in a
+  link's query, an option such as `--password` with the word after it, and tokens with a
+  known shape are masked. The activity records' own filter does most of this
+  (`bromigos_activity.redact`).
+
+It can't recognise a secret written out in a sentence, or under a name that says nothing.
+
+### The API
+
+The API is Starlette on uvicorn. It listens on `/run/bromigos-board.sock`, which systemd
+opens (`bromigos-board.socket`) and only Caddy's group can use. It runs as its own user,
+`bromigos-board`, with no capabilities and no network of its own
+(`bromigos-board.service`). Caddy serves the page's files from
+`/usr/share/bromigos-board/web` and passes `/api/` to the socket.
+
+No request to the board is big. Caddy refuses a body over 8 KB, and the API one over 4096
+bytes: by its `Content-Length` without reading it, and after 4096 bytes when it gave none.
+The API takes 64 connections at once (more get 503) and 256 MB of memory.
+
+Every answer is JSON with `Cache-Control: no-store`. An error is
+`{"error": {"code": "…", "words": "…"}}`, where `words` is a sentence for a person.
+
+| Request | Who | Answer |
+|---|---|---|
+| `GET /api/door` | anyone it lets in | The door |
+| `GET /api/local` | anyone it lets in | 204, and nothing else. Caddy asks it for the lab network's addresses |
+| `GET /api/session` | anyone it lets in | Whether this browser is signed in, and the browsers that are |
+| `POST /api/session` `{"code": "K7QM-3XPD"}` | anyone it lets in | Signs in, sets the cookie |
+| `DELETE /api/session` | signed in | Signs this browser out |
+| `DELETE /api/session/<id>` | signed in | Signs that browser out |
+| `GET /api/board` | signed in | The board, worked out from the reader's `board.json` |
+| `GET /api/activity` | signed in | The jobs, live, as server-sent events |
+
+The status codes:
+
+| Code | `error.code` | Means |
+|---|---|---|
+| 401 | `signed-out` | Sign in first |
+| 403 | `not-local` | The address isn't the home network's or the lab's |
+| 403 | `csrf` | The request didn't come from the board's own page |
+| 401 | `bad-code` | The code is wrong, or was used already |
+| 401 | `expired` | The code is older than 10 minutes |
+| 404 | `no-session` | No browser is signed in with that id |
+| 413 | `too-big` | The body is over 4096 bytes |
+| 415 | `not-json` | The body isn't JSON |
+| 429 | `too-many` | Too many wrong codes from this address. `Retry-After` says when to try again |
+| 503 | `gathering` | The first reading isn't there yet. `Retry-After: 5` |
+
+`GET /api/door`:
+
+```json
+{"schema": 1, "lab": {"name": "myserver", "address": "https://myserver.local"},
+ "server": {"name": "myserver"}, "world": "wick", "door": true,
+ "tiles": [{"id": "photos", "job": "Photos", "app": "Immich", "holo": "photos", "group": "home",
+            "open": {"url": "https://photos-myserver.local"}},
+           {"id": "uptime", "job": "Uptime", "app": "Uptime Kuma", "holo": "uptime", "group": "home",
+            "open": {"url": "http://myserver.local:3001/dashboard"}}],
+ "signin": {"code": true, "phone": false, "account": false}}
+```
+
+A single server is its own lab, so `lab` names the server. `signin` says which ways in this
+server offers: only the console code, for now.
+
+`GET /api/session`, before and after sign-in:
+
+```json
+{"schema": 1, "signed_in": false, "role": null, "browser": null, "expires_at": null, "browsers": []}
+{"schema": 1, "signed_in": true, "role": "owner",
+ "browser": {"id": "3f9a0c1d2e4b5a67", "name": "Firefox on Linux"}, "expires_at": 1796882000000,
+ "browsers": [{"id": "3f9a0c1d2e4b5a67", "name": "Firefox on Linux", "signed_in_at": 1794290000000,
+               "last_seen_at": 1794290000000, "expires_at": 1796882000000, "current": true}]}
+```
+
+`GET /api/board` passes the cards' commands through unchanged, and works out what the page
+draws first from those same documents:
+
+```json
+{"schema": 1, "at": 1794290000000, "max_age_s": 45, "age_s": 4, "stale": false,
+ "lab": {"name": "myserver", "address": "https://myserver.local"},
+ "server": {"name": "myserver", "kind": "server", "roles": ["home-services"]},
+ "status": {"state": "needs-you", "words": "1 thing needs you.", "checked_at": 1794290000000},
+ "machines": [{"name": "myserver", "kind": "server", "here": true, "page": true, "state": "warn",
+               "state_word": "needs you", "roles": ["home-services"], "updates": null, "readings": null,
+               "hardware": {"cpu": 4, "ram_gb": 16, "disk_gb": 512, "gpu": false, "gpu_kind": null,
+                            "gpu_name": null, "gpu_vram_gb": 0},
+               "apps": 6}],
+ "needs_you": [{"id": "update.restart", "machine": "myserver", "subject": null, "severity": "warn",
+                "words": "A restart finishes the update",
+                "detail": "The kernel was updated. Restart when it suits you.",
+                "since": 1794200000000, "go": "supply/updates", "job": null}],
+ "fixed": [{"id": "20261110-0530-app.update-photos-1a2b", "machine": "myserver", "title": "Updating Photos",
+            "words": "Photos didn't answer after the update, so it was put back.", "at": 1794260000000}],
+ "apps": ["… bromigos lab apps list --json's apps"],
+ "storage": "… bromigos storage health --json",
+ "backups": "… bromigos lab backups status --json",
+ "updates": {"updates": "… bromigos server status --json's updates", "rollbacks": []},
+ "ups": {"found": false},
+ "sources": {"storage": {"command": ["bromigos", "storage", "health", "--json"], "at": 1794289999000, "ok": true, "rc": 1},
+             "apps": {"command": ["bromigos", "lab", "apps", "list", "--json"], "at": 1794289999000, "ok": false, "rc": 2,
+                      "why": "bromigos lab: no command apps"}},
+ "system": "… bromigos server status --json", "activity": "… bromigos activity list --json",
+ "alerts": "… bromigos alerts --json", "host": "myserver", "settings": {"door": true, "world": "wick"}}
+```
+
+- `status` is the one line for the whole server, and it never says more than was read.
+  `status.words` is "Everything is running." only when every part was read and nothing in
+  them says otherwise. In order, worst first:
+
+  | `status.state` | When | `status.words`, for example |
+  |---|---|---|
+  | `unknown` | the reading is more than 45 seconds old (`stale`) | Can't check right now: the last reading is old. |
+  | `needs-you` | something is in `needs_you` | 2 things need you. |
+  | `needs-you` | an installed app is `down` or `degraded` | Photos isn't running. |
+  | `needs-you` | the backups' health is `attention` | the backups' own verdict |
+  | `setup` | the apps list was read and nothing is installed | Nothing is set up yet. |
+  | `unknown` | a part couldn't be read: the alerts, the jobs, the apps, the drives' health, the backups or the system's status | Can't say everything is running: the alerts couldn't be read (bromigos: no such command). |
+  | `ok` | none of the above | Everything is running. |
+
+  The reason in brackets is `sources.<part>.why`, or what the command's error document said.
+- `machines[].state` is the machine's own row: `unknown` when the reading is old, `warn` when
+  something on it is in `needs_you`, else `ok` ("online"). A machine that answered is never
+  "can't check" because one part couldn't be read: that is the status line's to say.
+- `machines[].hardware` is what is in the box, from the app manager's scan: `cpu` (cores),
+  `ram_gb`, `disk_gb` (free where apps keep their data), `gpu` (true or false), `gpu_kind`
+  (`"nvidia"`, `"amd"` or null), `gpu_name` (null: the command doesn't print it yet)
+  and `gpu_vram_gb`. It is null when `bromigos lab apps budget` didn't answer. The drives
+  aren't repeated there: `storage.drives` has them.
+- `needs_you` lists the alerts a person must act on (severity `needs_you`, shown as `warn`,
+  or `critical`), then the jobs waiting for an answer. `go` names the part of the page that
+  owns the fact: `data`, `data/backups`, `supply/updates` or `activity`.
+- `fixed` lists the jobs that failed and put things back by themselves (`rolled-back`):
+  `title` is the job's own ("Updating Photos"), `words` what became of it.
+- `readings` and `updates` in `machines` are null: nothing the reader runs measures how busy
+  a machine is, or counts its waiting updates, yet.
+
+Times are milliseconds since 1970, UTC.
+
+`GET /api/activity` is a stream of server-sent events:
+
+| Event | Data |
+|---|---|
+| `snapshot` | First: `{"schema": 1, "jobs": [...]}`, at most 50 records as `bromigos activity list --json` gives them |
+| `job` | A record that is new or changed ([the record](activity.md)) |
+| `gone` | `{"id": "…"}`: a record that was pruned |
+| `signed-out` | The session ended. The stream stops |
+
+A comment line, `: keep-alive`, comes every 20 seconds.
+
+### The files
+
+| Path | What |
+|---|---|
+| `/usr/lib/bromigos/board/bromigos-board` | The board's own command: `serve`, `snapshot`, `code`, `sessions` |
+| `/usr/lib/bromigos/lib/bromigos_board/` | Its library |
+| `/usr/share/bromigos-board/caddy/site.caddy` | The site's rules, imported by the server's Caddy site |
+| `/etc/caddy/conf.d/bromigos-board.caddy` | The site, written by the catalogue's `board` step for `<server>.local` and `home-<server>.local` |
+| `/usr/share/bromigos-board/web/` | The page's files (`bromigos-board-web`) |
+| `/usr/share/bromigos-board/placeholder/` | The placeholder Caddy serves until the page is installed |
+| `/run/bromigos-board/board.json` | The reader's last reading |
+| `/run/bromigos-board/wanted`, `door` | The two files the API marks to ask for readings |
+| `/var/lib/bromigos-board/` | Sessions and codes, the board's user's only |
+
+### The service's tests
+
+```bash
+cd board
+PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests
+```
+
+They need `python-starlette`, `uvicorn` and `python-httpx`. With `caddy` installed, they
+also check that Caddy reads the site and puts its 403 first. With `systemd-analyze`, they
+have systemd check the units' text. The `board-tests` workflow runs them on every pull
+request that touches `board/`.
+
+The same workflow runs `board/tests/board-integration.sh` on a throwaway machine, as real
+root under its real systemd. It installs the board where the package puts it, then checks
+what a stand-in root can't show: who owns each folder once tmpfiles made them, that the
+board's user can put nothing in root's folder, that root's files in the board's folder are
+the board's user's, that a link planted there is refused, and that each unit works inside
+its sandbox. Never run it on a computer you use.
+
+### Not built yet, on the server's side
+
+- Actions: restarting, updating or removing an app from the page.
+- Signing in from the phone, or with a Bromigos account.
+- The lab's own address, and the lab's other machines on one server's page.
+- Moving servers that run the start page onto the board.

@@ -1,0 +1,20 @@
+#!/bin/sh
+# A stand-in for `bromigos` in the snapshot's tests: prints the fixture for each command the
+# snapshot runs. $BOARD_FIXTURES is this folder; $BOARD_MISSING names commands that aren't there.
+case "$*" in
+  "server status --json") f=server-status.json ;;
+  "storage health --json") f=storage-health.json; rc=1 ;;
+  "lab backups status --json") f=backups-status.json ;;
+  "activity list --json") f=activity-list.json ;;
+  "alerts --json") f=alerts.json; rc=1 ;;
+  "lab apps list --json") f=apps-list.json ;;
+  "lab apps budget --json") f=apps-budget.json ;;
+  *) echo "bromigos: no command $*" >&2; exit 2 ;;
+esac
+for m in $BOARD_MISSING; do
+  if [ "$m" = "$1 $2" ] || [ "$m" = "$1" ] || [ "$m" = "$1 $2 $3" ]; then
+    echo "bromigos lab: no command apps" >&2; exit 2
+  fi
+done
+cat "$BOARD_FIXTURES/$f"
+exit "${rc:-0}"

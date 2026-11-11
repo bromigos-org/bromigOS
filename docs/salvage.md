@@ -74,15 +74,15 @@ WHAT IT'S GOOD FOR
   Roles
     no        Lab node: Together these need about 4.6 GB of memory, and this server has 3.8
               GB.
-    yes, but  Storage: Memory will be tight: about 3.4 of 3.8 GB.
+    yes, but  Storage: Memory will be tight: about 3.7 of 3.8 GB.
     yes, but  Home services: without Photos (Immich): Photos (Immich) needs 4 GB of memory;
               this server has 3.8 GB.
     no        Game server: Minecraft server needs 4 GB of memory; this server has 3.8 GB.
-    no        Media: Together these need about 7.3 GB of memory, and this server has 3.8 GB.
+    no        Media: Together these need about 7.2 GB of memory, and this server has 3.8 GB.
     yes       Just a server
 
-  Apps and services (53 in the catalogue)
-    Fit comfortably (38): all of Network (2), Storage (4) and BRODEC (1); Lab core except
+  Apps and services (54 in the catalogue)
+    Fit comfortably (39): all of Network (2), Storage (4) and BRODEC (1); Lab core except
     Argo CD and External Secrets; in AI, VECTOR's lab bridge; Home apps except Photos
     (Immich); Media except Requests (Seerr), Autoscan, Tautulli and YouTube library.
     Fit with a trade-off (4):
@@ -116,9 +116,9 @@ WHAT WOULD CHANGE THE ANSWER (smallest change first; no brands, no prices)
 
 NEXT STEP
   Install bromigOS Server as Home services.
-  It would run: Backups, Caddy, Start page, Passwords (Vaultwarden), File sync (Syncthing),
+  It would run: Backups, Caddy, Lab board, Passwords (Vaultwarden), File sync (Syncthing),
   Uptime (Uptime Kuma), This server on BRODEC.
-  Together they need about 3.1 GB of memory of 3.8 and 6 GB of disk of 500.
+  Together they need about 2.95 GB of memory of 3.8 and 6 GB of disk of 500.
 
   To carry these choices into the installer:
     bromigos hw salvage --answers salvage.toml
@@ -160,7 +160,7 @@ cpu_model = "Intel(R) Core(TM) i5-3470 CPU @ 3.20GHz"
 [server]
 roles = ["home"]
 lab = "none"
-provision = ["backups", "caddy", "start-page", "passwords", "file-sync", "uptime", "brodec-machine"]
+provision = ["backups", "caddy", "board", "passwords", "file-sync", "uptime", "brodec-machine"]
 ```
 
 The file names no disk, no password, no admin and no SSH key, on purpose. The installer

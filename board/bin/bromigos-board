@@ -1,0 +1,18 @@
+#!/usr/bin/python3 -I
+"""bromigos-board: the Lab board's server side (docs/board.md). Installed as
+/usr/lib/bromigos/board/bromigos-board, out of `bromigos`'s own command list: people use
+`bromigos server board code` and `bromigos server board sessions`, and systemd runs `serve` and
+`snapshot`. `bromigos-board --help` lists them."""
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+# a checkout (board/lib, then the repository's lib/ for bromigos_activity), else the installed folder
+for candidate in reversed((os.path.join(here, "..", "lib"), os.path.join(here, "..", "..", "lib"), "/usr/lib/bromigos/lib")):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, os.path.normpath(candidate))
+
+from bromigos_board import cli  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(cli.main())

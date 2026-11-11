@@ -1,0 +1,61 @@
+# The Lab board's site (docs/board.md), imported into a site block that names this server:
+#
+#   myserver.local, home-myserver.local {
+#     tls internal
+#     import /usr/share/bromigos-board/caddy/site.caddy
+#   }
+#
+# bromigos lab provision --local writes that block (/etc/caddy/conf.d/bromigos-lab.caddy). One
+# route, so the order below is the order Caddy follows.
+
+# Only the home network and the lab's private network. remote_ip is the address that
+# connected, never a header. The API checks again (bromigos_board/net.py).
+#
+# Always local: private (RFC 1918), link-local and loopback addresses, and IPv6's unique-local,
+# link-local and loopback. The carrier-grade NAT range (RFC 6598) is last in the list: the lab's
+# private network uses it, and so do some internet providers for their customers. It is let
+# past this first rule, and the next one asks the API, which says yes only while this server is
+# on the lab's network (GET /api/local; net.lab_network_up). Any other answer, and no answer,
+# is what the client gets.
+@bromigos_board_outside not remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 127.0.0.0/8 fc00::/7 fe80::/10 ::1/128 100.64.0.0/10
+@bromigos_board_lab_network remote_ip 100.64.0.0/10
+# home-<server>.local serves the board and nothing else, on no other port
+@bromigos_board_home expression {http.request.host}.startsWith("home-")
+
+route {
+	header {
+		# a default: an answer of the API keeps its own, stricter one (default-src 'none')
+		?Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+	# HTTPS only from the second visit on, for the name that has no app on a port of its own.
+	# Not for <server>.local: apps without a name of their own answer at
+	# http://<server>.local:<port>, and this header would turn those links into https.
+	header @bromigos_board_home Strict-Transport-Security "max-age=31536000"
+	respond @bromigos_board_outside "The Lab board answers only the home network and the lab's private network." 403
+	# no request to the board is big: more than this is refused before the API sees it
+	request_body {
+		max_size 8KB
+	}
+	forward_auth @bromigos_board_lab_network unix//run/bromigos-board.sock {
+		uri /api/local
+	}
+	reverse_proxy /api/* unix//run/bromigos-board.sock {
+		flush_interval -1
+	}
+	# the page (bromigos-board-web); until it's installed, the placeholder that lists the door's
+	# apps. The page routes by #hash, so every other path is its index.html. (Caddy takes the
+	# first root whose matcher matches: the page's, when its files are there.)
+	@bromigos_board_page file {
+		root /usr/share/bromigos-board/web
+		try_files {path} {path}/index.html /index.html
+	}
+	root @bromigos_board_page /usr/share/bromigos-board/web
+	root * /usr/share/bromigos-board/placeholder
+	try_files {path} {path}/index.html /index.html
+	file_server
+}

@@ -1,0 +1,41 @@
+{
+ "cpu": 4.0,
+ "ram_gb": 5.5,
+ "disk_gb": 22.0,
+ "gpu_vram_gb": 0.0,
+ "fits": true,
+ "notes": [],
+ "cpu_max": 2.0,
+ "installed": {
+  "ids": [
+   "caddy",
+   "photos",
+   "passwords"
+  ],
+  "cpu": 4.0,
+  "cpu_max": 2.0,
+  "ram_gb": 4.5,
+  "disk_gb": 22.0
+ },
+ "picked": {
+  "ids": [],
+  "cpu": 0,
+  "cpu_max": 0,
+  "ram_gb": 0,
+  "disk_gb": 0
+ },
+ "measured": {
+  "ram_bytes": 1050000000,
+  "ram_apps": 3,
+  "disk_bytes": 356352,
+  "disk_apps": 1
+ },
+ "hardware": {
+  "cpu": 4,
+  "ram_gb": 16,
+  "disk_gb": 512,
+  "gpu": false,
+  "gpu_vram_gb": 0
+ },
+ "schema": 1
+}
