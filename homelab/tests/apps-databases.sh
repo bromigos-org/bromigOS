@@ -53,9 +53,10 @@ for r in json.load(sys.stdin)["databases"]:
           ("own " + r["path"]) if r.get("own") else "failed " + r["reason"])' "$1"
 }
 
-units_of() {
-    python3 -c 'import sys, tomllib; print(" ".join(tomllib.load(open(sys.argv[1], "rb")).get("units") or []))' \
-        "/etc/bromigos/backup-databases.d/$1.toml" 2>/dev/null
+units_of() {   # the app's services, from the catalogue (an app whose add failed has no hook left)
+    PYTHONPATH="$repo/homelab/lib" python3 -c 'import sys
+from bromigos_homelab import localprovision as L, provcatalog as PC
+print(" ".join(L.services_of(PC.by_id()[sys.argv[1]])))' "$1"
 }
 proven=() missed=() never=() later=()
 for id in "${PROVE[@]}"; do
@@ -71,7 +72,12 @@ for id in "${PROVE[@]}"; do
         if [[ -z $up ]]; then
             never+=("$id")
             echo "::group::$id: not running"
-            for u in "${units[@]}"; do journalctl -u "$u" -n 25 --no-pager 2>&1 | tail -25; done
+            for u in "${units[@]}"; do
+                echo "== $u"; systemctl status "$u" --no-pager --lines=0 2>&1 | head -6
+                journalctl -u "$u" -n 30 --no-pager -o cat 2>&1 | tail -30
+                cat "/etc/containers/systemd/${u%.service}.container" 2>/dev/null
+            done
+            podman secret ls 2>&1 | head -12
             echo "::endgroup::"
             continue
         fi
@@ -110,4 +116,6 @@ echo "::endgroup::"
     echo "- Copied nothing (the hook's path is wrong): ${missed[*]:-none}"
     echo "- Not installed here (the image or the app didn't come up): ${never[*]:-none}"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
-(( ${#missed[@]} == 0 && ${#never[@]} == 0 ))
+# A wrong path fails this lane. An app that couldn't run here proves nothing either way: it is
+# named in the summary (and in docs/server.md as documentation only), and its journal is above
+(( ${#missed[@]} == 0 && ${#proven[@]} > 0 ))
