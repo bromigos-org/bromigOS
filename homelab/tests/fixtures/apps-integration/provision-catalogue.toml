@@ -1,0 +1,39 @@
+# A catalogue of one tiny app, for the app manager's integration test in CI
+# (.github/workflows/homelab-tests.yml, "Apps on a Server"; homelab/tests/apps-integration.sh).
+# It is installed as the server's catalogue on a throwaway runner, with its template beside it.
+# The keys are the real catalogue's (homelab/share/provision-catalogue.toml documents them).
+format = 2
+
+[[group]]
+id = "home"
+name = "Home apps"
+icon = "go-home-symbolic"
+glyph = "people"
+
+[[item]]
+id = "hello"
+group = "home"
+name = "Hello (BusyBox)"
+job = "Hello"
+app = "BusyBox"
+line = "A page that says hello, and a folder of notes."
+hint = "BusyBox's small web server in a container: the smallest app the app manager can add, remove and add again."
+icon = "go-home-symbolic"
+glyph = "people"
+holo = "home"
+needs = []
+conflicts = []
+roles = ["base"]
+default = false
+requires = { cpu = 1, ram_gb = 0.1, disk_gb = 0.1 }
+size_text = "about 2 MB of images"
+ports = [18080]
+web = { port = 18080 }
+internet = true
+install = { quadlet = "hello" }
+images = { hello = "docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec" }
+health = { http = "/", port = 18080, within_s = 60 }
+[[item.data]]
+path = "notes"
+kind = "library"
+what = "The notes the test writes, to find again after the app is removed and added back."

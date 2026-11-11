@@ -35,6 +35,13 @@ class FakeMachine:
         self.podman_secrets = {}
         self.users = set()
         self.unseal_ok = True
+        # the service manager, for `systemctl show`: units started and not stopped since are
+        # active; `units` overrides a unit's answer ({unit: {ActiveState: …, …}}); `missing`
+        # units aren't installed (LoadState=not-found)
+        self.active = set()
+        self.units = {}
+        self.missing = set()
+        self.since = 1794200000                # ActiveEnterTimestamp, in seconds
 
     def __call__(self, argv, data=None, env=None, **kw):
         argv = [str(a) for a in argv]
@@ -70,6 +77,13 @@ class FakeMachine:
                 return 0, "", ""
             if argv[1:3] == ["healthcheck", "run"]:
                 return 0, "", ""
+        if cmd == "systemctl" and len(argv) > 1:
+            if argv[1] in ("start", "restart"):
+                self.active.update(argv[2:])
+            elif argv[1] == "stop":
+                self.active.difference_update(argv[2:])
+            elif argv[1] == "show":
+                return 0, self.show(argv[argv.index("--") + 1:] if "--" in argv else []), ""
         if cmd == "systemd-creds":
             if argv[1] == "has-tpm2":
                 return (0 if self.tpm else 1), "", ""
@@ -107,6 +121,19 @@ class FakeMachine:
         if cmd == "bw":
             return 0, "bw-value-" + argv[-1] + "\n", ""
         return 0, "", ""
+
+    def show(self, units):
+        """`systemctl show -p Id,LoadState,ActiveState,SubState,ActiveEnterTimestamp,ControlGroup`."""
+        blocks = []
+        for u in units:
+            on = u in self.active and u not in self.missing
+            row = {"Id": u, "LoadState": "not-found" if u in self.missing else "loaded",
+                   "ActiveState": "active" if on else "inactive", "SubState": "running" if on else "dead",
+                   "ActiveEnterTimestamp": f"@{self.since}" if on else "",
+                   "ControlGroup": f"/system.slice/{u}" if on else ""}
+            row.update(self.units.get(u, {}))
+            blocks.append("\n".join(f"{k}={v}" for k, v in row.items()))
+        return "\n\n".join(blocks) + "\n"
 
     def ran(self, prefix):
         return [c for c in self.calls if " ".join(c).startswith(prefix)]

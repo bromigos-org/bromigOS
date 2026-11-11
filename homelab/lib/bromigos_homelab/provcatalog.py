@@ -507,21 +507,33 @@ def fits_item(it, hw):
     return None
 
 
-def budget(ids, hw, path=None, models=()):
+def budget(ids, hw, path=None, models=(), installed=None):
     """What the items need together against what the server has: {cpu, ram_gb, disk_gb,
     gpu_vram_gb, fits, notes}. Memory and disk add up; the processor is shared, so it fits when
-    the hungriest item fits, and a note says when they'd be busy together."""
+    the hungriest item fits, and a note says when they'd be busy together.
+
+    installed: the ids already on the server (bromigos lab apps). Then `ids` are what's picked
+    besides them: memory and the processor count both, and only the picked items' disk must fit
+    in hw's disk_gb, which is free space the installed apps have already taken theirs from. The
+    result gains cpu_max (the hungriest item's cores) and installed and picked, each {ids, cpu,
+    cpu_max, ram_gb, disk_gb}. Without installed the result is as it always was."""
     cat = by_id(path)
+    if installed is not None:
+        installed = [i for i in dict.fromkeys(installed) if i in cat]
+        picked = [i for i in dict.fromkeys(ids) if i not in installed]
+        ids = installed + picked
     rows = [cat[i] for i in ids]
     req = [r["requires"] or {} for r in rows]
     cpu = sum(float(r.get("cpu", 0)) for r in req)
     ram = sum(float(r.get("ram_gb", 0)) for r in req)
     disk = sum(float(r.get("disk_gb", 0)) for r in req)
+    room = disk if installed is None else sum(float((cat[i]["requires"] or {}).get("disk_gb", 0)) for i in picked)
     vram = 0.0
     for m in models or ():
         vram = max(vram, float(m.get("vram_gb") or 0))
         ram += float(m.get("ram_gb") or 0) if not _gpu_vendor(hw) else 0
         disk += float(m.get("disk_gb") or 0)
+        room += float(m.get("disk_gb") or 0) if installed is not None else 0
     notes, fits = [], True
     hw = hw or {}
     for r in rows:
@@ -536,9 +548,9 @@ def budget(ids, hw, path=None, models=()):
                      "Untick something, or add memory.")
     elif hw.get("ram_gb") is not None and total_ram > 0.85 * hw["ram_gb"]:
         notes.append(f"Memory will be tight: about {total_ram:.1f} of {hw['ram_gb']:.1f} GB.")
-    if hw.get("disk_gb") is not None and disk > hw["disk_gb"] * (1 - DISK_HEADROOM):
+    if hw.get("disk_gb") is not None and room > hw["disk_gb"] * (1 - DISK_HEADROOM):
         fits = False
-        notes.append(f"Together these need about {disk:.0f} GB of disk, and {hw['disk_gb']:.0f} GB is free. "
+        notes.append(f"Together these need about {room:.0f} GB of disk, and {hw['disk_gb']:.0f} GB is free. "
                      "Untick something, or add a disk.")
     biggest = max((float(r.get("cpu", 0)) for r in req), default=0)
     if hw.get("cpu") and biggest > hw["cpu"]:
@@ -552,8 +564,17 @@ def budget(ids, hw, path=None, models=()):
     for problem in conflicts(list(ids), path):
         fits = False
         notes.append(problem)
-    return {"cpu": round(cpu, 2), "ram_gb": round(ram + OS_RAM_GB, 2), "disk_gb": round(disk, 1),
-            "gpu_vram_gb": round(vram, 1), "fits": fits, "notes": notes}
+    out = {"cpu": round(cpu, 2), "ram_gb": round(ram + OS_RAM_GB, 2), "disk_gb": round(disk, 1),
+           "gpu_vram_gb": round(vram, 1), "fits": fits, "notes": notes}
+    if installed is not None:
+        def part(these):
+            r = [cat[i]["requires"] or {} for i in these]
+            return {"ids": list(these), "cpu": round(sum(float(x.get("cpu", 0)) for x in r), 2),
+                    "cpu_max": max((float(x.get("cpu", 0)) for x in r), default=0),
+                    "ram_gb": round(sum(float(x.get("ram_gb", 0)) for x in r), 2),
+                    "disk_gb": round(sum(float(x.get("disk_gb", 0)) for x in r), 1)}
+        out.update(cpu_max=biggest, installed=part(installed), picked=part(picked))
+    return out
 
 
 def norm_roles(roles):

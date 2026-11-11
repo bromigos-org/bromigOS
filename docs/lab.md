@@ -31,6 +31,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab network setup`, `join`, `connect`, `status`, `approve`, `remove`, `rotate` | Run the lab's own private network, Headscale, and join machines to it ([lab-network.md](lab-network.md)). |
 | `bromigos lab power …` | Read supported PDU outlets and plan reviewed changes ([below](#pdu-power)). |
 | `bromigos lab maintenance …` | Plan, follow and resume an ordered shutdown or startup ([below](#rack-maintenance)). |
+| `bromigos lab apps`, `show`, `add`, `remove`, `restart`, `logs`, `budget` | On bromigOS Server: the apps it runs, each one's state, memory, data and page; add and remove them ([below](#apps-on-a-server)). |
 | `bromigos lab backups`, `list`, `show`, `restore`, `test` | On bromigOS Server: whether its backups are healthy, what's in them, getting files back, and a test restore ([server.md](server.md#backups)). |
 | `bromigos lab backups go-bag`, `drives`, `setup`, `run`, `forget` | On bromigOS Server: the Go Bag, a copy of the backup on a USB drive you carry away ([server.md](server.md#the-go-bag)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
@@ -39,8 +40,10 @@ shows *unreachable*, and nothing crashes.
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
 | Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. Set your media languages. |
 
-> **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs,
+> **Planned.** Changing a lab through its repository is Phase 2: deploying, restarting, logs,
 > machine waking, GPU power limits, and adding or replacing models. Those commands only say they are not built yet.
+> On a bromigOS Server, `deploy`, `restart` and `logs` are built: they are the
+> [apps](#apps-on-a-server) verbs.
 > Setting up Core and Advanced is built in `lab provision`
 > ([lab-provision.md](lab-provision.md)). Ordered rack shutdown and startup are built
 > in `lab maintenance`. See [Planned: changing the lab](#planned-changing-the-lab).
@@ -922,6 +925,243 @@ Then:
 
 It now appears on the console, in the doctor and in `bromigos lab run --kinds`.
 
+## Apps on a Server
+
+`bromigos lab apps` lists, adds and removes the apps a bromigOS Server runs: Photos,
+Passwords, the media apps and every other item in the provisioning catalogue
+([lab-provision.md](lab-provision.md#the-catalogue)). It is the engine under the Lab board's
+Supply page. The page, the phone and the desktop read its `--json` and run its verbs, so
+none of them knows more than the command line. The code is
+`homelab/lib/bromigos_homelab/labapps.py`. The manual's
+[Your apps](../manual/src/server.md#your-apps) is the plain path.
+
+| Command | What it does |
+|---|---|
+| `bromigos lab apps [list] [--all] [--json]` | Each installed app: its state, memory, data and page. `--all` adds the apps that can be added. |
+| `bromigos lab apps show ID [--json]` | One app in full: its units, data folders with their sizes, health check, key names, needs. |
+| `sudo bromigos lab apps add ID… [--plan] [--set ITEM.FIELD=VALUE]` | Add apps, with what they need. `--plan` says what it would add and what it asks of the server, and changes nothing. |
+| `sudo bromigos lab apps remove ID [--plan]` | Remove an app and keep its data. |
+| `sudo bromigos lab apps remove ID --delete-data [--yes]` | Remove it and delete its data. It asks you to type the app's id, or takes `--yes`. |
+| `sudo bromigos lab apps restart ID` | Restart its services. |
+| `bromigos lab apps logs ID [-f] [-n N]` | Its services' journal. |
+| `bromigos lab apps budget [ID…] [--json]` | What the installed apps ask of the server, with these added, and what they use now. |
+
+`ID` is the catalogue's item id (`photos`, `jellyfin`). `list --all` shows them all.
+
+### What the server is meant to run
+
+`/etc/bromigos/lab/apps.toml` is the desired state: the apps this server is meant to run,
+the install's roles and lab answer, and the apps' setup fields. A secret field is a
+reference to the secret store (`{ secret = "local:gluetun/password" }`), never a value.
+
+```toml
+format = 1
+seeded_from = "/var/log/bromigos/install-answers.toml"
+lab = "none"
+roles = ["home-services"]
+apps = ["caddy", "photos", "passwords"]
+```
+
+When the file is missing it is seeded once. The seed is the install answers' selection
+with what it needs (or what the answers' roles tick), plus anything
+`/var/lib/bromigos/lab/provision-local.json` shows was set up since. Reading never writes
+it: `add`, `remove` and `provision --local --apply` do. After that the file is what counts.
+`provision --local --apply` adds what it set up.
+
+### What each app reports
+
+Every number comes from the machine. None is a guess.
+
+| Field | Where it comes from |
+|---|---|
+| `state`, `state_word`, `since` | The service manager: one `systemctl show` for every installed app's units (`ActiveState`, `LoadState`, `ActiveEnterTimestamp`), then the recipe's `health` check. |
+| `measured.ram_bytes` | Each unit's cgroup, `memory.current`, added up. A container's processes are in its unit's cgroup. Null when any unit has no reading. |
+| `measured.disk_bytes` | Each of the item's `[[item.data]]` folders, walked on its own disk and counted as `du` counts. Null when an item has no `[[item.data]]`, or when any part can't be read. A part is never counted as the whole. |
+| `version` | The recipe's `app_version` when it has one. For a package, what pacman has installed. For a container, the tag its first image was pinned at when it was installed (`latest` is no version). |
+| `recipe` | The recipe's revision when it was installed (`version` in the catalogue). |
+| `open` | The item's `web`: `https://<name>-<server>.local` when Caddy runs here, else `http://<server>.local:<port>`. |
+| `needed_by` | The installed apps that can't run without it. An `a\|b` need met by another app doesn't count. |
+
+The states, each a shape and a word:
+
+| `state` | `state_word` | Means |
+|---|---|---|
+| `ok` | Running | Every unit is active and the health check answers. |
+| `ok` | Set up | An item with no service of its own, such as the media library folder, that was set up. |
+| `starting` | Starting | A unit is starting, an add job for it is running, or it doesn't answer yet within its recipe's `within_s` (60 s when none). |
+| `updating` | Updating | An `app.update` job for it is running (no such job exists yet). |
+| `degraded` | Degraded | Some units are active and some aren't, or all are and it doesn't answer. |
+| `down` | Down | No unit is active, or its units aren't there. |
+| `unknown` | Unknown | The service manager didn't answer. |
+
+The health check is the recipe's own: a GET to `127.0.0.1:<port><http>` with nothing
+signed in, no redirect followed and no proxy, or `podman exec CONTAINER COMMAND`. It runs
+only when every unit is active, three seconds at most, for all apps at once.
+
+Walking a large library takes time, so the data folders' sizes are kept for ten minutes in
+`/run/bromigos/lab/apps-measured.json`. Root writes it. Anyone may read it, because sizes
+aren't secret. So a person without root sees the numbers root measured last. Adding or
+removing an app forgets its sizes.
+
+### Add
+
+`add` checks the plan as you, then hands over to an activity job
+([activity.md](activity.md)):
+
+```text
+bromigos activity run --kind app.install --title "Adding Photos" --subject app:photos:Photos \
+    --lock apps -- bromigos-lab apps add photos
+```
+
+The job runs in its own unit, so closing the terminal changes nothing. Inside it, the same
+command does the work, in these steps:
+
+1. `plan`: the desired set plus the new apps, through the engine's `build_plan`. A problem,
+   such as two apps that conflict, stops it here.
+2. One step per catalogue item: the engine applies the whole set, as
+   `provision --local --apply` does. Items that didn't change are left as they are.
+3. `record`: the new apps that installed go into `apps.toml`. One that failed doesn't.
+4. `answers`: each new app is asked whether it answers, every two seconds, until its
+   `within_s` (60 s when none). If it never does, the step fails with the check and the
+   command that shows its logs. The app stays recorded: it is installed, and its tile says
+   it doesn't answer.
+
+### Remove
+
+Removing an app and deleting its data are two decisions. `remove` never deletes data
+without `--delete-data`. Before it acts, it says:
+
+- what stops and leaves: the app's units, and its name on the network;
+- what stays: its folder `/srv/apps/<id>` with its measured size, each data folder, and its
+  keys' names. Adding the app again picks them up;
+- what is never touched: the media library, shared folders, other apps' data.
+
+It refuses, with exit code 3:
+
+- an app that other installed apps need. Remove those first;
+- an item set up by a step that changes more than its own service: Caddy, the cluster,
+  Vault, ad blocking (it changes DNS), the backups, the media library, the lab network,
+  Wings. Removing those isn't built yet. Passwords, File sync and Shares (SMB) can be
+  removed: their step installs a package and starts one service.
+
+The job is `app.remove`, with the lock `apps`, in these steps:
+
+1. `check`: what needs it.
+2. `stop`: its units stop. A package's units are disabled too.
+3. `units`: a container app's Quadlet files leave `/etc/containers/systemd/`. The shared
+   `bromigos-lab.network` stays. A package app's packages are removed with `pacman -R`.
+   If something else needs a package, it stays and a note says so. Its line leaves
+   `provision-local.json`.
+4. `data`: `skipped`, with a note saying where the data stays and its size. With
+   `--delete-data` the folder `/srv/apps/<id>` is deleted.
+5. `record`: it leaves `apps.toml`.
+6. `others`: the engine applies the rest again, so Caddy's names, the start page's links
+   and units that named the app follow.
+
+The app's images stay in Podman's store, because another app may use the same one.
+`sudo podman image prune` removes the ones nothing uses. Its keys stay in the secret
+store either way.
+
+Not built yet: the seven-day snapshot before `--delete-data` deletes. That comes with each
+app's data in a subvolume of its own, in the update path.
+
+### Two app jobs at once
+
+Every add and remove holds the lock `apps`. A second app job waits for the first, with
+`waiting_for: "another job"` in its record, in the order they started
+([activity.md](activity.md#jobs-that-touch-the-same-thing)). Where `bromigos activity`
+isn't installed, the command runs in place, as root, with no record, and says so.
+
+### The tile JSON
+
+`list --json` prints a JSON array with one tile per catalogue item, installed or not, in
+the catalogue's order. This is the Lab board's tile contract. A tile has exactly these keys.
+Here are two, from the unit tests' stand-in server:
+
+```json
+[
+ {"id": "photos", "job": "Photos", "app": "Immich", "holo": "photos", "group": "home",
+  "installed": true, "version": "v3.3.5", "recipe": 1, "household": null,
+  "state": "ok", "state_word": "Running", "since": 1794200000000, "reading": null,
+  "open": {"url": "https://photos-myserver.local", "port": 2283}, "update": null,
+  "measured": {"ram_bytes": 1000000000, "disk_bytes": 356352},
+  "requires": {"cpu": 2, "ram_gb": 4, "disk_gb": 20},
+  "can": ["open", "restart", "logs", "remove"], "needed_by": []},
+ {"id": "jellyfin", "job": "Films and shows", "app": "Jellyfin", "holo": "films", "group": "media",
+  "installed": false, "version": "12.4ubu2604-ls57", "recipe": 1, "household": null,
+  "state": null, "state_word": null, "since": null, "reading": null, "open": null,
+  "update": null, "measured": null, "requires": {"cpu": 2, "ram_gb": 2, "disk_gb": 10},
+  "can": ["add"], "needed_by": []}
+]
+```
+
+Times are milliseconds since the epoch, UTC. An app that isn't installed has `state`,
+`state_word`, `since`, `open` and `measured` null, and `can` is `["add"]`.
+
+Three fields are always null for now, because nothing can fill them honestly yet:
+
+- `reading` needs an app adapter that reads the app's own API on the server. None is wired
+  to tiles yet. The health check sets `state`. It isn't a reading.
+- `update` needs the update path, which isn't built.
+- `household` needs a `household` key in the catalogue, which no item has yet.
+
+`can` lists `open` when it has a page, `restart` and `logs` when it has a service, and
+`remove` when it can be removed and nothing needs it. `update` and `rollback` aren't
+offered, because they aren't built.
+
+`show --json` is `{schema, app, recipe, units, data, health, keys, needs, record,
+snapshots}`. `app` is the tile. `health` is `{ok, ms, how, status, at}`. `snapshots` is
+null until the update path keeps them. `add --plan --json` and `remove --plan --json` say
+what would happen. `budget --json` is below.
+
+### The budget
+
+`budget [ID…]` is the meter's numbers. `provcatalog.budget(ids, hw, installed=…)` counts the
+installed apps plus the picked ones:
+
+- Memory and the processor count both.
+- Only the picked apps' disk must fit in the free space. That free space is measured where
+  `/srv/apps` is, and the installed apps have already taken theirs from it.
+- `cpu_max` is the hungriest app's cores. The processor is shared, so the hungriest one
+  decides whether it fits, not the sum.
+- `installed` and `picked` are `{ids, cpu, cpu_max, ram_gb, disk_gb}` each, from the recipes.
+- `measured` is what the installed apps use now: `ram_bytes` and `disk_bytes`, added up
+  over the apps that have a reading. `ram_apps` and `disk_apps` say how many had one.
+
+Without `installed`, `budget()` returns what it always did. The installer and the salvage
+scan still call it that way.
+
+### The stubs on a Server
+
+On a bromigOS Server, `bromigos lab deploy ID` is `apps add ID`. `bromigos lab restart ID`
+and `bromigos lab logs ID` are `apps restart` and `apps logs`. `bromigos lab update` says
+updating apps is planned and exits 3. A machine counts as a Server when it has
+`/etc/bromigos/server.toml`, the `bromigos-server` command, or the local target's record.
+Elsewhere the four commands keep their Phase 2 message.
+
+### Exit codes
+
+| Code | Means |
+|---|---|
+| 0 | Done, or every installed app is running. |
+| 1 | A problem found: an app is down or doesn't answer, or a job failed. |
+| 2 | The command line was wrong. |
+| 3 | Refused: no such app, it isn't installed, others need it, it can't be removed yet, it needs root, or deleting needs a yes. |
+| 4 | It couldn't check: the service manager didn't answer, or `apps.toml` can't be read. |
+
+### Its tests
+
+- `homelab/tests/test_lab_apps.py` runs the tiles, the desired state, add and remove
+  through the engine, and the commands' jobs. It uses the `Host` stand-ins: `provfake.FakeMachine`
+  answers `systemctl show`, and cgroup files sit under a stand-in root. Under a stand-in
+  root no command reaches the machine the tests run on. Two app jobs queue through the
+  real `bromigos activity run`.
+- `homelab/tests/apps-integration.sh` runs in CI (`homelab-tests.yml`, "Apps on a Server")
+  on a throwaway VM with Podman, Quadlet and systemd. A tiny recipe
+  (`tests/fixtures/apps-integration`: BusyBox's web server) is added, listed, removed
+  keeping a note in its data, added again with `bromigos lab deploy` (the note is there),
+  and removed with `--delete-data`. Each add and remove is a job in a unit of its own.
+
 ## Planned: changing the lab
 
 > **Planned.** These commands exist, but they only say they aren't built yet. The design
@@ -930,6 +1170,9 @@ It now appears on the console, in the doctor and in `bromigos lab run --kinds`.
 Phase 2 will change the lab through your homelab's Git repository, never by hand on a
 server. Every change will be a commit or a pull request that Argo CD, Flux or Ansible
 applies, and each command will ask you first.
+
+On a bromigOS Server, `deploy`, `logs` and `restart` are built: they are
+[`lab apps`](#apps-on-a-server). The table is the planned path for a lab with a repository.
 
 | Command | What it will do |
 |---|---|
@@ -943,7 +1186,9 @@ applies, and each command will ask you first.
 `lab maintenance` provides a separate ordered shutdown and startup flow
 ([above](#rack-maintenance)). `lab backups` is built for bromigOS Server's own backups:
 status, list, show, restore and a test restore ([server.md](server.md#backups)). Backups
-of the rest of a lab, through its repository, remain planned. `lab update` remains planned.
+of the rest of a lab, through its repository, remain planned. `lab update` remains planned:
+on a Server it says so, and the apps' update path is in
+[lab-provision.md](lab-provision.md#updates).
 
 ## Tests
 

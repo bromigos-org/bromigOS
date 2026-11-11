@@ -189,6 +189,37 @@ If it won't start, choose **bromigOS Field Kit** in the boot menu. The boot menu
 a second kernel, under Advanced options: the server starts the long-term-support one, and
 the newest one stays there in case it's needed.
 
+## Your apps
+
+See the apps your server runs, add one, or take one away:
+
+```bash
+bromigos lab apps                       # each app: running or not, its memory, its data, its page
+bromigos lab apps list --all            # what else it can run
+sudo bromigos lab apps add photos       # add Photos, and anything it needs
+sudo bromigos lab apps remove photos    # take it away; your photos stay
+```
+
+**Removing an app keeps your data.** Your photos stay in `/srv/apps/photos`, with the app's
+keys. Add the app again and it finds them. To delete the data as well, add
+`--delete-data`. It asks you to type the app's name first, because the data is gone for
+good.
+
+`bromigos lab apps remove photos --plan` says what would stop, what stays and how big it
+is, and changes nothing. An app that another app needs can't be removed until that one is.
+
+Adding and removing keep going if you close the terminal. `bromigos activity` shows how
+far they got. If an app says **Down** or **Degraded**:
+
+```bash
+bromigos lab apps logs photos           # what it said
+sudo bromigos lab apps restart photos   # start it again
+```
+
+For scripts, every command takes `--json`. The
+[lab docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#apps-on-a-server)
+have where each number comes from, the exit codes and the JSON.
+
 ## Where your apps keep their data
 
 If you gave the server data disks during the install, most of your apps keep their data

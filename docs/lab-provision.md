@@ -326,11 +326,11 @@ The approved design also covers these features. They are not built here:
 - Formatting and mounting a spare disk. The hardware check only suggests one.
 - The catalog's app-specific configure steps, account sign-in and library setup.
 - Public certificates, DNS and opt-in tunnels.
-- Service removal with a separate data-retention decision.
-- An app manager for a server that is already set up: `bromigos lab apps` to list, add,
-  remove, restart and update apps. The catalogue's format 2 keys are its data
-  ([The catalogue](#format-2-what-an-app-manager-needs-to-know)). Until it is built, no
-  command reads an item's `health` or `[[item.data]]`.
+- Updating and rolling back an app with `bromigos lab apps update` and `rollback`, and a
+  person's own Compose file or Quadlet through `bromigos lab apps add --file`. Listing,
+  adding, removing (keeping or deleting the data), restarting and logs are built
+  ([lab.md](lab.md#apps-on-a-server)).
+- A seven-day snapshot of an app's data before `bromigos lab apps remove --delete-data`.
 - Scheduled Vault Raft snapshots and backups of the cluster control plane.
 - Updating pinned images and chart versions through `bromigos lab update`. For the local
   target's apps that means a CI job that tests and moves the catalogue's digests, and the
@@ -387,8 +387,9 @@ a live check (`bromigos lab provision --check ITEM`).
 The file says `format = 2`. Format 2 adds keys to each item and changes none, so anything
 that read format 1 reads this file the same way. The installer's own reader is one such.
 The new keys describe an item well enough to show it as a tile, open its page, find its
-data and ask whether it answers. Nothing uses them for that yet: the commands that will
-are listed under [work reserved for later slices](#work-reserved-for-later-slices).
+data and ask whether it answers. `bromigos lab apps` reads them for each app's tile, its
+health check and its data's size ([lab.md](lab.md#apps-on-a-server)). The update path,
+which reads the rest, is under [work reserved for later slices](#work-reserved-for-later-slices).
 
 | Key | What it holds |
 |---|---|
@@ -491,7 +492,10 @@ it comes (NetworkManager's connectivity check, else a connection to pkgs.bromigo
 that don't need one go ahead. `--no-wait` exits 75 instead of waiting. A failed item is
 reported with `::error` in words and its dependents fail with the reason; the rest carry on.
 `/var/lib/bromigos/lab/provision-local.json` records each finished item with a fingerprint of
-what it installed, so a re-run leaves finished items alone and redoes only changed ones.
+what it installed, so a re-run leaves finished items alone and redoes only changed ones. It
+also keeps the recipe's revision (`recipe`) and the app's version (`app_version`) as
+installed. The apply adds what it set up to `/etc/bromigos/lab/apps.toml`, the list of what
+this server is meant to run ([lab.md](lab.md#what-the-server-is-meant-to-run)).
 
 Media items get wired together after they install: qBittorrent and SABnzbd as download
 clients in Sonarr, Radarr and Lidarr, with their categories, and the root folders. No source
