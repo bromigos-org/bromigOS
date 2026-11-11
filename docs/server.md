@@ -1070,6 +1070,7 @@ ask one function (`health()` in `lib/bromigos_backups.py`). They can't disagree.
 | … A restore stopped part-way: … | A restore in place was interrupted. Run it again. |
 | The last backup failed: the backup left out /srv/apps (the apps' data). … | The backup ran without the apps' data. It doesn't count. |
 | … But the database of documents (Paperless-ngx) wasn't copied whole, … | That app's database copy failed. The rest was backed up. |
+| … But photos (Immich) has no recent database backup of its own, … | Immich's own nightly dump has stopped. The backup holds its database only through those. |
 | … Go Bag: copied 3 days ago. | The [Go Bag](#the-go-bag) drive has a good copy. |
 | … Go Bag: no copy yet. | A Go Bag is set up, and has never been copied to. |
 | … Your Go Bag drive hasn't been updated in 31 days. Plug it in. | The reminder. `drive_remind_days` sets the wait. |
@@ -1125,28 +1126,97 @@ otherwise be backed up into itself. `paths` and `exclude` in `[backup]` replace 
 **The apps' data is always in it.** Every backup names `/srv/apps` by itself, whatever
 `paths` says. On a server with data disks it's a disk of its own, mounted there, and a
 backup that only named `/srv` and didn't cross into other disks would leave every app's
-data out. After each backup the server looks in it for `/srv/apps`. If it isn't there
-(an `exclude` of yours that matches it, say), the backup counts as failed, the health line
-says what was left out, and [alerts](alerts.md) raise it. The weekly check and the monthly
-test restore look too, and fail the same way when the newest backup lacks it. When the
-data disks aren't mounted, `/srv/apps` is an empty folder, so the backup doesn't run at all
-and says why: a backup of that would say the apps have no data.
+data out. After each backup the server looks in it for `/srv/apps` and for each app's own
+folder inside (`/srv/apps/photos`, `/srv/apps/documents`). If one isn't there, the backup
+counts as failed, the health line says which was left out, and [alerts](alerts.md) raise
+it. The weekly check and the monthly test restore look too, and fail the same way. When
+the data disks aren't mounted, `/srv/apps` is an empty folder, so the backup doesn't run
+at all and says why: a backup of that would say the apps have no data.
 
-**The databases are copied whole first.** An app writes to its database while the backup
+An app's folder that your own `exclude` names is your choice, and isn't asked of the
+backup. `/srv/apps` itself always is.
+
+**An app you add later isn't a failed backup.** Each backup is judged against what was on
+the server when it ran. An app set up since then isn't missing from that backup: it's in
+the next one. Until then the status has a line for it, and the check and the test restore
+pass and say the same:
+
+```text
+  Added since   /srv/apps/navidrome (the navidrome app's data): not in a backup yet: the next one runs at 2026-11-11 06:00
+```
+
+An app that was there when the backup ran, and isn't in it, still fails.
+
+**The databases are made safe first.** An app writes to its database while the backup
 reads it, so a file copied half-way through a write may not open. Before each backup, the
-server copies each app's SQLite database with SQLite's own online backup, which gives a
-whole, consistent copy while the app goes on running. The copies go in
-`/var/lib/bromigos/backup-databases/<app>/`, readable by root only, and every backup holds
-them. To get an app's database back, restore its copy and put it in place of the app's own
-file with the app stopped. Today that's the passwords vault (Vaultwarden) and documents
-(Paperless-ngx). Photos (Immich) makes its own database dump every night into
-`/srv/apps/photos/library/backups`, which the backup holds. A copy that fails is on the
-health line; the rest of the backup still runs.
+server copies each app's SQLite databases with SQLite's own online backup, which gives a
+whole, consistent copy while the app goes on running, its write-ahead log included. An app
+with several databases has each copied. Each copy goes on the same disk as the apps' data,
+readable by root only, and every backup holds it:
 
-A copy to the [Go Bag](#the-go-bag) follows both rules. It names `/srv/apps`, copies the
-databases first, looks for the apps' data in what it wrote, and doesn't run while the data
-disks are away. A database copy that fails there makes the Go Bag's copy "worked, but left
-some files out", with the reason under it.
+- **With data disks**, in `/srv/apps/.bromigos-backup-databases/<app>/`, on the data disks.
+  A large history (Home Assistant's, Jellyfin's) is copied onto the disks that hold it,
+  never onto the system disk. The backup holds it through `/srv/apps`, once.
+- **Without data disks**, in `/var/lib/bromigos/backup-databases/<app>/`, on the system
+  disk, where the apps' data is too.
+
+When the apps' data moves (`bromigos lab app-data move`), the next backup makes the copies
+in the new place, and removes the old ones once the new ones are written. To get an app's
+database back, restore its copy and put it in place of the app's own file with the app
+stopped.
+
+Every app in the catalogue that keeps a database has a hook that says how, written when
+the app is installed. A server set up before a hook existed gets every hook the next time
+the lab's engine runs there: when an app is added or removed (`bromigos lab apps add`), or
+when the install's own apply is run again.
+
+| App | What is made safe |
+|---|---|
+| Passwords (Vaultwarden), Documents (Paperless-ngx), Navidrome, Audiobookshelf, Uptime Kuma, Tautulli, Seerr, Home Assistant, Beets, Autoscan | Its SQLite database, copied |
+| Sonarr, Radarr, Lidarr, Prowlarr | Both of its databases (`sonarr.db` and `logs.db`, and so on), copied. Each also keeps zipped backups of its own in `config/Backups`, which the backup holds |
+| Jellyfin, Bazarr, Pinchflat, the Pelican panel, slskd | Every database in its data folder, copied |
+| Photos (Immich) | Nothing is copied. Its database is PostgreSQL, whose files can't be copied while it runs. Immich dumps it itself every night into `/srv/apps/photos/library/backups`, and the backup holds those dumps |
+| Plex | Nothing is copied. Plex's database only Plex reads safely. Plex backs it up itself every three days, beside the database, and the backup holds those files |
+
+For Photos and Plex the server checks that the app's own newest backup is recent (3 days
+for Immich, 10 for Plex). When it isn't, the health line and the alert say so: the app's
+own backup may be turned off. A new app gets that long to make its first one.
+
+**A copy never fills a disk.** Before each copy the server checks the free space where it
+goes: the database's size and its write-ahead log's, 64 MiB more, and never taking that
+disk below 1 GiB free or 5 % of its size, whichever is more. Without the room, that
+database isn't copied and nothing is written. The backup is partial, and the health line
+and the alert name the app: "not enough free space on /srv/apps for a copy of
+/srv/apps/home-automation/config/home-assistant_v2.db: it needs 4.2 GB, and 3.1 GB is
+free (1.0 GB is always left free)". The copy from the night before stays. A copy is written beside its place and moved
+in when whole, so one that stops part-way (a power cut) never replaces it, and what it left
+is removed at the next backup.
+
+A copy that fails for another reason is on the health line the same way, and the rest of
+the backup still runs. An app with no database yet (nothing was ever added to it) is
+skipped.
+
+**A hook that finds nothing is said.** Most hooks' paths come from each app's own
+documentation. If one is wrong, the backup finds nothing to copy for that app. So
+`bromigos lab backups` has a Databases row for each app: what was copied last time, or why
+not. For an app whose services are running, a hook that found nothing is said too:
+
+```text
+  Databases     music tags (Beets): nothing found at /srv/apps/beets/config/musiclibrary.blb, and it is running: …
+```
+
+It is a note, not a failure: an app nobody has used yet may have made no database. It isn't
+shown for an app set up within the hour.
+
+**Which paths are proven.** CI installs the real apps on a throwaway machine
+(`homelab/tests/apps-databases.sh`), and each hook must copy that app's database once it
+answers. The pull request that added it lists which apps that proved. The others' paths
+are from their documentation only.
+
+A copy to the [Go Bag](#the-go-bag) follows all of this. It names `/srv/apps`, makes the
+databases safe first, looks for each app's folder in what it wrote, and doesn't run while
+the data disks are away. A database copy that fails there makes the Go Bag's copy "worked,
+but left some files out", with the reason under it.
 
 **A drive that isn't plugged in.** When a backup worked at the destination before and
 nothing is there now, the nightly backup fails and says so. It never starts a new backup
@@ -1324,8 +1394,9 @@ A drive you mounted yourself is used where it is and left mounted. The job then 
 | `… restore … --in-place --apply` | Does it, after a `yes` and a snapshot |
 | `bromigos lab backups test [--all] [--scratch DIR]` | A test restore, recorded for the health line. `--scratch DIR` works in `DIR/bromigos-restore-test`, a folder of its own, and touches nothing else there |
 | `bromigos lab backups run`, `check [--data]` | The same as `bromigos server backup run` and `check` |
-| `sudo bromigos lab backups copy-databases` | Copies the apps' databases, as the nightly backup does first. For a backup job of your own |
-| `bromigos lab backups holds [PATH…]` | For a backup job's own unit: does the newest backup in `$RESTIC_REPOSITORY` hold these paths (none: `/srv/apps` and the database copies), and were the copies whole? Exit 1 when not |
+| `sudo bromigos lab backups copy-databases` | Makes the apps' databases safe, as the nightly backup does first. For a backup job of your own. Exit 1 when one failed |
+| `bromigos lab backups holds [PATH…]` | For a backup job of your own: does the newest backup in `$RESTIC_REPOSITORY` hold these folders (none: `/srv/apps`, each app's folder in it and the database copies)? Exit 1 when not |
+| `bromigos lab backups job PATH…` | The lab's own nightly backup on a machine that isn't a bromigOS Server, which `bromigos-lab-backup.service` runs ([lab-provision.md](lab-provision.md#where-the-data-goes)). Not for a Server |
 | `sudo bromigos server backup run [--new]` | A backup now. The first one sets the destination up (`restic init`) |
 | `sudo bromigos server backup check [--data]` | A check now; `--data` reads 5 % back |
 | `sudo bromigos server backup test` | What the monthly timer runs: `bromigos lab backups test` |
@@ -1357,7 +1428,7 @@ with a `percent`. Every document has `schema` (1) and `ok`. A failure has
 
 | Command | Its document |
 |---|---|
-| `status` | `server`, `configured`, `to`, `destination` (`kind`, `path`, `present`), `timers`, `health` (`state`: `ok`, `attention`, `waiting` or `off`; `verdict`; `problems`), `last_backup`, `last_success`, `last_check`, `last_check_passed`, `last_read_back`, `last_test`, `last_test_passed`, `snapshots` (`count`, `oldest_ts`, `newest_ts`), `drives` (the [Go Bag](#for-power-users-the-go-bag)), `restore`, `running`, `checked_at`, `now` |
+| `status` | `server`, `configured`, `to`, `destination` (`kind`, `path`, `present`), `timers`, `health` (`state`: `ok`, `attention`, `waiting` or `off`; `verdict`; `problems`), `last_backup`, `last_success`, `last_check`, `last_check_passed`, `last_read_back`, `last_test`, `last_test_passed`, `snapshots` (`count`, `oldest_ts`, `newest_ts`), `drives` (the [Go Bag](#for-power-users-the-go-bag)), `not_in_backup_yet` (each `path`, `what`: set up since the last backup ran), `next_backup_ts` (when the next one runs, when something waits for it), `restore`, `running`, `checked_at`, `now` |
 | `list` | `to`, `snapshots`: each `id`, `short_id`, `time`, `ts`, `host`, `tags`, `paths`, `files`, `bytes`, `added_bytes`, `nightly` |
 | `show` | `snapshot`, `path`, `entries`: each `name`, `path`, `type` (`file`, `dir`, `symlink`, `other`), `size`, `mtime`, `permissions` |
 | `restore` | `state` (`done`, `incomplete`), `mode` (`new-folder`), `snapshot`, `paths`, `target`, `files`, `bytes`, `verified`, `replaced` (0), `skipped`: each `path`, `why` |
@@ -1388,15 +1459,15 @@ bromigos lab backups restore latest /etc/caddy --in-place --apply --yes \
 | `/etc/bromigos/server.toml` | `[backup]`: `to`, `paths`, `exclude`, `keep_daily`, `keep_weekly`, `keep_monthly`, `env_file`, `drive_remind_days` |
 | `/etc/bromigos/server/backup.key` | The key: restic's repository password, one line. Root only |
 | `/etc/bromigos/server/backup.env` | The destination's credentials, as `KEY=VALUE` lines. Root only |
-| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went; a backup's `run` also has `databases` (each copy's `name`, `what`, `path`, `ok`, `reason`) and, when it left out what it must hold, `missing`. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked, and for a backup where it went (`to`, without any password). `first_ok_ts`, and `snapshots`: the count and dates. `drives`: the Go Bag, by its filesystem's UUID, with its own `run`, `run_ok`, `test` and `test_ok` |
+| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went; a backup's `run` also has `databases` (each copy's `name`, `what`, `path`, `ok`, `reason`; `own` for an app's own backups), `saw` (the folders it had to hold: what was on the server when it ran) and, when it left one out, `missing`. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked, and for a backup where it went (`to`, without any password). `first_ok_ts`, and `snapshots`: the count and dates. `drives`: the Go Bag, by its filesystem's UUID, with its own `run`, `run_ok`, `test` and `test_ok` |
 | `/var/lib/bromigos/server/backup-drive.lock` | Held by the one job that uses the Go Bag drive |
 | `/run/bromigos/backup-drive/<UUID>/` | Where the Go Bag drive is mounted while a job uses it |
 | `/var/lib/bromigos/server/restore.json` | The restore running now, or the last one: its steps, its state, and a restore in place that stopped part-way |
 | `/var/lib/bromigos/server/restore-test.json` | The same for the test restore |
 | `/var/lib/bromigos/server/restore-test/` | The test restore's scratch folder. Empty between runs |
 | `/var/cache/restic/` | restic's cache |
-| `/etc/bromigos/backup-databases.d/<app>.toml` | One per app with a database file: `what` (its name) and `sqlite` (the database's paths; the ones that aren't there are skipped). The lab's engine writes them |
-| `/var/lib/bromigos/backup-databases/<app>/` | The databases' copies, made before each backup. Root only |
+| `/etc/bromigos/backup-databases.d/<app>.toml` | One per app that keeps a database. `what`: its name. `sqlite`: its SQLite files; a `*` matches inside one folder, and the ones that aren't there are skipped. `own` and `own_days`: the app's own database backups (files the backup holds), and how old the newest may be. The lab's engine writes one for each catalogue app, again at every apply; a file of your own with another name is read the same way |
+| `/srv/apps/.bromigos-backup-databases/<app>/` or `/var/lib/bromigos/backup-databases/<app>/` | The databases' copies, made before each backup, one file per database: beside the apps' data when `/srv/apps` is a disk of its own (data disks), else on the system disk. Root only |
 | `/srv/restore/` | Where restores go |
 
 `bromigos server status --json` shows the destination without any password in it, and the
@@ -1728,9 +1799,13 @@ the test restore. It also covers what every backup must hold: `/srv/apps` on a f
 of its own (a stand-in restic that leaves out `$FAKE/other-filesystems` under `--one-file-system`, as
 restic does, and, where user namespaces allow, a real tmpfs mounted there in a namespace of
 the test's own), a `paths` list without `/srv`, the data disks away, an exclude that drops
-the apps (the run fails), the check and the test restore against a backup without them, a
-SQLite database in write-ahead-log mode copied whole while it's open, one that can't be
-copied, and the lab's own backup unit run as it is written. snapper is a stand-in: from a stand-in root the machine's own snapper
+the apps (the run fails), one app's folder left out (the run, the check and the test
+restore fail) against an exclude of your own (they don't), an app set up after the last
+backup (nothing fails, and the status says "not in a backup yet"), a state file from before
+runs kept their list (judged by each folder's birth time), a SQLite database in
+write-ahead-log mode copied whole while it's open, an app with several, one that can't be
+copied, one that wouldn't fit, an app's own backups that are recent, old or not made yet,
+and the lab's own backup job, with and without bromigos-core's library. snapper is a stand-in: from a stand-in root the machine's own snapper
 is never run, nor its `systemctl`, nor `sudo`. `tests/alerts/test_alerts.py` checks that
 every backup alert is a problem of the same `health()` the status prints.
 
@@ -1760,7 +1835,10 @@ restore by hand and through `bromigos-server-backup-test.service`; the re-run th
 must all report. On the Server installed with two data disks, `iso/test/server-data-checks.sh`
 backs it up with the real `bromigos server backup run` and reads the newest backup back:
 it must hold the app's folder under `/srv/apps`, a mount of the data disks, and the vault's
-database copy, which must open.
+database copy, which must open. The engine also installs Navidrome there: the real app
+makes its database, and the backup must hold the copy its hook made. Then a folder is made
+under `/srv/apps` after the backup: the check and the test restore must pass, and the
+status must say it isn't in a backup yet.
 
 `iso/fieldkit/backup-drive-drill.sh` follows it on the same server, for the Go Bag. The
 harness plugs a disk image into the running VM as a USB drive and pulls it out again

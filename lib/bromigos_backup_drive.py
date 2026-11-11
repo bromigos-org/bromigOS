@@ -598,6 +598,7 @@ def backup(env, b):
     if gone:
         raise B.Problem("failed", f"The data disks aren't mounted, so {B.missing_words(gone)} can't be read. Nothing was copied.")
     dbs = B.copy_databases()
+    saw = B.required_now(b.get("exclude"))           # what this copy must hold, as the server is now
     paths = [B.at(p) for p in B.backup_set(b["paths"])]
     args = ["backup", "--json", "--tag", B.TAG, "--exclude-caches"]
     for x in b["exclude"]:
@@ -622,7 +623,7 @@ def backup(env, b):
         raise B.Problem("failed", f"{B.upper_first(B.sentence(last or last_words(err) or 'restic backup failed'))}.")
     # looked for in the copy itself: one without the apps' data is not a good copy
     snap = str(summary.get("snapshot_id") or "")
-    gone = B.missing(env, {"id": snap}, B.required_paths())
+    gone = B.missing(env, {"id": snap}, saw)
     if gone:
         raise B.Problem("failed", f"The copy left out {B.missing_words(gone)}.")
     why = [] if rc == 0 else ["some files couldn't be read: " + (last or f"{len(skipped)} of them")]
@@ -630,7 +631,7 @@ def backup(env, b):
     return {"phase": "partial" if why else "ok", "at": B.iso(), "ts": time.time(),
             "snapshot": snap[:8], "files": summary.get("total_files_processed"),
             "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-            "reason": "; ".join(why), "databases": dbs}
+            "reason": "; ".join(why), "unread": rc != 0, "databases": dbs, "saw": saw}
 
 
 def keep(env, b):

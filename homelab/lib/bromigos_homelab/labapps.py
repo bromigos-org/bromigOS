@@ -790,6 +790,7 @@ def do_remove(m, i, delete_data=False, emit=None, host_kw=None):
     if rec["items"].pop(i, None) is not None:
         p = m.path(L.STATE)
         p.write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
+    L.forget_database_hook(m.path(f"{L.DB_HOOKS}/{i}.toml"))      # no backup looks for its database any more
     step(emit, "units", "done")
     folder = r["stays"]["path"]
     if delete_data:

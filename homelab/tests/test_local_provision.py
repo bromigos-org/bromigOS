@@ -466,26 +466,120 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(mode, {"srv/backups/restic": 0o700, "srv/backups": 0o755, "srv/backups/data": 0o700,
                                 "srv/apps/photos": 0o750, "srv/apps/photos/postgres": 0o700, "srv/apps/photos/library": 0o755})
 
-    def test_the_apps_with_a_database_file_have_it_copied_whole_before_each_backup(self):
-        # a hook each (lib/bromigos_backups.py, copy_databases): the vault, wherever it is, and
-        # Paperless's SQLite. Immich's postgres makes its own dumps, into its library folder
+    def hooks(self):
+        import tomllib
+        d = Path(self.root, "etc/bromigos/backup-databases.d")
+        return {p.stem: tomllib.loads(p.read_text()) for p in sorted(d.iterdir())} if d.is_dir() else {}
+
+    def test_the_apps_with_a_database_have_it_made_safe_before_each_backup(self):
+        # a hook each (labbackup.py, copy_databases): the vault, wherever it is, and Paperless's
+        # SQLite. Immich's postgres can't be copied as files: Immich dumps it itself, and its hook
+        # names those dumps, which must be recent
         Path(self.root, "var/lib/vaultwarden").mkdir(parents=True)
         plan = L.build_plan(["passwords", "documents", "photos", "backups"], hw=HW)
         self.net["up"] = True
         self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
-        hooks = Path(self.root, "etc/bromigos/backup-databases.d")
-        self.assertEqual(sorted(p.name for p in hooks.iterdir()), ["documents.toml", "passwords.toml"])
-        import tomllib
-        self.assertEqual(tomllib.loads((hooks / "passwords.toml").read_text()),
-                         {"what": "passwords (Vaultwarden)", "sqlite": ["/srv/apps/passwords/db.sqlite3", "/var/lib/vaultwarden/db.sqlite3"]})
-        self.assertEqual(tomllib.loads((hooks / "documents.toml").read_text()),
-                         {"what": "documents (Paperless-ngx)", "sqlite": ["/srv/apps/documents/data/db.sqlite3"]})
-        # the lab's own backup names the apps' folder by itself: on a server with data disks it is a
-        # mount of its own, which --one-file-system never crosses into
+        self.assertEqual(self.hooks(), {
+            "passwords": {"what": "passwords (Vaultwarden)", "units": ["vaultwarden.service"],
+                          "sqlite": ["/srv/apps/passwords/db.sqlite3", "/var/lib/vaultwarden/db.sqlite3"]},
+            # its services: when they run and nothing is found where the hook looks, the status says so
+            "documents": {"what": "documents (Paperless-ngx)", "sqlite": ["/srv/apps/documents/data/db.sqlite3"],
+                          "units": ["paperless-valkey.service", "paperless.service"]},
+            "photos": {"what": "photos (Immich)", "own": ["/srv/apps/photos/library/backups/*"], "own_days": 3}})
+        text = Path(self.root, "etc/bromigos/backup-databases.d/photos.toml").read_text()
+        self.assertIn("# Immich's database is PostgreSQL", text, "the hook's comment says why nothing is copied")
+        self.assertTrue(all(len(line) <= 101 for line in text.splitlines() if line.startswith("#")), text)
+        # the lab's own backup is one job, which names the apps' folder by itself: on a server with
+        # data disks it is a mount of its own, which --one-file-system never crosses into
         unit = Path(self.root, "etc/systemd/system/bromigos-lab-backup.service").read_text()
-        self.assertIn("ExecStart=/bin/sh -c 'for p in /etc /srv /srv/apps /var/lib/bromigos /var/lib/vaultwarden; do "
-                      "[ -e \"$$p\" ] && set -- \"$$@\" \"$$p\"; done; exec /usr/bin/restic backup --one-file-system "
-                      "--exclude-caches \"$$@\"'\n", unit)
+        self.assertIn("ExecStart=/usr/lib/bromigos/bin/bromigos-lab backups job /etc /srv /srv/apps /var/lib/bromigos "
+                      "/var/lib/vaultwarden\n", unit)
+        self.assertEqual(unit.count("Exec"), 1, "nothing of bromigos-core's is run beside it")
+
+    def test_every_catalogue_app_that_keeps_a_database_has_a_hook(self):
+        # the catalogue says which items keep a database ([[item.data]] kind = "database"); each
+        # one has an entry, and every path in it is inside a folder the item's recipe mounts
+        cat = PC.by_id()
+        keeps = {i for i, it in cat.items() if any(d["kind"] == "database" for d in it["data"])}
+        self.assertEqual(keeps - set(L.DATABASES), set(), "an app with a database and no hook: add it to DATABASES")
+        self.assertEqual(set(L.DATABASES) - set(cat), set())
+        for i, d in L.DATABASES.items():
+            folders = [r["path"] for r in L.data_paths(cat[i])] or ["/srv/apps/passwords", "/var/lib/vaultwarden"]
+            paths = d.get("sqlite", []) + d.get("own", [])
+            self.assertTrue(paths, i)
+            for p in paths:
+                self.assertTrue(any(p.startswith(f.rstrip("/") + "/") for f in folders), f"{i}: {p} isn't in {folders}")
+            self.assertTrue(L.database_what(cat[i]), i)
+        self.assertEqual((L.database_what(cat["sonarr"]), L.database_what(cat["jellyfin"])), ("shows (Sonarr)", "films and shows (Jellyfin)"))
+
+    def test_a_server_set_up_before_the_hooks_gets_them_at_its_next_apply(self):
+        plan = L.build_plan(["navidrome", "sonarr", "jellyfin"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        want = {"navidrome": ["/srv/apps/navidrome/data/navidrome.db"], "sonarr": ["/srv/apps/sonarr/config/*.db"],
+                "jellyfin": ["/srv/apps/jellyfin/config/data/data/*.db"], "prowlarr": ["/srv/apps/prowlarr/config/*.db"]}
+        self.assertEqual({k: v["sqlite"] for k, v in self.hooks().items()}, want)
+        # as an engine from before the hooks left it: every app installed and on record, no hook
+        d = Path(self.root, "etc/bromigos/backup-databases.d")
+        for p in d.iterdir():
+            p.unlink()
+        (d / "mine.toml").write_text('what = "my own app"\nsqlite = ["/srv/mine/data.db"]\n')    # a person's own hook
+        installs = len(self.m.ran("systemctl restart")) + len(self.m.ran("systemctl start"))
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0)
+        self.assertEqual(len(self.m.ran("systemctl restart")) + len(self.m.ran("systemctl start")), installs, "nothing was set up again")
+        self.assertEqual({k: v["sqlite"] for k, v in self.hooks().items()}, dict(want, mine=["/srv/mine/data.db"]))
+        # an app that left (bromigos lab apps remove takes it off the record): its hook goes, a person's own stays
+        state = Path(self.root, L.STATE)
+        rec = json.loads(state.read_text())
+        del rec["items"]["navidrome"]
+        state.write_text(json.dumps(rec))
+        self.assertEqual(L.Runner(self.host(L.build_plan(["sonarr", "jellyfin"], hw=HW))).run(), 0)
+        self.assertEqual(sorted(self.hooks()), ["jellyfin", "mine", "prowlarr", "sonarr"])
+
+    def test_a_container_with_an_account_of_its_own_owns_its_data_folder(self):
+        # Navidrome and slskd run as the media account (User= in their units). Their data folder
+        # was root's, so the app couldn't make its database in it
+        plan = L.build_plan(["navidrome", "slskd", "sonarr", "seerr"], hw=HW)
+        self.net["up"] = True
+        made = []
+        mkdir = L.Host.mkdir
+
+        def recorded(host, rel, mode=None, owner=None):
+            made.append((str(rel).lstrip("/"), owner))
+            return mkdir(host, rel, mode, owner)
+
+        with mock.patch.object(L.Host, "mkdir", recorded):
+            self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        owners = dict(made)
+        self.assertIn("User=1000:1000\n", Path(self.root, L.QUADLET_DIR, "navidrome.container").read_text())
+        self.assertEqual((owners["srv/apps/navidrome/data"], owners["srv/apps/slskd/app"]), ("1000:1000", "1000:1000"))
+        # Seerr's image runs as its own node account (CI's run of it: EACCES on /app/config/logs as root's)
+        self.assertEqual(owners["srv/apps/seerr/config"], "1000:1000")
+        self.assertIsNone(owners["srv/apps/sonarr/config"], "an image that drops to its own account itself is left as it was")
+
+    def test_a_recipe_whose_revision_was_raised_is_set_up_again(self):
+        # what the engine writes for an item changed (the lab's backup unit, the vault's settings
+        # file, Autoscan's config.yml): the catalogue's `version` is in the fingerprint, so a
+        # server that has the item gets the change at its next apply. An item nobody revised
+        # keeps the fingerprint it had
+        cat = PC.by_id()
+        host = self.host(L.build_plan(["passwords", "backups", "photos"], hw=HW))
+        for i in ("passwords", "backups", "autoscan", "navidrome", "slskd", "seerr"):
+            self.assertEqual(cat[i]["version"], 2, i)
+            self.assertNotEqual(L.fingerprint(cat[i], host), L.fingerprint(dict(cat[i], version=1), host), i)
+        self.assertEqual(cat["photos"]["version"], 1)
+        self.assertEqual(L.fingerprint(cat["photos"], host), L.fingerprint({k: v for k, v in cat["photos"].items() if k != "version"}, host))
+        # the lab's backup unit as #112 left it, on a machine the engine set up then
+        self.net["up"] = True
+        self.assertEqual(L.Runner(host).run(), 0, "\n".join(self.lines))
+        unit = Path(self.root, "etc/systemd/system/bromigos-lab-backup.service")
+        state = Path(self.root, L.STATE)
+        rec = json.loads(state.read_text())
+        rec["items"]["backups"]["fingerprint"] = L.fingerprint(dict(cat["backups"], version=1), host)
+        state.write_text(json.dumps(rec))
+        unit.write_text(unit.read_text().replace("backups job", "backups holds"))
+        self.assertEqual(L.Runner(self.host(L.build_plan(["passwords", "backups", "photos"], hw=HW))).run(), 0)
+        self.assertIn("bromigos-lab backups job /etc /srv /srv/apps", unit.read_text())
 
     def test_a_vault_already_in_the_packages_folder_stays_there_and_goes_on_working(self):
         # a server set up before the vault had a folder under /srv/apps: pointing the service at an

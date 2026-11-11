@@ -4,6 +4,9 @@ Description=Requests (Seerr)
 [Container]
 Image={{image:seerr}}
 ContainerName=seerr
+# the image's own account (node, 1000): named here so the engine makes its data folder that
+# account's. As root's, Seerr can't write its logs or its database and stops at start
+User=1000:1000
 Network=bromigos-lab.network
 PublishPort=5055:5055
 Volume={{data}}/config:/app/config:Z

@@ -52,7 +52,11 @@ case "$1" in
   list-units)
     case "$*" in
       *--state=failed*) cat "$FAKE/failed$u" 2>/dev/null ;;
-      *restic*) cat "$FAKE/backup-units" 2>/dev/null ;;
+      *restic*)   # the backup units, as systemctl lists them: only those one of the patterns names
+        set -f
+        while read -r unit rest; do
+          for p in "$@"; do case "$unit" in $p) echo "$unit $rest"; break ;; esac; done
+        done < "$FAKE/backup-units" 2>/dev/null ;;
     esac ;;
   show) cat "$FAKE/show/$2" 2>/dev/null ;;
   status) echo "x $2 - $(sed -n 's/^Description=//p' "$FAKE/show/$2" 2>/dev/null)"; echo "     Active: failed (Result: exit-code)" ;;

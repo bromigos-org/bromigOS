@@ -769,6 +769,8 @@ class Copy(DriveRig):
         self.assertEqual(self.plugged_in().returncode, 0)
         run = self.drives()[UUID]["run"]
         self.assertEqual((run["phase"], [d["ok"] for d in run["databases"]]), ("ok", [True]))
+        self.assertEqual(run["saw"], ["/srv/apps", "/srv/apps/passwords", "/srv/apps/photos", "/var/lib/bromigos/backup-databases"],
+                         "what this copy had to hold: a later test restore from the drive judges it against that")
         for folder, name in (("/srv/apps/photos/library", "beach.jpg"), ("/var/lib/bromigos/backup-databases/passwords", "db.sqlite3")):
             self.assertEqual([e["name"] for e in self.doc("show", "--from", "go-bag", run["snapshot"], folder)["entries"]], [name])
         # a database that can't be copied whole: the copy is kept, and says so

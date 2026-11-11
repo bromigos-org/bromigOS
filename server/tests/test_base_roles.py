@@ -616,9 +616,10 @@ class Backup(Rig):
             (self.root / vault).mkdir(parents=True)
             (self.root / vault / "db.sqlite3").write_text("the household's passwords\n")
         self.summary()
-        # what the backup holds, as restic ls says it after the run: the apps' folder
-        (self.fake / "restic-ls.out").write_text(json.dumps({"struct_type": "node", "name": "apps", "type": "dir",
-                                                             "path": f"{self.root}/srv/apps"}) + "\n")
+        # what the backup holds, as restic ls says it after the run: the apps' folder, and each app's in it
+        (self.fake / "restic-ls.out").write_text("".join(
+            json.dumps({"struct_type": "node", "name": os.path.basename(p), "type": "dir", "path": f"{self.root}{p}"}) + "\n"
+            for p in ("/srv/apps", "/srv/apps/passwords")))
         r = self.run_server("backup", "run")
         self.assertEqual(r.returncode, 0, r.stderr)
         line = next(l for l in self.log().splitlines() if l.startswith("restic backup "))
@@ -627,7 +628,10 @@ class Backup(Rig):
         self.assertIn(f"{self.root}/srv", paths)
         # and the apps' folder by itself: on a server with data disks it's a disk of its own
         self.assertIn(f"{self.root}/srv/apps", paths)
-        self.assertIn(f"restic ls --json --retry-lock 2m 1234abcd5678 {self.root}/srv/apps", self.log())
+        self.assertIn(f"restic ls --json --retry-lock 2m 1234abcd5678 {self.root}/srv/apps repo=", self.log(),
+                      "one listing: the folder, and what is right inside it")
+        # what this run saw is on its record: a later check judges the backup against it
+        self.assertEqual(self.backup_state()["run"]["saw"], ["/srv/apps", "/srv/apps/passwords"])
         # a server without the app has no such folder, and restic isn't handed a path that isn't there
         (self.root / "var/lib/vaultwarden/db.sqlite3").unlink()
         (self.root / "var/lib/vaultwarden").rmdir()

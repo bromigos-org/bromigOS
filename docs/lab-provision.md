@@ -602,16 +602,51 @@ as it is. An app that doesn't answer yet gets a note, and is connected at the ne
 
 **Backups.** On a bromigOS Server the Server's own nightly backup covers the apps
 ([server.md](server.md#backups)). Anywhere else, the Backups item (`step_backups`) writes
-`bromigos-lab-backup.service`, which runs `restic backup --one-file-system` over `/etc`,
-`/srv`, `/srv/apps`, `/var/lib/bromigos` and `/var/lib/vaultwarden`, each one that is there
-(restic 0.19 fails a run that names a path that isn't). `--one-file-system`
-keeps it off other disks: `/srv/data` isn't read a second time, and `/srv/backups`, where
-its own repository is by default, isn't backed up into itself. So `/srv/apps`, a disk of
-its own on a server with data disks, is named by itself. Before restic, `bromigos lab
-backups copy-databases` copies the apps' databases whole; after it, `bromigos lab backups
-holds` fails the unit when the backup lacks `/srv/apps` or a copy failed. The engine writes
-a hook for each app with a database file (`DATABASES`: passwords and documents) to
-`/etc/bromigos/backup-databases.d/<item>.toml`.
+`bromigos-lab-backup.service`, which runs one command, `bromigos lab backups job`, over
+`/etc`, `/srv`, `/srv/apps`, `/var/lib/bromigos` and `/var/lib/vaultwarden`. The job
+(`bromigos_homelab/labbackup.py`) needs nothing but `bromigos-lab`:
+
+1. It makes the apps' databases safe, as their hooks say.
+2. It runs `restic backup --one-file-system` over the paths that are there. That flag keeps
+   restic off other disks: `/srv/data` isn't read a second time, and `/srv/backups`, where
+   its own repository is by default, isn't backed up into itself. So `/srv/apps`, a disk of
+   its own on a server with data disks, is named by itself.
+3. It looks in the new backup for `/srv/apps` and each app's folder in it. One that is
+   missing fails the job, before anything older is let go.
+4. It applies the keep rules (7 daily, 4 weekly, 6 monthly).
+
+How each run went is `/var/lib/bromigos/lab/backup.json`, in the shape of the Server's
+`backup.json` (`run`, `run_ok`). `bromigos alerts` reads it and judges it as it judges the
+Server's backup, in the same words: a failed run, none for 36 hours, an app's folder left
+out, a database that wasn't copied whole ([alerts.md](alerts.md)). Its commands are the
+unit's: `journalctl -u bromigos-lab-backup.service -n 50 --no-pager` and `sudo systemctl
+start bromigos-lab-backup.service`. `bromigos alerts` is `bromigos-core`'s: a machine with
+`bromigos-lab` alone has the record and the failed unit, and no alert: that is left out on
+purpose for now. `systemctl status bromigos-lab-backup.service` shows it, and the record says
+why in plain words.
+
+**Database hooks.** Every item that keeps a database has an entry in `DATABASES`
+(`localprovision.py`), and the engine writes its hook,
+`/etc/bromigos/backup-databases.d/<item>.toml`: when the item is installed, and for every
+installed item at each apply, so a server set up before a hook was known gets it then. An
+item that leaves (`bromigos lab apps remove`) takes its hook with it. `sqlite` lists the
+item's SQLite files, with a `*` for a folder of them, and `units` its services: a hook that
+finds nothing while they run is said in `bromigos lab backups`. `own` names the backups an app makes
+itself, where its database can't be copied as a file (Immich's PostgreSQL, Plex).
+[server.md](server.md#backups) has the table. A test holds `DATABASES` to the catalogue:
+every item with a `database` row in its `[[item.data]]` has an entry, inside a folder the
+item mounts.
+
+**A recipe's revision.** An item's `version` in the catalogue is 1 unless it says
+otherwise. It is part of the item's fingerprint when it isn't 1, so raising it has the
+engine set the item up again at the next apply on a server that has it. That is how a
+change to what the engine writes for an item (a unit, a settings file) reaches servers set
+up before it. Backups, Passwords, Autoscan, Navidrome and slskd are at 2.
+
+**A container with an account of its own.** A unit with `User=` (Navidrome and slskd run
+as the `bromigos-media` account) writes its data as that account, so the engine makes the
+unit's folders under `/srv/apps` that account's. The linuxserver images start as root and
+change account themselves; their folders are left as they are.
 
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
 installer mounted it there, `bromigos lab app-data move` puts it on the data disks, and

@@ -371,8 +371,11 @@ class AddAndRemove(Base):
         self.assertEqual(self.add(["uptime"]), 0)
         note = Path(self.root, "srv/apps/uptime/data/kuma.db")
         note.write_bytes(b"monitors" * 1000)
+        hook = Path(self.root, "etc/bromigos/backup-databases.d/uptime.toml")
+        self.assertIn('sqlite = ["/srv/apps/uptime/data/kuma.db"]', hook.read_text(), "its database is copied whole before each backup")
         code = self.remove("uptime")
         self.assertEqual(code, 0, "\n".join(self.lines))
+        self.assertFalse(hook.exists(), "no backup looks for the database of an app that left")
         self.assertFalse(Path(self.root, L.QUADLET_DIR, "uptime-kuma.container").exists())
         self.assertTrue(Path(self.root, L.QUADLET_DIR, "bromigos-lab.network").exists(), "the network is every app's")
         self.assertNotIn("uptime-kuma.service", self.fm.active)
@@ -386,6 +389,7 @@ class AddAndRemove(Base):
         self.assertTrue(any(ln.startswith("::note data Its data stays in /srv/apps/uptime (") and
                             ln.endswith("Adding Uptime again picks it up.") for ln in self.lines), self.lines)
         self.assertEqual(self.add(["uptime"]), 0)
+        self.assertTrue(hook.exists())
         self.assertEqual(note.read_bytes(), b"monitors" * 1000)
         self.assertIn("uptime-kuma.service", self.fm.active)
 

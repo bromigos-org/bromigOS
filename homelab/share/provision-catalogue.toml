@@ -59,15 +59,17 @@
 #                                  what you follow
 #                        config    its settings and working files (a queue, its own backups)
 #                        cache     safe to lose: downloaded or made again when missing
+#   version            the recipe's own revision, 1 when left out. Raised when what the engine writes
+#                      for the item changed (a unit, a settings file): the engine sets the item up
+#                      again at the next apply on a server that has it (localprovision.fingerprint)
 #   [item.setup]       a small form the UIs render: title, intro, check (the --check name),
 #                      [[item.setup.field]] {id, label, kind = text|number|bool|choice|secret|path,
 #                      default, help, choices = [{id, label, note, url}], show_if = {field = [values]},
 #                      secret_for = [choice ids that need it]}, [[item.setup.action]] {label, url}
 #
 # Read by the reader and filled by no item yet (the app manager's later steps fill them:
-# docs/lab-provision.md, "The catalogue"): homepage, licence, remove_note, version (the
-# recipe's own revision, 1 when left out), app_version, changed, track, status and status_note,
-# download_mb, [item.update] and [item.tile]. A key that isn't in this header is a mistake:
+# docs/lab-provision.md, "The catalogue"): homepage, licence, remove_note, app_version, changed,
+# track, status and status_note, download_mb, [item.update] and [item.tile]. A key that isn't in this header is a mistake:
 # `validate()` names it.
 #
 # Images are pinned by digest. Nothing moves the digests yet: no CI job does, and no template
@@ -251,6 +253,8 @@ secrets = ["grafana-admin"]
 
 [[item]]
 id = "backups"
+# 2: the lab's own backup is one job with a record (labbackup.py), and names /srv/apps. A server that has it gets this at its next apply
+version = 2
 group = "lab-core"
 name = "Backups"
 job = "Backups"
@@ -773,6 +777,8 @@ what = "The models for faces and search, downloaded again when missing."
 
 [[item]]
 id = "passwords"
+# 2: the vault's address and web vault come from a file, and its database has a backup hook. A server that has it gets this at its next apply
+version = 2
 group = "home"
 name = "Passwords (Vaultwarden)"
 job = "Passwords"
@@ -1049,6 +1055,8 @@ what = "Plex's settings, watch history, artwork and what it knows about the libr
 
 [[item]]
 id = "navidrome"
+# 2: its data folder belongs to the account its container runs as. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "Navidrome (music)"
 job = "Music"
@@ -1111,6 +1119,8 @@ what = "Covers, its own backups, its logs and its working files."
 
 [[item]]
 id = "seerr"
+# 2: its data folder belongs to the account its image runs as. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "Requests (Seerr)"
 job = "Requests"
@@ -1337,6 +1347,8 @@ images = { unpackerr = "docker.io/golift/unpackerr:0.15.2@sha256:057e34740d26c34
 
 [[item]]
 id = "autoscan"
+# 2: its config.yml is written before it starts. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "Autoscan"
 job = "Library rescans"
@@ -1526,6 +1538,8 @@ what = "Its settings and the torrents it is working on."
 
 [[item]]
 id = "slskd"
+# 2: its data folder belongs to the account its container runs as. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "slskd (Soulseek)"
 job = "Soulseek"

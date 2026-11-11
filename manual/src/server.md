@@ -77,9 +77,10 @@ one, show its key and keep it somewhere safe, away from the server: without it n
 read the backup.
 
 Your apps' data is always in it, on whichever disk it is kept. The server looks for it in
-each backup, and a backup without it counts as failed. Before each backup the server also
-makes a clean copy of the passwords vault's database and of the documents app's, so they
-open when you restore them even though the apps were running.
+each backup, app by app, and a backup without one counts as failed. Before each backup the
+server also makes a clean copy of every app's database, so it opens when you restore it
+even though the app was running. An app you add after a backup isn't a problem: the status
+says it's "not in a backup yet", and when the next one runs.
 
 ```bash
 sudo bromigos server backup key

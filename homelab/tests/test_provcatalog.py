@@ -27,6 +27,15 @@ def tearDownModule():
     _SHARE.stop()
 
 
+# The recipes revised since the first one, and what changed: the engine sets each up again at the
+# next apply on a server that has it (localprovision.fingerprint). Raising one means saying why here
+REVISED = {"backups": 2,        # the lab's own backup is one job with a record
+           "passwords": 2,      # the vault's settings come from a file; its database has a hook
+           "autoscan": 2,       # its config.yml is written before it starts
+           "navidrome": 2,      # its data folder is its own account's
+           "slskd": 2,          # the same
+           "seerr": 2}          # the same: its image runs as node (1000), named in its unit
+
 class CatalogueTests(unittest.TestCase):
     def test_loads_and_validates(self):
         self.assertEqual(PC.validate(), [])
@@ -148,7 +157,8 @@ class FormatTwoTests(unittest.TestCase):
         for it in PC.load():
             self.assertTrue(it["job"], it["id"])
             self.assertIn(it["holo"], PC.HOLO, it["id"])
-            self.assertEqual(it["version"], 1, it["id"])
+            # the recipe's revision: 1, or raised where what the engine writes for the item changed
+            self.assertEqual(it["version"], REVISED.get(it["id"], 1), it["id"])
             # the name the installer shows is still there, and still says both
             self.assertTrue(it["name"], it["id"])
         cat = PC.by_id()
