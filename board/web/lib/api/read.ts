@@ -265,7 +265,7 @@ export function readBoard(doc: unknown): Board {
   const parts: Record<Part, unknown> = {
     apps: tiles(d.apps), drives: storage(d.storage), backups: backups(d.backups), updates: updates(d.updates),
     // what needs you comes from the alerts, the jobs from the activity list: unread when its command didn't answer
-    alerts: obj(d.alerts) ? true : null, jobs: obj(d.activity) ? true : null,
+    alerts: obj(d.alerts) ? true : null, jobs: Array.isArray(obj(d.activity)?.jobs) ? jobs(obj(d.activity)!.jobs) : null,
   };
   const SOURCE: Record<Part, string> = { apps: "apps", drives: "storage", backups: "backups", updates: "system", alerts: "alerts", jobs: "activity" };
   const unread = (Object.keys(parts) as Part[]).filter((p) => parts[p] === null);
@@ -283,6 +283,7 @@ export function readBoard(doc: unknown): Board {
     machines,
     needs_you: each(d.needs_you, need),
     fixed: each(d.fixed, fixedRow),
+    jobs: parts.jobs as JobRecord[] | null,
     apps: parts.apps as Tile[] | null,
     storage: parts.drives as DriveHealth | null,
     backups: parts.backups as BackupsStatus | null,
@@ -340,6 +341,10 @@ export function readJob(v: unknown): JobRecord | null {
     result: result ? { ok: bool(result.ok), summary: str(result.summary) } : null,
     error: error && str(error.words) ? { step: strOrNull(error.step), words: str(error.words), fix: strOrNull(obj(error.fix)?.label) } : null,
     parent: strOrNull(o.parent), children: strs(o.children),
+    notes: each(o.notes, (n) => (str(n.words) ? { words: str(n.words), at: num(n.at) } : null)),
+    can: strs(o.can),
+    cancel_note: strOrNull(o.cancel_note),
+    command: strs(o.command), unit: strOrNull(o.unit), log: strOrNull(o.log),
   };
 }
 
