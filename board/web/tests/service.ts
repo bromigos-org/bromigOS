@@ -4,6 +4,7 @@
 // page under test is the real client (no ?fixture=), so what these tests see is what a server sees.
 import { readFileSync } from "node:fs";
 import { expect, type Page, type Route } from "@playwright/test";
+import { NO_WEBGL } from "./webgl";
 
 type Json = Record<string, any>;
 export const real: { now: number; http: Record<string, { status: number; headers: Record<string, string>; body: any }>; boards: Record<string, Json>; doors: Record<string, Json> } =
@@ -138,8 +139,8 @@ export async function openReal(page: Page, service: Service, hash = "", opts: { 
   page.on("console", (m) => {
     if (m.type() !== "error") return;
     const text = m.text();
-    // a failed request is the test's own doing (a 4xx, 5xx or refused answer); a font may be missing in CI
-    if (/Failed to load resource|net::ERR_/.test(text) || /fonts\/GeistMono/.test(m.location().url) || opts.quiet?.test(text)) return;
+    // a failed request is the test's own doing (a 4xx, 5xx or refused answer); a font may be missing in CI; with WebGL off (tests/webgl.ts) three.js says so
+    if (/Failed to load resource|net::ERR_/.test(text) || /fonts\/GeistMono/.test(m.location().url) || NO_WEBGL.test(text) || opts.quiet?.test(text)) return;
     errors.push(`console: ${text}`);
   });
   await page.addInitScript(() => {
@@ -158,6 +159,15 @@ export async function whole(page: Page, watch: Watch, where: string) {
   await expect(page.locator("#view > *").first(), `${where}: the page`).toBeVisible();
   expect(await page.locator(".broken").count(), `${where}: a part couldn't be shown`).toBe(0);
   expect(watch.errors, where).toEqual([]);
+}
+
+/**
+ * On Home and on a machine's Overview: Lamplight's module is mounted, not only its frame, so what
+ * it draws from the document in hand is part of the run.
+ */
+export async function station(page: Page, where: string) {
+  if (await page.locator(".lamp").count()) await expect(page.locator(".lamp.on .lp .stage"), `${where}: Home's station`).toBeVisible({ timeout: 30_000 });
+  if (await page.locator(".mc-hero").count()) await expect(page.locator(".mc-hero.on .lp .mhero"), `${where}: the machine's hero`).toBeVisible({ timeout: 30_000 });
 }
 
 /** Go to another place of the page without loading it again. */

@@ -1,0 +1,143 @@
+{
+ "name": "wick-cut",
+ "title": "A RELAY STATION OF THE WICK'S CLASS",
+ "height": 0.9139,
+ "radius": 0.5012,
+ "parts": [
+  {
+   "id": "decks",
+   "label": "DECKS",
+   "hint": "The station's three decks, each with its tray pulled out of the cut: the hold, the rack room and comms",
+   "explode": [
+    0.0,
+    0.0,
+    0.06
+   ],
+   "anchor": [
+    -0.0997,
+    0.201,
+    0.1159
+   ]
+  },
+  {
+   "id": "mast",
+   "label": "MAST",
+   "hint": "The mast: the network",
+   "explode": [
+    0.0,
+    0.32,
+    0.0
+   ],
+   "anchor": [
+    0.0042,
+    0.7969,
+    -0.0436
+   ]
+  },
+  {
+   "id": "dish",
+   "label": "DISH",
+   "hint": "The dish: the lab's AI and its models",
+   "explode": [
+    0.2641,
+    0.1321,
+    0.0528
+   ],
+   "anchor": [
+    0.2405,
+    0.5412,
+    -0.0372
+   ]
+  },
+  {
+   "id": "whips",
+   "label": "WHIPS",
+   "hint": "The whips: the game servers",
+   "explode": [
+    -0.1338,
+    0.2229,
+    0.0
+   ],
+   "anchor": [
+    -0.0528,
+    0.5439,
+    -0.0096
+   ]
+  },
+  {
+   "id": "solar_l",
+   "label": "ARRAYS",
+   "hint": "The arrays, this wing: the lab's machines as nodes",
+   "explode": [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   "anchor": [
+    -0.4184,
+    0.3078,
+    -0.0104
+   ]
+  },
+  {
+   "id": "solar_r",
+   "label": "ARRAYS",
+   "hint": "The arrays, that wing: the lab's machines as nodes",
+   "explode": [
+    0.3,
+    0.0,
+    0.0
+   ],
+   "anchor": [
+    0.4395,
+    0.3112,
+    0.0007
+   ]
+  },
+  {
+   "id": "rackroom",
+   "label": "RACK ROOM",
+   "hint": "The rack room: services",
+   "explode": [
+    0.0,
+    0.0326,
+    0.2176
+   ],
+   "anchor": [
+    0.1658,
+    0.3227,
+    -0.0234
+   ]
+  },
+  {
+   "id": "dock",
+   "label": "DOCK",
+   "hint": "The docking ring: media, and where a machine joins",
+   "explode": [
+    0.0,
+    -0.24,
+    0.0
+   ],
+   "anchor": [
+    -0.0292,
+    0.0266,
+    -0.0614
+   ]
+  },
+  {
+   "id": "hull",
+   "label": "HULL",
+   "hint": "The hull, cut open: storage",
+   "explode": [
+    0.0,
+    -0.0287,
+    0.0958
+   ],
+   "anchor": [
+    0.025,
+    0.1954,
+    0.0016
+   ]
+  }
+ ]
+}

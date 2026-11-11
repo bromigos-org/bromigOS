@@ -7,6 +7,9 @@ has two parts:
 - **Den TV's bumps** (`bumps/static/`): short clips that play between shows and on a channel
   change, mostly late at night.
 
+A third part isn't in the package: **the station's crew** (`crew/`), five cut-outs that the
+Lab board's page shows on its station ([docs/board.md](../docs/board.md)).
+
 It's art only. The code that shows it is in `lib/bromigos_static_art.py` (the guide) and
 `lib/bromigos_bumps.py` with `live/live/tvbumps.py` (the bumps). Without this package, the
 guide draws STATIC's code-drawn placeholder, and the den plays no bumps.
@@ -51,6 +54,26 @@ your own pack.
 | `takeover` | between | | A dormant repair robot wakes up as LINEMAN. |
 | `crew` | between | | The crew on the ship: OWL at the viewport, LINEMAN at a junction box, NOIR on the bridge. |
 | `sign-off` | close | SIGNING OFF | NOIR powers down for the night. It's the night block's sign-off. |
+
+## The station's crew
+
+`crew/` holds five cut-outs: one figure each, on a clear background, 300 pixels high.
+The Lab board's station (Lamplight) stands them where a real event needs them. The
+board's build copies them into its page (`board/web/scripts/art.mjs`), so they ship in
+`bromigos-board-web`, not in this package.
+
+| File | The shell | Where the station shows it |
+|---|---|---|
+| `owl.webp` | OWL on comms duty, listening | On the mast, while all is well |
+| `owl-scan.webp` | OWL crouched, looking down | On the mast, while something needs you |
+| `lineman.webp` | LINEMAN in his harness, welding | At the machine that needs you |
+| `lineman-stand.webp` | LINEMAN kneeling at an open panel | In quarters, off duty |
+| `noir.webp` | NOIR in his pod, seen from behind | In quarters, and in the booth when a show is on |
+
+Each was painted from its shell's locked board with Qwen-Image-Edit-2511, cut out with
+Lucida (MIT) and resized. `provenance.jsonl` has three lines for each, under its
+`crew/<name>.webp`: the painting, the cut-out and the resize. SPARK, HERMIT and EXO have
+no cut-out here, because their boards aren't locked: the station names them in words.
 
 ## How it was made
 

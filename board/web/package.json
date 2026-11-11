@@ -9,10 +9,11 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build && node scripts/postbuild.mjs",
+    "dev": "node scripts/art.mjs && next dev",
+    "art": "node scripts/art.mjs",
+    "build": "node scripts/art.mjs && next build && node scripts/postbuild.mjs",
     "fixtures": "node scripts/make-fixtures.mjs",
-    "build:fixtures": "node scripts/make-fixtures.mjs && BOARD_FIXTURES=1 next build && BOARD_FIXTURES=1 node scripts/postbuild.mjs",
+    "build:fixtures": "node scripts/art.mjs && node scripts/make-fixtures.mjs && BOARD_FIXTURES=1 next build && BOARD_FIXTURES=1 node scripts/postbuild.mjs",
     "typecheck": "tsc --noEmit",
     "test": "playwright test"
   },

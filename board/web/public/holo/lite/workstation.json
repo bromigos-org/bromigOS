@@ -1,0 +1,128 @@
+{
+ "name": "workstation",
+ "title": "WORKSTATION",
+ "height": 0.9269,
+ "radius": 0.5305,
+ "parts": [
+  {
+   "id": "cpu",
+   "label": "CPU",
+   "hint": "Processor and its tower cooler: load across all cores, package temperature",
+   "explode": [
+    0.0,
+    0.1057,
+    0.302
+   ],
+   "anchor": [
+    -0.2417,
+    0.7844,
+    0.1456
+   ]
+  },
+  {
+   "id": "ram",
+   "label": "MEMORY",
+   "hint": "System memory: used of total, swap",
+   "explode": [
+    0.0847,
+    0.1694,
+    0.2824
+   ],
+   "anchor": [
+    0.0535,
+    0.7784,
+    0.142
+   ]
+  },
+  {
+   "id": "gpu",
+   "label": "GPU",
+   "hint": "Graphics card: utilisation, VRAM, temperature, power draw",
+   "explode": [
+    -0.0824,
+    0.0,
+    0.4118
+   ],
+   "anchor": [
+    -0.2766,
+    0.3725,
+    0.1276
+   ]
+  },
+  {
+   "id": "drives",
+   "label": "DRIVES",
+   "hint": "Storage: the fullest filesystems and read/write rate",
+   "explode": [
+    0.1659,
+    0.1327,
+    0.2654
+   ],
+   "anchor": [
+    0.3406,
+    0.7766,
+    0.1426
+   ]
+  },
+  {
+   "id": "exhaust",
+   "label": "EXHAUST",
+   "hint": "Case and CPU fans from the motherboard sensors",
+   "explode": [
+    -0.2873,
+    0.0862,
+    0.0
+   ],
+   "anchor": [
+    -0.4403,
+    0.7952,
+    -0.0583
+   ]
+  },
+  {
+   "id": "intake",
+   "label": "INTAKE",
+   "hint": "Front panel: network traffic in and out of this machine",
+   "explode": [
+    0.3334,
+    0.0,
+    0.0667
+   ],
+   "anchor": [
+    0.4469,
+    0.6241,
+    0.0851
+   ]
+  },
+  {
+   "id": "psu",
+   "label": "PSU",
+   "hint": "Power: GPU board power and system uptime",
+   "explode": [
+    0.0,
+    -0.1543,
+    0.2572
+   ],
+   "anchor": [
+    0.1555,
+    0.1342,
+    0.1055
+   ]
+  },
+  {
+   "id": "chassis",
+   "label": "CHASSIS",
+   "hint": "The case: host, kernel and load average",
+   "explode": [
+    0.0,
+    0.0,
+    -0.12
+   ],
+   "anchor": [
+    -0.1012,
+    0.6771,
+    -0.1041
+   ]
+  }
+ ]
+}

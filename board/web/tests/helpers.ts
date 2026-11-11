@@ -1,6 +1,7 @@
 // What every test shares: opening the page on a fixture, catching page errors and Content
 // Security Policy violations, and the list of routes (IA.md §2) with what each must show.
 import { expect, type Page } from "@playwright/test";
+import { NO_WEBGL } from "./webgl";
 
 declare global {
   interface Window {
@@ -44,8 +45,8 @@ export async function open(page: Page, fixture: string, hash = "") {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
-    // a missing font file is the only error allowed: CI may have no Geist Mono
-    if (m.type() === "error" && !/fonts\/GeistMono/.test(m.location().url)) errors.push(`console: ${m.text()}`);
+    // allowed: a missing font file (CI may have no Geist Mono), and three.js saying WebGL is off (tests/webgl.ts)
+    if (m.type() === "error" && !/fonts\/GeistMono/.test(m.location().url) && !NO_WEBGL.test(m.text())) errors.push(`console: ${m.text()}`);
   });
   await page.addInitScript(() => {
     window.__csp = [];
@@ -58,6 +59,15 @@ export async function open(page: Page, fixture: string, hash = "") {
     csp: () => page.evaluate(() => window.__csp),
   };
 }
+
+/**
+ * A page's one status line. Home's is the station's own line (Lamplight is handed the page's
+ * headline), or the hero's frame until the station has loaded; a machine's is under its hero;
+ * elsewhere it is the stage's.
+ */
+export const VERDICT = ".stage .verdict, .mgroups .verdict, .lamp.on .head .line";
+/** Home: when the server read itself, and how long ago (the station's, or the frame's chip). */
+export const READ_AT = ".lamp.on .head .readat, .stage.lamp-wait .chip";
 
 /** The controls a person can press or type in, that are on screen now. */
 export const CONTROLS = 'a[href], button, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])';

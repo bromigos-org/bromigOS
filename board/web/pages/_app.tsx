@@ -12,6 +12,7 @@ import "@/styles/data.css";
 import "@/styles/people.css";
 import "@/styles/supply.css";
 import "@/styles/app.css";
+import "@/lib/lamplight/lamplight.css";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (

@@ -4,7 +4,7 @@
 // update documents as their commands print them. What isn't read yet says so, or is planned.
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Boundary } from "@/components/Boundary";
-import { Hologram } from "@/components/Hologram";
+import { MachineStation } from "@/components/Lamplight";
 import { NoBoard } from "@/components/NoBoard";
 import { Trend } from "@/components/Trend";
 import { Icon, IconLink, Planned, State } from "@/components/ui";
@@ -54,34 +54,20 @@ export const tileShape = (t: Tile): Shape | "busy" =>
 
 // ---------------------------------------------------------------- Overview: the hero
 
-/** The catalogue's eight groups (provision-catalogue.toml), as the rack's modules, left then right. */
-const GROUPS: { id: string; name: string; glyph: string; side: "l" | "r"; row: 1 | 2 | 3 | 4; go?: string }[] = [
-  { id: "lab-core", name: "LAB CORE", glyph: "g-rack", side: "l", row: 1 },
-  { id: "network", name: "NETWORK", glyph: "g-cloud", side: "l", row: 2, go: "#network" },
-  { id: "games", name: "GAMES", glyph: "g-gamepad", side: "l", row: 3, go: "#den/play" },
-  { id: "media", name: "MEDIA", glyph: "g-monitor", side: "l", row: 4, go: "#den" },
-  { id: "ai", name: "AI", glyph: "g-gpu", side: "r", row: 1 },
-  { id: "storage", name: "STORAGE", glyph: "g-drive", side: "r", row: 2, go: "#data" },
-  { id: "home", name: "HOME APPS", glyph: "g-house", side: "r", row: 3 },
-  { id: "brodec", name: "BRODEC", glyph: "g-phone", side: "r", row: 4 },
+// The hero is Lamplight's (components/Lamplight.tsx): the machine on its deck tray, pulled out of
+// the station. Under it, this page's own status line and a module for each group of apps.
+
+/** The catalogue's eight groups (provision-catalogue.toml), as the machine's modules under its hero. */
+const GROUPS: { id: string; name: string; glyph: string; go?: string }[] = [
+  { id: "lab-core", name: "LAB CORE", glyph: "g-rack" },
+  { id: "network", name: "NETWORK", glyph: "g-cloud", go: "#network" },
+  { id: "games", name: "GAMES", glyph: "g-gamepad", go: "#den/play" },
+  { id: "media", name: "MEDIA", glyph: "g-monitor", go: "#den" },
+  { id: "ai", name: "AI", glyph: "g-gpu" },
+  { id: "storage", name: "STORAGE", glyph: "g-drive", go: "#data" },
+  { id: "home", name: "HOME APPS", glyph: "g-house" },
+  { id: "brodec", name: "BRODEC", glyph: "g-phone" },
 ];
-const ROW_Y = { 1: [116, 187], 2: [196, 219], 3: [275, 251], 4: [355, 283] } as const;
-
-function Beam({ side, row, on }: { side: "l" | "r"; row: 1 | 2 | 3 | 4; on: boolean }) {
-  const [my, ry] = ROW_Y[row];
-  const d = side === "l" ? `M526 ${ry}L291 ${my}` : `M654 ${ry}L889 ${my}`;
-  if (!on) return <path className="ln off" d={d} />;
-  return (
-    <>
-      <path className="ln-glow" d={d} />
-      <path className="ln" d={d} />
-      {[0, 1, 2].map((k) => (
-        <circle key={k} className="ln-dot" r="3" style={{ offsetPath: `path('${d}')`, animationDelay: `${-(row * 0.3 + k * 1.13).toFixed(2)}s` } as CSSProperties} />
-      ))}
-    </>
-  );
-}
-
 function Hero({ b, m, apps, now }: { b: Board; m: M; apps: Tile[] | null; now: number }) {
   const { stale: old, settling } = useLab();
   const v = headline(b, { stale: old, settling, now, machine: m });
@@ -93,18 +79,16 @@ function Hero({ b, m, apps, now }: { b: Board; m: M; apps: Tile[] | null; now: n
   });
   const lit = mods.filter((x) => x.n).length;
   return (
-    <div className="stage board" role="group" aria-label={`${m.name} as its hologram, with a module for each group of apps`}>
-      <div className="tilt">
-        <svg className="h-art beams" viewBox="0 0 1180 430" aria-hidden="true">
-          {mods.map((x) => (
-            <Beam key={x.id} side={x.side} row={x.row} on={!!x.n} />
-          ))}
-        </svg>
-        <div className="st-rack">
-          <svg className="st-em" viewBox="0 0 179 300" aria-hidden="true">
-            <path className="cone" d="M34 268H145L176 6H3z" />
-          </svg>
-          <Hologram kind={m.kind} state={v.look === "warn" ? "warn" : v.look === "q" ? "unknown" : "ok"} label={`${m.name}'s hologram`} />
+    <MachineStation board={b} machine={m}>
+      <div className="mgroups">
+        <div className="st-top">
+          <span className="over" title={`${lit} of the catalogue's eight groups have apps on ${m.name}`}>
+            {apps ? `${lit} OF 8 GROUPS LIT` : "APPS NOT READ"}
+          </span>
+          <p className={`verdict${v.look ? ` ${v.look}` : ""}`} role="status" title={v.hint}>
+            {v.words}
+          </p>
+          <Fresh at={b.at} now={now} />
         </div>
         <div className="mods">
           {mods.map((x) => {
@@ -125,7 +109,7 @@ function Hero({ b, m, apps, now }: { b: Board; m: M; apps: Tile[] | null; now: n
               : x.n
               ? `${x.name[0] + x.name.slice(1).toLowerCase()}: ${x.names.join(", ")}. ${x.up === x.n ? "All running." : `${x.up} of ${x.n} running.`}${x.go ? " Press to open it." : ""}`
               : `${x.name[0] + x.name.slice(1).toLowerCase()}: nothing installed. Its module stays dim: an empty slot, not a lit prop.`;
-            const cls = `mod ${x.side} y${x.row}${x.n ? " on" : ""}`;
+            const cls = `mod${x.n ? " on" : ""}`;
             return x.go && x.n ? (
               <a key={x.id} className={cls} href={x.go} title={hint}>
                 {body}
@@ -138,18 +122,7 @@ function Hero({ b, m, apps, now }: { b: Board; m: M; apps: Tile[] | null; now: n
           })}
         </div>
       </div>
-      <div className="st-top">
-        <span className="over" title={`${lit} of the catalogue's eight groups have apps on ${m.name}`}>
-          {apps ? `${lit} OF 8 GROUPS LIT` : "APPS NOT READ"}
-        </span>
-        <p className={`verdict${v.look ? ` ${v.look}` : ""}`} role="status" title={v.hint}>
-          {v.words}
-        </p>
-        <Fresh at={b.at} now={now} />
-      </div>
-      <span className="h-scan" aria-hidden="true" />
-      <span className="h-edge" aria-hidden="true" />
-    </div>
+    </MachineStation>
   );
 }
 
