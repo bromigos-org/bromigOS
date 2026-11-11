@@ -120,6 +120,18 @@ test.describe("against the service's real answers", () => {
     await expect(page.locator("#view")).not.toContainText("Nothing is running");
   });
 
+  test("the board's list of jobs as anything but a list: the stream's jobs stand, and nothing blanks", async ({ page }) => {
+    const s = new Service();
+    s.activity = live("activity_needs_you");
+    const w = await openReal(page, s, "activity");
+    for (const value of [null, {}, [], "x", 7, true, { jobs: "x" }, { jobs: [null, 7, "x", {}, { id: 3 }, []] }, { schema: 1, ok: false, error: "it could not be read" }]) {
+      s.board = { ...copy(real.boards.needs_you), activity: value };
+      await page.reload();
+      await expect(page.locator(".ac-group .job")).toHaveCount(3);
+      await whole(page, w, `activity = ${JSON.stringify(value)}`);
+    }
+  });
+
   for (const name of ["healthy", "needs_you", "running", "setup"])
     test(`the real stream "${name}" on the page`, async ({ page }) => {
       const s = new Service();
