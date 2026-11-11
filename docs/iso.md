@@ -943,6 +943,14 @@ the desktop medium, so no later run moves it to a version with Field Kit alone, 
 retention never removes the version it names. The run is still marked failed; re-running its failed jobs (`gh run rerun RUN --failed`)
 builds the missing ISO and runs `finish` again, which lists both.
 
+**On every push to main** that changes `iso/`, `server/`, `board/`, `homelab/` or this
+workflow, it does the same as for a pull request (below), from that commit, measured against
+main before the push, and publishes nothing. Those folders are what the media's VM checks
+test, so a merge that breaks one is seen the day it lands. Before this, main ran the ISO only
+for a release, and a check that #140 broke went unseen until #142 touched `iso/`. A change to
+the docs alone doesn't start it. When pushes come in a row, the newest one's run goes on and
+the older ones stop.
+
 **On a pull request** that changes `iso/` or this workflow, it builds, checks and tests the
 same way and publishes nothing. Its medium has the **edge** channel's packages (main's, which
 the pull request goes into), and before the build `iso/ci-local-packages.sh` builds, from the

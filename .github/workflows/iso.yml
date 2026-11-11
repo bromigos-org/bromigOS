@@ -6,7 +6,11 @@
 # - by hand: any stable release again (a backfill), from its tag or another ref, or a
 #   build of any branch that publishes nothing (publish: false);
 # - on pull requests that change this pipeline or a medium (iso/): the build, its checks and
-#   tests, nothing published. A pull request's medium has the edge channel's packages (main's),
+#   tests, nothing published;
+# - on every push to main that changes this pipeline, a medium, or what the media's VM checks
+#   test (server/, board/, homelab/): the same, nothing published. A merge that breaks a VM
+#   check is seen the day it lands, not at the next pull request that touches iso/ (#140 broke
+#   the web ports' check, and nothing ran it on main until #142). Pushes in a row: the newest. A pull request's medium has the edge channel's packages (main's),
 #   with the ones this ref adds or changes built from it (iso/ci-local-packages.sh), so a new
 #   package never breaks the build; so does a build by hand that publishes nothing.
 # Every profile under iso/ (a directory with profiledef.sh: the desktop medium, the Field
@@ -24,6 +28,10 @@ on:
     - cron: "23 10 * * 1"          # Mondays, 03:23 Pacific: the edge ISO
   pull_request:
     paths: [".github/workflows/iso.yml", "iso/**", "secureboot/**", "packaging/bromigos-secureboot/**"]
+  push:
+    branches: [main]
+    paths: [".github/workflows/iso.yml", "iso/**", "secureboot/**", "packaging/bromigos-secureboot/**",
+            "server/**", "board/**", "homelab/**"]
   workflow_dispatch:
     inputs:
       channel:
@@ -53,8 +61,8 @@ on:
         default: false
 
 concurrency:
-  group: iso-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || inputs.channel || (github.event_name == 'schedule' && 'edge') || 'stable' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: iso-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || (github.event_name == 'push' && 'main') || inputs.channel || (github.event_name == 'schedule' && 'edge') || 'stable' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 permissions:
   contents: read
@@ -101,6 +109,7 @@ jobs:
             workflow_run) channel=stable tag=$RUN_TAG ref=$RUN_TAG publish=true ;;
             schedule) channel=edge tag='' ref=main publish=true ;;
             pull_request) channel=edge tag='' ref=$PR_SHA publish=false ;;
+            push) channel=edge tag='' ref=$GITHUB_SHA publish=false ;;       # main, after a merge
             workflow_dispatch)
               channel=$IN_CHANNEL publish=$IN_PUBLISH tests=$IN_TESTS import=$IN_IMPORT tag=''
               if [[ $channel == stable ]]; then
@@ -109,11 +118,13 @@ jobs:
               fi
               ref=${IN_REF:-${tag:-main}} ;;
           esac
-          if [[ $channel == stable && $EVENT != pull_request ]]; then
+          if [[ $channel == stable && $EVENT != pull_request && $EVENT != push ]]; then
             [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$tag isn't a stable release's tag"; exit 1; }
             version=${tag#v}
           elif [[ $EVENT == pull_request ]]; then
             version=pr$PR
+          elif [[ $EVENT == push ]]; then
+            version=main.${GITHUB_SHA::7}
           else
             version=$(date -u +%Y.%m.%d)
           fi
@@ -228,7 +239,8 @@ jobs:
         if: needs.plan.outputs.publish != 'true'
         shell: bash
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          # what this ref is measured against: the pull request's base, or main before this push
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -euo pipefail
           [[ -x src/iso/ci-local-packages.sh ]] || { echo "this ref builds none of its own"; exit 0; }
