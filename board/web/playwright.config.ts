@@ -9,7 +9,7 @@ export default defineConfig({
   globalSetup: "./tests/renderer.ts",
   fullyParallel: true,
   timeout: 60_000,
-  // the hologram draws on a software renderer in headless Chromium: a few workers at a time
+  // the specs that draw holograms (tests/webgl.ts) draw them on a software renderer in CI: a few workers at a time
   workers: process.env.CI ? 2 : 6,
   forbidOnly: !!process.env.CI,
   retries: 0,
