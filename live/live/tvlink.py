@@ -206,13 +206,15 @@ def correct(expected, actual, rate=1.0):
 
 
 def redact(text):
-    """A log line from mpv about a linked stream, with any address taken out."""
+    """A log line from mpv about a stream, with any address and key taken out."""
     words = []
     for w in str(text).split():
-        if w.lower().startswith(("authorization", "bearer")):
+        low = w.lower()
+        if low.startswith(("authorization", "bearer", "x-emby-token", "x-plex-token", "x-mediabrowser-token",
+                           "x-emby-authorization")):
             words.append("<redacted>")                          # a header: the rest of the line is its value
             break
-        words.append("<stream>" if "://" in w or "token=" in w else w)
+        words.append("<stream>" if "://" in w or "token=" in low or "api_key=" in low else w)
     return " ".join(words)
 
 

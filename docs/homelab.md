@@ -521,7 +521,10 @@ auth_ref = "@file:~/.local/share/bromigos/plex-token"
   (its offset). Jellyfin's starts where mpv seeks: Jellyfin 10.11 fails every segment of a
   playlist asked for with StartTimeTicks, so it isn't sent. Each screen has its own device
   id, and `video_stop(stream)` ends a transcode when its screen moves on. Without a size, a
-  file plays as it is unless it's over `direct_max_mbps`. Full screen plays the file.
+  file plays as it is unless it's over `direct_max_mbps`. Full screen plays the file. When
+  the file doesn't play (an error, or nothing from the server in 8 seconds), full screen
+  plays a 1080p transcode from the same moment, and says so on the player and in
+  `~/.local/state/bromigos-live/live.log`, with mpv's own error.
 - **The key** goes in a request header, never in an address, so it never shows in a
   command line or a log. Casting is the one exception: a Chromecast or a TV fetches the
   stream itself and can't send headers, so the address it is given carries the key. That
