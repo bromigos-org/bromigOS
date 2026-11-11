@@ -58,13 +58,19 @@ const meshes = new Map<string, Promise<HoloMesh>>();
 export function loadMesh(src: string): Promise<HoloMesh> {
   let p = meshes.get(src);
   if (!p) {
-    // The board's two changes to the copied file: only the .bin models are read (the board serves
-    // them as files; a data: URL would be refused by its content policy), and a load that failed
-    // isn't kept, so the next view asks again.
+    // The board's changes to the copied file: no data: URL is read (the board's content policy
+    // allows only its own origin), and a load that failed isn't kept, so the next view asks again.
+    // A model is NAME.bin, served as a file. Where a host can't serve raw binary (the design
+    // pages) it is NAME.bin.json: {format, bytes, data: base64}, decoded here.
     p = fetch(src)
       .then((r) => {
         if (!r.ok) throw new Error(`hologram ${src}: ${r.status}`);
-        return r.arrayBuffer();
+        if (!/\.json(\?|$)/.test(src)) return r.arrayBuffer();
+        return r.json().then((j: { data: string }) => {
+          const s = atob(j.data), b = new Uint8Array(s.length);
+          for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+          return b.buffer as ArrayBuffer;
+        });
       })
       .then(parse);
     meshes.set(src, p);

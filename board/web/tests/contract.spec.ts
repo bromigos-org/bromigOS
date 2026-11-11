@@ -4,11 +4,12 @@
 // holds: no document the service can send, and no way it can fail, blanks the page or makes it
 // say something that isn't so.
 import { expect, test } from "@playwright/test";
+import { READ_AT, VERDICT } from "./helpers";
 import { Answer, CODE, copy, go, live, openReal, pass, PLACES, real, Service, whole } from "./service";
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "desktop", "the contract is the same at every width"));
 
-const verdict = ".stage .verdict";
+const verdict = VERDICT;
 const tile = (page: import("@playwright/test").Page, name: string) => page.locator(".rt", { hasText: name });
 
 // ---------------------------------------------------------------- the door and signing in
@@ -113,7 +114,7 @@ test("what the page says of the board the service sends today", async ({ page })
   const s = new Service();
   await openReal(page, s, "home");
   await expect(page.locator(verdict)).toHaveText("ALL MACHINES NOMINAL");
-  await expect(page.locator(".stage.lamp .chip")).toContainText("JUST NOW");
+  await expect(page.locator(READ_AT)).toContainText("JUST NOW");
   // a machine's page: the updates are read where the service puts them ({updates, rollbacks})
   await go(page, "m/myserver");
   await expect(page.locator(verdict)).toHaveText("ALL SYSTEMS NOMINAL");
@@ -167,7 +168,7 @@ const SAYS: Record<string, { at: string; has?: [string, string | RegExp][]; neve
   setup: [{ at: "home", has: [[verdict, "NOTHING INSTALLED YET"]] }, { at: "supply", has: [["#view", "Nothing is installed yet."]] }],
   apps_missing: [
     { at: "home", has: [[verdict, "COULDN'T READ THE APPS"]] },
-    { at: "m/myserver", has: [[".mc-apps", "The apps couldn't be read on the server: bromigos: no such command"], [".stage .over", "APPS NOT READ"]], never: [[verdict, "NOMINAL"]] },
+    { at: "m/myserver", has: [[".mc-apps", "The apps couldn't be read on the server: bromigos: no such command"], [".mgroups .over", "APPS NOT READ"]], never: [[verdict, "NOMINAL"]] },
     { at: "supply", has: [["#view", "The apps couldn't be read on the server"]] },
     { at: "supply/browse", has: [["#view", "The apps couldn't be read on the server"]] },
     { at: "supply/updates", has: [[".panel:has-text('THE APPS')", "couldn't be read"]] },
@@ -324,7 +325,7 @@ for (const [what, answer] of [
     await page.clock.install();
     const w = await openReal(page, s, "home", { quiet: /EventSource|event-stream/ });
     await expect(page.locator(verdict)).toHaveText("ALL MACHINES NOMINAL");
-    await expect(page.locator(".stage.lamp .chip")).toContainText("JUST NOW");
+    await expect(page.locator(READ_AT)).toContainText("JUST NOW");
     s.board = answer;
     s.activity = answer;
     await s.drop(page);
@@ -334,7 +335,7 @@ for (const [what, answer] of [
     // the last reading stays on the page, and soon reads as old: never "just now" for ever
     await page.clock.runFor(5 * 60_000);
     await expect(page.locator(verdict)).toHaveText(/^NOT READ FOR 5 MIN$/);
-    await expect(page.locator(".stage.lamp .chip")).toContainText("5 MIN AGO");
+    await expect(page.locator(READ_AT)).toContainText("5 MIN AGO");
     await expect(page.locator(".sh-strip .strip")).toContainText("not live");
     for (const place of ["m/myserver", "data", "supply", "activity"]) {
       await go(page, place);
@@ -432,7 +433,7 @@ for (const skew of [3 * 60_000, -3 * 60_000, 400 * 86_400_000])
     await page.clock.install({ time: new Date(real.now + skew) });
     await openReal(page, s, "home");
     await expect(page.locator(verdict)).toHaveText("ALL MACHINES NOMINAL");
-    await expect(page.locator(".stage.lamp .chip")).toContainText("JUST NOW");
+    await expect(page.locator(READ_AT)).toContainText("JUST NOW");
     await go(page, "data");
     await expect(page.locator(".dt-stage .chip")).toHaveText("READ 12 MIN AGO");
     await go(page, "data/backups");

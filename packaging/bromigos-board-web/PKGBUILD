@@ -19,7 +19,8 @@ makedepends=('git' 'nodejs' 'npm' 'rsync')
 options=('!debug' '!strip')
 
 _root="${startdir%/packaging/*}"
-_paths=(board/web packaging/bromigos-board-web LICENSE-MIT LICENSE-APACHE)
+# mascot/crew and mascot/static: the station's crew is copied and cut from them (board/web/scripts/art.mjs)
+_paths=(board/web mascot/crew mascot/static packaging/bromigos-board-web LICENSE-MIT LICENSE-APACHE)
 # a new package: nothing of it is in the archived history (packaging/README.md, Versions)
 _archived=0
 _fonts=(Regular SemiBold Bold)
@@ -46,7 +47,8 @@ build() {
   local id clean
   id=$(git -C "$_root" log -1 --format=%h -- "${_paths[@]}" | grep . || echo dev)
   clean=(env -i PATH="$PATH" HOME="$srcdir/home" LANG=C.UTF-8 npm_config_cache="$srcdir/npm-cache"
-         npm_config_update_notifier=false NEXT_TELEMETRY_DISABLED=1 BOARD_BUILD_ID="$id")
+         npm_config_update_notifier=false NEXT_TELEMETRY_DISABLED=1 BOARD_BUILD_ID="$id"
+         BOARD_MASCOT="$_root/mascot")
   "${clean[@]}" npm ci --ignore-scripts --no-audit --no-fund
   # the real build: it talks to the server's API, never to fixtures (BOARD_FIXTURES isn't set)
   "${clean[@]}" npm run build

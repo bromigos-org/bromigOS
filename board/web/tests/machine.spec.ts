@@ -2,11 +2,11 @@
 // gauges and the ECharts trend (and its planned state when the server keeps no trends);
 // Hardware's parts; Set-up on a first run.
 import { expect, test } from "@playwright/test";
-import { open } from "./helpers";
+import { open, VERDICT } from "./helpers";
 
 test("Overview, healthy: the verdict, the lit groups, the three readings and the apps", async ({ page }) => {
   await open(page, "healthy", "m/myserver");
-  const hero = page.locator(".stage.board");
+  const hero = page.locator(".mc-hero");
   await expect(hero.locator(".verdict")).toHaveText("ALL SYSTEMS NOMINAL");
   await expect(hero.locator(".over")).toHaveText("5 OF 8 GROUPS LIT");
   await expect(hero.locator(".mod.on")).toHaveCount(5);
@@ -21,7 +21,7 @@ test("Overview, healthy: the verdict, the lit groups, the three readings and the
 
 test("Overview, one thing wrong: the verdict, the drive and what fixed itself", async ({ page }) => {
   await open(page, "needs-you", "m/myserver");
-  await expect(page.locator(".stage.board .verdict")).toHaveText("2 THINGS NEED YOU");
+  await expect(page.locator(VERDICT)).toHaveText("2 THINGS NEED YOU");
   await expect(page.locator(".rt", { hasText: "STORAGE" })).toContainText("getting worse");
   await expect(page.locator(".panel", { hasText: "FIXED BY ITSELF" })).toContainText("Updating Photos");
   await expect(page.locator(".panel", { hasText: "FIXED BY ITSELF" })).toContainText("It failed and put things back by itself.");
@@ -29,28 +29,53 @@ test("Overview, one thing wrong: the verdict, the drive and what fixed itself", 
   await expect(page.locator(".sh-crumb")).toHaveText(/Data › Drives$/);
 });
 
-test("the hero draws the rack: one canvas, and something on it", async ({ page }) => {
-  const { errors } = await open(page, "healthy", "m/myserver");
-  const mount = page.locator(".holo-mount");
-  await expect(mount).toHaveAttribute("aria-label", "myserver's hologram");
-  await expect(mount).toHaveClass(/drawn/, { timeout: 30_000 });
+test("the hero draws the machine on its deck tray: one canvas, and something on it", async ({ page }) => {
+  const { errors, csp } = await open(page, "healthy", "m/myserver");
+  const hero = page.locator(".mc-hero .mhero");
+  await expect(hero).toHaveClass(/ready/, { timeout: 30_000 });
+  await expect(hero).not.toHaveClass(/nogl/);
+  await expect(hero.locator(".mh-top")).toContainText("D2·A · MYSERVER");
+  await expect(hero.locator(".mh-top")).toContainText("ONLINE");
   await expect(page.locator("canvas")).toHaveCount(1);
-  await expect(mount.locator("svg.gl")).toHaveCount(0);
   // the canvas carries a picture: the hero looks different with it than without it
-  const rack = page.locator(".st-rack");
   await expect
     .poll(async () => {
-      const withIt = await rack.screenshot();
+      const withIt = await hero.screenshot();
       await page.locator("canvas").evaluate((c) => ((c as HTMLElement).hidden = true));
-      const without = await rack.screenshot();
+      const without = await hero.screenshot();
       await page.locator("canvas").evaluate((c) => ((c as HTMLElement).hidden = false));
       return Buffer.compare(withIt, without) !== 0;
     }, { timeout: 20_000 })
     .toBe(true);
+  // "DOCKS AT D2" goes back to the whole station
+  await hero.getByRole("button", { name: "DOCKS AT D2" }).click();
+  await expect(page.locator(".sh-crumb")).toHaveText(/Home$/);
   expect(errors).toEqual([]);
+  expect(await csp()).toEqual([]);
 });
 
-test("without WebGL the machine's glyph stays, and nothing breaks", async ({ page }) => {
+test("something wrong on it: the cause is lit and LINEMAN stands beside it", async ({ page }) => {
+  await open(page, "needs-you", "m/myserver");
+  const hero = page.locator(".mc-hero .mhero");
+  await expect(hero).toHaveClass(/ready/, { timeout: 30_000 });
+  await expect(hero.locator(".mh-top")).toContainText("NEEDS YOU · A DRIVE IS GETTING WORSE");
+  await expect(hero.locator('img.crewx[src$="/lamplight/crew/lineman.webp"]')).toBeVisible();
+  await expect(hero.locator(".cap2")).toContainText("LINEMAN");
+  await expect(hero.locator(".tgt2")).toHaveCount(1);
+});
+
+test("a kind with no cleared model shows its icon on the tray, and asks for no mesh of its own", async ({ page }) => {
+  const asked: string[] = [];
+  page.on("request", (r) => asked.push(new URL(r.url()).pathname));
+  await open(page, "lab", "m/vault");
+  const hero = page.locator(".mc-hero .mhero");
+  await expect(hero).toHaveClass(/ready/, { timeout: 30_000 });
+  await expect(hero.locator(".kico.big")).toBeVisible();
+  await expect(hero.locator(".mh-top")).toContainText("VAULT");
+  expect(asked.filter((p) => p.startsWith("/holo/"))).toEqual(["/holo/lite/wick-cut.bin"]);
+});
+
+test("without WebGL the hero's words stand, and nothing breaks", async ({ page }) => {
   await page.addInitScript(() => {
     const get = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...rest: unknown[]) {
@@ -60,11 +85,12 @@ test("without WebGL the machine's glyph stays, and nothing breaks", async ({ pag
   const failures: string[] = [];
   page.on("pageerror", (e) => failures.push(e.message));
   await page.goto("/?fixture=healthy#m/myserver");
-  await expect(page.locator(".stage.board .verdict")).toHaveText("ALL SYSTEMS NOMINAL");
-  await expect(page.locator(".holo-mount svg.gl")).toBeVisible();
-  await page.waitForTimeout(1500);
-  await expect(page.locator(".holo-mount")).not.toHaveClass(/drawn/);
-  await expect(page.locator(".holo-mount canvas")).toHaveCount(0);
+  await expect(page.locator(VERDICT)).toHaveText("ALL SYSTEMS NOMINAL");
+  const hero = page.locator(".mc-hero .mhero");
+  await expect(hero).toHaveClass(/nogl/, { timeout: 30_000 });
+  await expect(hero.locator(".mh-top")).toContainText("D2·A · MYSERVER");
+  await expect(hero.locator("canvas")).toHaveCount(0);
+  await expect(page.locator(".mgroups .mod.on")).toHaveCount(5);
   expect(await page.locator(".broken").count()).toBe(0);
   expect(failures).toEqual([]);
 });
@@ -73,13 +99,16 @@ test("a model that fails to load once is asked for again by the next view", asyn
   let asked = 0;
   await page.route("**/holo/rack.bin", (route) => (++asked === 1 ? route.fulfill({ status: 503, body: "" }) : route.fallback()));
   await page.goto("/?fixture=healthy#m/myserver");
-  await expect(page.locator(".holo-mount svg.gl")).toBeVisible();
+  const hero = page.locator(".mc-hero .mhero");
+  await expect(hero).toHaveClass(/nogl/, { timeout: 30_000 });
+  await expect(hero.locator(".mh-top")).toContainText("D2·A · MYSERVER");
   await expect.poll(() => asked).toBe(1);
   // away and back: the failed load wasn't kept, and no half-made view is left behind
   await page.evaluate(() => (window.location.hash = "home"));
-  await expect(page.locator(".stage.lamp")).toBeVisible();
+  await expect(page.locator(".lamp.on .stage.ready")).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => (window.location.hash = "m/myserver"));
-  await expect(page.locator(".holo-mount")).toHaveClass(/drawn/, { timeout: 30_000 });
+  await expect(hero).toHaveClass(/ready/, { timeout: 30_000 });
+  await expect(hero).not.toHaveClass(/nogl/);
   expect(asked).toBe(2);
   await expect(page.locator("canvas")).toHaveCount(1);
 });

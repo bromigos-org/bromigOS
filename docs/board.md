@@ -19,11 +19,11 @@ package.
 - **The door and signing in.** Signed out, every address shows the door: the ways in and
   the apps to open, nothing else. **Sign in** takes the one-time code that
   `sudo bromigos server board code` prints at the server.
-- **Home.** The lab's one status line, what needs you (each item with its machine and a
-  link to where it is fixed), and a tile per machine. The hero is the mount point for
-  Lamplight, the living station, which arrives in its own change.
-- **A machine.** Overview: the machine's hologram with a module per catalogue group, its
-  status line, what needs you and what fixed itself, the Storage, Backups and Updates
+- **Home.** The hero is [Lamplight](#lamplight-the-station): the lab as a living station,
+  with the lab's one status line. Under it, what needs you (each item with its machine and
+  a link to where it is fixed), and a tile per machine.
+- **A machine.** Overview: the machine on its deck tray, pulled out of the station, then
+  its status line with a module per catalogue group, what needs you and what fixed itself, the Storage, Backups and Updates
   tiles, its apps as tiles with Open, and the always-on parts. Vitals: four gauges and one
   trend chart. Hardware: processor, memory, drives and the graphics card. Set-up stands in
   for Overview on a first run.
@@ -49,15 +49,17 @@ package.
 | `board/web/pages/` | The one page (`index.tsx`), its document and its styles' entry |
 | `board/web/shell/` | The rail, the top bar, the strip and its drawer, the Depth drawer, tabs and sheets |
 | `board/web/views/` | The door and the sign-in sheet, and one file per place |
-| `board/web/components/` | Icons and buttons, the job card, the hologram, the trend chart, the error boundary |
+| `board/web/components/` | Icons and buttons, the job card, Lamplight's two heroes, the trend chart, the error boundary |
 | `board/web/lib/api/` | The API's client (`client.ts`), its reader (`read.ts`), the types the views use (`types.ts`), fixture mode (`fixtures.ts`) |
 | `board/web/lib/lab.tsx` | The page's state and its one connection to the server |
 | `board/web/lib/words.ts` | The headlines' rules |
 | `board/web/lib/routes.ts` | Every route, its tabs and sheets |
+| `board/web/lib/lamplight/` | Lamplight, the station: a module with no React in it, and its stylesheet |
+| `board/web/lib/lamplight-assets.ts` | What the station may draw: its models and STATIC's crew |
 | `board/web/lib/holo/` | The hologram renderer |
 | `board/web/styles/` | DRIFTGLASS on the web: the worlds' tokens, the parts, a file per place |
 | `board/web/tests/` | The Playwright tests; `tests/contract/service.json` holds real answers of the service |
-| `board/web/scripts/` | `make-contract.py`, `make-fixtures.mjs`, `postbuild.mjs` |
+| `board/web/scripts/` | `make-contract.py`, `make-fixtures.mjs`, `art.mjs`, `postbuild.mjs` |
 | `packaging/bromigos-board-web/` | The package: the built page in `/usr/share/bromigos-board/web/` |
 
 ## Routes
@@ -157,15 +159,69 @@ alerts and the jobs were read.
   add (`actions` holds `"add"`) and the app's tile says it can be added. Otherwise the
   sheet shows the command and a planned mark. The service doesn't send `actions` yet.
 
-## Holograms and charts
+## Lamplight, the station
 
-A machine's hero draws its hologram with bromigos.org's renderer (`lib/holo/`, three.js
-0.186.1): one WebGL context for the page, drawing only while something moves. The model
-turns for 20 seconds, then holds still. Under reduced motion, or without a graphics card's
-WebGL, it draws one still frame. Only the rack (servers) and the workstation (desktops)
-ship (`public/holo/`); other kinds of machine show their kind's glyph, because their
-meshes' licence isn't cleared. Without WebGL the glyph stays. A model that fails to load is
-asked for again by the next view.
+Home's hero draws the lab as a station: a relay station of the Wick's class, cut open so
+its decks show. It is never the Wick itself, which is BLACKFLAME's own post. Everything on
+it comes from the board's document.
+
+- **Each machine is a compartment on a deck.** Servers ride the rack room (D2), storage
+  the hold (D1), a desktop the docking ring. A server and a desktop stand as their
+  holograms. A kind with no cleared model (storage, a small server) stands as its icon on
+  the deck tray. The list beside the station names every compartment with its state and
+  one reading, and the deck plan under it shows the same boxes in side elevation. Press
+  a machine anywhere to open its page.
+- **The line is the page's own.** The station says the same status line as the rest of the
+  page (`lib/words.ts`), with when the server read itself. Three lit readouts count the
+  machines that answer, what needs you, and the time of the reading.
+- **What needs you lights where it is.** A drive or volume alert lights the hull; any
+  other lights the rack room. The alarm bar names the machine and the alert, flashes three
+  times when it starts and then stays lit. Pressing it, or the lit part, opens the page
+  that owns the fact.
+- **The crew stands where something real happens.** OWL keeps the watch on the mast.
+  LINEMAN stands at the machine that needs you until it is fixed. The shells with nothing
+  to do wait in quarters. Nobody is placed for decoration.
+- **An old reading shows no signal.** When the server's reading is older than it allows,
+  the station dims, no machine is shown as known, and the alarm is withdrawn: the page
+  can't vouch for it.
+- **A first run is its own state.** A server with nothing installed reads SET UP, with no
+  alarm.
+
+A machine's Overview shows that machine pulled out of the station on its deck tray, at
+full detail, with the part that is the cause lit and the shell at work beside it. **DOCKS
+AT** goes back to the whole station.
+
+The station is a module with no React in it (`lib/lamplight/`). The page hands it the
+board's document (`fromBoard`), the manifest of what it may draw
+(`lib/lamplight-assets.ts`) and the page's status line, and calls `update` with each new
+reading. A reading that changed only its time rewrites the head and the readouts, and
+nothing else. The module and three.js load only when a hero is on screen. Until they
+have, or if they can't, the hero's frame shows the lab's plain state.
+
+It draws with bromigos.org's renderer (`lib/holo/`, three.js 0.186.1): one WebGL context
+for the page, drawing only while something moves. The station turns for 20 seconds after
+a change or the pointer, then holds still. Under reduced motion it draws one still frame.
+Without WebGL the words stand: the line, the readouts, the alarm, the deck list and the
+deck plan need no hologram. A model that fails to load is asked for again by the next
+view.
+
+What ships (`public/holo/`, [ASSETS.md](ASSETS.md)): the station, the rack and the
+workstation, each as a lighter bake for the station, and the rack and the workstation in
+full for a machine's page. The storage, node, router and battery meshes aren't shipped,
+because their licence isn't cleared. When a clean one lands, it is added to the manifest
+and nothing else changes.
+
+The crew's paintings come from the repository's `mascot/` at build time
+(`scripts/art.mjs`, into `public/lamplight/`, which isn't committed): the five cut-outs
+in `mascot/crew/`, and a portrait for each of those shells lifted from its loop in
+`mascot/static/`, used only where a cut-out is missing. A build outside the repository
+names the folder in `BOARD_MASCOT`.
+
+The module adds no `<style>` element and no style attribute, so it works under the
+board's content policy. Its stylesheet (`lib/lamplight/lamplight.css`) is scoped under
+`.lp`.
+
+## Charts
 
 The trend is ECharts, one series at a time in the world's colour, with a crosshair and its
 readings in a table for screen readers. Its tooltip is drawn on the canvas, so the chart
@@ -208,8 +264,25 @@ npx playwright install --only-shell chromium
 npx playwright test       # headless; nothing opens on the desktop
 ```
 
+The suite draws WebGL with Chromium's software renderer, because CI has no graphics card
+and CI is the reference. That takes every core for a while. On a machine with a card, a
+local run can use it instead, still headless and with no window:
+
+```sh
+BOARD_TEST_GPU=1 npx playwright test --workers=2
+```
+
+The run prints which renderer it got (`WebGL renderer: …`) before the first test. With
+the switch on, it stops there if the browser fell back to software, rather than quietly
+using the processor. The switch adds `--enable-gpu --use-angle=vulkan
+--enable-features=Vulkan --ignore-gpu-blocklist` and drops `--enable-unsafe-swiftshader`
+(`playwright.config.ts`, `tests/renderer.ts`). No test compares pictures against a stored
+one, so the suite means the same on either renderer. On the card the holograms turn,
+where the software renderer holds them still.
+
 The build's id is the commit it was built from, so two builds of one commit are the same
-files.
+files. Both builds first run `scripts/art.mjs`, which copies STATIC's crew for the station
+from the repository's `mascot/` folder.
 
 ### The service's real answers
 
@@ -296,4 +369,6 @@ to `ttf-geist-mono`'s files, and nothing else. The board's service serves that f
 through Caddy and answers `/api/`.
 
 The package's build gives npm and the build a clean environment, and runs no dependency's
-install script: the lock file pins every package by its hash.
+install script: the lock file pins every package by its hash. It builds a copy of
+`board/web/`, so it names the repository's `mascot/` folder in `BOARD_MASCOT` for the
+station's crew.

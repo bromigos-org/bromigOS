@@ -6,5 +6,7 @@ test-results/
 playwright-report/
 public/fonts/
 public/fixtures/
+# written by scripts/art.mjs from the repository's mascot/ (STATIC's crew for Lamplight)
+public/lamplight/
 # written by scripts/make-fixtures.mjs from tests/contract/service.json
 fixtures/

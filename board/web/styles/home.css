@@ -29,11 +29,11 @@
 .hm-mh { display: flex; align-items: center; gap: 8px; min-width: 0; } .hm-mh > svg { color: var(--phosphor); } .hm-mh b { color: var(--phosphor); letter-spacing: .08em; font-size: 14px; }
 .hm-mh .st { margin-left: auto; }
 
-/* the hero's frame while Lamplight's module isn't mounted: the holo-table, its floor light and the lab's plain state */
-.stage.lamp { aspect-ratio: 1180 / 430; border: 1px solid var(--line);
+/* Home's hero: Lamplight's station (lib/lamplight/lamplight.css is its own stylesheet, scoped under .lp).
+   Until its module has loaded, the frame carries the lab's plain state in the station's place. */
+.lamp { position: relative; min-width: 0; }
+.stage.lamp-wait { height: clamp(640px, calc(100svh - 150px), 860px); border: 1px solid var(--line);
   background: radial-gradient(ellipse 60% 55% at 50% 100%, color-mix(in srgb, var(--phosphor) 12%, transparent), transparent), color-mix(in srgb, var(--panel) 60%, var(--void)); }
-.lamp-mount { position: absolute; inset: 0; display: grid; place-items: center; }
-.lamp-wait { display: inline-flex; align-items: center; gap: 10px; margin: 0; color: var(--static); font-size: 12px; font-weight: 700; letter-spacing: .3em; }
 .verdict.q { color: var(--static); text-shadow: none; }
 .hm-mi { display: grid; min-width: 0; }
 .hm-needs .lb-need { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
@@ -41,4 +41,4 @@
 .lb-need b { color: var(--amber); }
 .hm-plans { margin: 0; display: inline-flex; gap: 8px; align-items: center; }
 .spec.q, .spec.q svg { color: var(--static); }
-@container view (max-width: 860px) { .stage.lamp { aspect-ratio: auto; min-height: 200px; } .stage.lamp .st-top { position: relative; } }
+@container view (max-width: 860px) { .stage.lamp-wait { height: 600px; } }

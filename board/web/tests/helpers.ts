@@ -57,5 +57,14 @@ export async function open(page: Page, fixture: string, hash = "") {
   };
 }
 
+/**
+ * A page's one status line. Home's is the station's own line (Lamplight is handed the page's
+ * headline), or the hero's frame until the station has loaded; a machine's is under its hero;
+ * elsewhere it is the stage's.
+ */
+export const VERDICT = ".stage .verdict, .mgroups .verdict, .lamp.on .head .line";
+/** Home: when the server read itself, and how long ago (the station's, or the frame's chip). */
+export const READ_AT = ".lamp.on .head .readat, .stage.lamp-wait .chip";
+
 /** The controls a person can press or type in, that are on screen now. */
 export const CONTROLS = 'a[href], button, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])';

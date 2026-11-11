@@ -14,7 +14,7 @@ import { loadMesh, type HoloMesh } from "./format";
 
 export type PartInfo = { id: string; label: string; hint: string; explode: number[]; anchor: number[] };
 export type ModelInfo = { name: string; height: number; radius: number; parts: PartInfo[] };
-export type State = "ok" | "warn" | "off" | "join" | "dim";
+export type State = "ok" | "warn" | "down" | "off" | "join" | "dim";
 export type PieceSpec = {
   id: string; src: string; info: ModelInfo; at: [number, number, number]; size: number;
   yaw?: number; spin?: number; state?: State; cause?: number | null; table?: boolean; explode?: number; gain?: number;
@@ -30,7 +30,7 @@ export type ViewOpts = {
   bed?: { radius: number; at?: number[]; power?: number; coneH?: number } | null;
   fps?: () => number; // extra animation the host wants (0: none)
 };
-const TOK = { ok: "--phosphor", warn: "--amber", off: "--static", join: "--soft", dim: "--dim" } as const;
+const TOK = { ok: "--phosphor", warn: "--amber", down: "--danger", off: "--static", join: "--soft", dim: "--dim" } as const;
 
 // ------------------------------------------------------------------ one context for the page
 const phone = () => matchMedia("(pointer: coarse)").matches || Math.min(screen.width, innerWidth) < 700;
@@ -130,7 +130,7 @@ class Piece {
   moving(t: number, reduced: boolean) {
     if (reduced) return false;
     const sp = this.spec;
-    return t - this.born < 1.4 || Math.abs(this.explode - sp.explode) > 1e-3 || sp.spin !== 0 || (sp.state === "warn" && sp.cause != null);
+    return t - this.born < 1.4 || Math.abs(this.explode - sp.explode) > 1e-3 || sp.spin !== 0 || ((sp.state === "warn" || sp.state === "down") && sp.cause != null);
   }
   frame(v: HoloView, t: number, dt: number, reduced: boolean, dpr: number) {
     const sp = this.spec;
@@ -140,13 +140,14 @@ class Piece {
     M.into(this.mm, M.T(sp.at[0], sp.at[1] + 0.02 * sp.size, sp.at[2]), M.Ry(sp.yaw), M.S(s));
     this.gm.setMatrix(this.mm);
     const st = sp.state as State;
-    const col = v.pal(TOK[st === "warn" && sp.causeOnly ? "ok" : st]);
-    const warm = st === "warn" ? v.pal(TOK.warn) : col;
+    const hot = st === "warn" || st === "down";        // needs you (amber) or down (red)
+    const col = v.pal(TOK[hot && sp.causeOnly ? "ok" : st]);
+    const warm = hot ? v.pal(TOK[st]) : col;
     const off = st === "off";
     if (this.table) {
       const r = Math.max((sp.info.radius || 0.5) * s * 1.15, 0.32 * sp.size), tt = reduced ? 0 : t;
       M.into(this.table.group.matrix, M.T(sp.at[0], sp.at[1], sp.at[2]), M.Ry(-tt * 0.05));
-      this.table.update(this.table.group.matrix.clone(), tt, r, r * 1.12, h * s * 1.05, (off ? 0.12 : st === "join" ? 0.5 : 0.85) * (sp.tablePower ?? 1), st === "warn" && sp.causeOnly ? col : warm);
+      this.table.update(this.table.group.matrix.clone(), tt, r, r * 1.12, h * s * 1.05, (off ? 0.12 : st === "join" ? 0.5 : 0.85) * (sp.tablePower ?? 1), hot && sp.causeOnly ? col : warm);
     }
     const u = this.gm.u, age = t - this.born;
     for (let i = 0; i < this.n; i++) {
@@ -164,8 +165,8 @@ class Piece {
       if (this.hover) k *= 1.3;
       let c = col, w = 1;
       const pulse = reduced ? 1.6 : 1.35 + 0.3 * Math.sin(t * 3.2);
-      if (st === "warn" && sp.causeOnly) { if (sp.cause === i) { c = warm; k *= pulse; w = 1.8; } }
-      else if (st === "warn") { c = warm; if (sp.cause === i) { k *= pulse + 0.1; w = 1.8; } else k *= 0.8; }
+      if (hot && sp.causeOnly) { if (sp.cause === i) { c = warm; k *= pulse; w = 1.8; } }
+      else if (hot) { c = warm; if (sp.cause === i) { k *= pulse + 0.1; w = 1.8; } else k *= 0.8; }
       let a = arrive;
       if (off) { a *= 0.3; k *= 0.7; }
       if (st === "join") a *= 0.75;
@@ -262,7 +263,7 @@ export class HoloView {
     if (this.reduced || !this.visible) return 0;
     const t = this.now();
     let f = this.extra();
-    for (const p of this.pieces.values()) if (p.moving(t, false)) { f = Math.max(f, p.spec.state === "warn" && p.spec.spin === 0 && t - p.born > 1.4 && Math.abs(p.explode - p.spec.explode) < 1e-3 ? 8 : 30); }
+    for (const p of this.pieces.values()) if (p.moving(t, false)) { f = Math.max(f, (p.spec.state === "warn" || p.spec.state === "down") && p.spec.spin === 0 && t - p.born > 1.4 && Math.abs(p.explode - p.spec.explode) < 1e-3 ? 8 : 30); }
     return f;
   }
   setReduced(on: boolean) { this.reduced = on || !!shared.eng?.software; this.kick(); }

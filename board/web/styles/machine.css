@@ -104,9 +104,24 @@ a.vt-link { text-decoration: none; color: inherit; } a.vt-link:hover { border-co
 @container view (max-width: 860px) { .vt-row2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* the board's own: the hologram's mount in the rack's place, the modules' rows, a gauge with no reading, the trend */
-.holo-mount { position: absolute; inset: 0; }
-.holo-mount > svg.gl { position: absolute; inset: 8% 10% 12%; width: 80%; height: 80%; }
-.mod.y1 { --y: 27%; } .mod.y2 { --y: 45.5%; } .mod.y3 { --y: 64%; } .mod.y4 { --y: 82.5%; }
+/* a machine's hero is Lamplight's (its deck tray pulled out of the station); the hero's place is
+   held while its module loads. Under it, this page's status line and a module for each group of apps. */
+.mc-hero > .lamp-mount { position: relative; min-width: 0; min-height: 460px; }
+.mgroups { margin-top: 14px; }
+.mgroups .st-top { position: static; padding: 0 0 10px; pointer-events: auto; }
+.mgroups .verdict { font-size: 22px; letter-spacing: .2em; margin-right: -.2em; text-shadow: 0 0 16px var(--lit), 0 0 3px var(--glow); }
+.mgroups .verdict.warn { text-shadow: 0 0 16px color-mix(in srgb, var(--amber) 55%, transparent); }
+.mgroups .verdict.q { text-shadow: none; }
+.mgroups .mods { position: static; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; pointer-events: auto; }
+.mgroups .mod { position: static; width: auto; margin: 0; height: 56px; }
+@container view (max-width: 860px) {
+  .mc-hero > .lamp-mount { min-height: 380px; }
+  .mgroups .verdict { font-size: 17px; letter-spacing: .14em; margin-right: -.14em; }
+  .mgroups .mods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mgroups .mod { grid-template-columns: 36px minmax(0, 1fr); height: 52px; padding: 0 8px 0 4px; }
+  .mgroups .mod > svg.i { display: none; }
+  .mgroups .mod svg.gl { width: 36px; height: 36px; }
+}
 a.mod { text-decoration: none; color: inherit; }
 .vt-g.q .vt-fig { fill: var(--static); filter: none; }
 .vt-g.warn .ring-done { stroke: var(--amber); }
