@@ -20,7 +20,13 @@ server, how it is built and packaged, and how it is tested. The service that ans
   `sudo bromigos server board code` prints at the server.
 - **The data layer.** Typed clients for the four things the page reads, and a fixture mode
   for building and testing pages before a server answers.
-- **Not built yet.** The places' own pages (Home, a machine, Data, Supply, Activity,
+- **Home.** The hero's frame with the lab's one status line (ALL MACHINES NOMINAL, N
+  MACHINES NEED YOU, NOTHING INSTALLED YET, or how old the reading is), NEEDS YOU with each
+  item's machine and a link to where it is fixed, and a tile per machine with its processor,
+  memory and hottest drive, grey once older than the server says they may be. Lamplight, the
+  living station, mounts in the hero once its module lands; This week and VECTOR's plans
+  are marked planned.
+- **Not built yet.** The places' own pages (a machine, Data, Supply, Activity,
   People, Den, Network, Settings) show their tabs and a PLANNED mark. They come one change
   at a time. Nothing is ever shown as a reading unless the server measured it.
 
@@ -139,6 +145,7 @@ all from one example lab. The package's build leaves fixture mode out.
 **The tests** (`tests/`), in headless Chromium at 1280 and 390 pixels wide, against the
 test copy served with the board's Content-Security-Policy:
 
+- Home's verdict, NEEDS YOU, the machines' tiles and their stale readings, and first run;
 - every route renders in four page states, with no error, no policy violation and no
   request to another site;
 - every control has a hint and an accessible name, and axe finds nothing, on every route,

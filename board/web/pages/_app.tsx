@@ -4,6 +4,7 @@ import "@/styles/fonts.css";
 import "@/styles/tokens.css";
 import "@/styles/base.css";
 import "@/styles/shell.css";
+import "@/styles/home.css";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (

@@ -7,7 +7,7 @@ import { writeFileSync } from "node:fs";
 
 const dir = new URL("../fixtures/", import.meta.url).pathname;
 const NOW = Date.UTC(2026, 10, 10, 22, 2, 0); // 10 Nov 2026, 14:02 Pacific
-const MIN = 60_000, H = 60 * MIN, D = 24 * H;
+const SEC = 1000, MIN = 60 * SEC, H = 60 * MIN, D = 24 * H;
 const GB = 1024 ** 3;
 
 const lab = { name: "MYLAB", address: "https://mylab.local" };
@@ -67,14 +67,14 @@ const machine = (name, kind, extra = {}) => ({
   name, kind, here: name === "myserver", page: name === "myserver", state: "ok", state_word: "online",
   roles: kind === "server" ? ["Home services", "Media"] : kind === "storage" ? ["Storage"] : kind === "node" ? ["Lab node"] : [],
   updates: { count: 0, security: false },
-  readings: { cpu_pct: 12, ram_pct: 31, temp_c: 36, at: NOW - MIN, max_age_s: 45 },
+  readings: { cpu_pct: 12, ram_pct: 31, temp_c: 36, at: NOW - 20 * SEC, max_age_s: 45 },
   apps: 0, ...extra,
 });
-const MYSERVER = machine("myserver", "server", { updates: { count: 2, security: false }, apps: APPS.length, readings: { cpu_pct: 23, ram_pct: 49, temp_c: 38, at: NOW - MIN, max_age_s: 45 } });
+const MYSERVER = machine("myserver", "server", { updates: { count: 2, security: false }, apps: APPS.length, readings: { cpu_pct: 23, ram_pct: 49, temp_c: 38, at: NOW - 20 * SEC, max_age_s: 45 } });
 
 const board = (over = {}) => ({
-  schema: 1, at: NOW - MIN, max_age_s: 45, lab, server: { name: "myserver", kind: "server", roles: ["home", "media"] },
-  status: { state: "ok", words: "Everything is running.", checked_at: NOW - MIN },
+  schema: 1, at: NOW - 20 * SEC, max_age_s: 45, lab, server: { name: "myserver", kind: "server", roles: ["home", "media"] },
+  status: { state: "ok", words: "Everything is running.", checked_at: NOW - 20 * SEC },
   machines: [MYSERVER], needs_you: [], fixed: [], apps: APPS,
   storage: null, backups: null, updates: null, ups: null,
   ...over,
