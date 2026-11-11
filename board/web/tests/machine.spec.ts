@@ -68,14 +68,25 @@ test("something wrong on it: the cause is lit and LINEMAN stands beside it", asy
   await expect(hero.locator(".tgt2")).toHaveCount(1);
 });
 
-test("a kind with no cleared model shows its icon on the tray, and asks for no mesh of its own", async ({ page }) => {
+test("a storage server's page draws its own hologram: the full mesh, and the station's", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (r) => asked.push(new URL(r.url()).pathname));
   await open(page, "lab", "m/vault");
   const hero = page.locator(".mc-hero .mhero");
   await expect(hero).toHaveClass(/ready/, { timeout: 30_000 });
-  await expect(hero.locator(".kico.big")).toBeVisible();
+  await expect(hero.locator(".kico")).toHaveCount(0);
   await expect(hero.locator(".mh-top")).toContainText("VAULT");
+  expect(asked.filter((p) => p.startsWith("/holo/")).sort()).toEqual(["/holo/lite/wick-cut.bin", "/holo/storage.bin"]);
+});
+
+test("a kind with no model shows its icon on the tray, and asks for no mesh of its own", async ({ page }) => {
+  const asked: string[] = [];
+  page.on("request", (r) => asked.push(new URL(r.url()).pathname));
+  await open(page, "lab-other", "m/spare");
+  const hero = page.locator(".mc-hero .mhero");
+  await expect(hero).toHaveClass(/ready/, { timeout: 30_000 });
+  await expect(hero.locator(".kico.big")).toBeVisible();
+  await expect(hero.locator(".mh-top")).toContainText("SPARE");
   expect(asked.filter((p) => p.startsWith("/holo/"))).toEqual(["/holo/lite/wick-cut.bin"]);
 });
 

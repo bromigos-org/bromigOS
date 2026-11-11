@@ -1,0 +1,38 @@
+{
+ "name": "router",
+ "title": "ROUTER",
+ "height": 0.9072,
+ "radius": 0.5819,
+ "parts": [
+  {
+   "id": "antennas",
+   "label": "ANTENNAS",
+   "hint": "Its four antennas: the Wi-Fi",
+   "explode": [
+    0.0,
+    0.2,
+    0.0
+   ],
+   "anchor": [
+    0.202,
+    0.7272,
+    -0.3077
+   ]
+  },
+  {
+   "id": "body",
+   "label": "BODY",
+   "hint": "The router: its status lights and ports. Equipment, read-only on the board",
+   "explode": [
+    0.0,
+    -0.0287,
+    0.0958
+   ],
+   "anchor": [
+    -0.1402,
+    0.0794,
+    0.1702
+   ]
+  }
+ ]
+}

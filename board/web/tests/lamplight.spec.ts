@@ -74,14 +74,26 @@ test("the crew: the five cut-outs that ship are asked for across the states, and
   expect(art).toEqual(CREW); // a cut-out stands in place of the portrait cut from a loop, so no still is fetched
 });
 
-test("a lab of four: a kind with no cleared model stands as its icon, and its files are never asked for", async ({ page }) => {
+test("a lab of four: each kind stands as its own hologram, and only the station's light meshes are asked for", async ({ page }) => {
   const { lamp, asked, errors, csp } = await station(page, "lab");
-  await expect(lamp.locator(".kico")).toHaveCount(2); // vault (storage) and node3 (a small server)
-  await expect(lamp.locator(".kico").first()).toHaveAttribute("title", /VAULT/);
+  await expect(lamp.locator(".kico")).toHaveCount(0); // vault (storage) and node3 (a small server) have models now
   await expect(lamp.locator(".crow")).toHaveCount(5); // four machines and the crew's quarters
   await expect(lamp.locator(".readout").first()).toHaveAttribute("title", /of 4 machines answer now/);
-  expect(asked.filter((p) => p.startsWith("/holo/")).sort()).toEqual(["/holo/lite/rack.bin", "/holo/lite/wick-cut.bin", "/holo/lite/workstation.bin"]);
-  expect(asked.filter((p) => /storage|node|router|ups|dish|phone/.test(p) && !p.startsWith("/_next/"))).toEqual([]);
+  expect(asked.filter((p) => p.startsWith("/holo/")).sort()).toEqual([
+    "/holo/lite/node.bin", "/holo/lite/rack.bin", "/holo/lite/storage.bin", "/holo/lite/wick-cut.bin", "/holo/lite/workstation.bin"]);
+  // no kind here is a router or a battery, and the phone, the dish and OWL aren't drawn by any kind
+  expect(asked.filter((p) => /router|ups|dish|phone|owl/.test(p) && p.startsWith("/holo/"))).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(await csp()).toEqual([]);
+});
+
+test("a kind the board doesn't know stands as its icon, and no mesh is asked for it", async ({ page }) => {
+  const { lamp, asked, errors, csp } = await station(page, "lab-other");
+  await expect(lamp.locator(".kico")).toHaveCount(1);
+  await expect(lamp.locator(".kico").first()).toHaveAttribute("title", /SPARE/);
+  await expect(lamp.locator(".crow")).toHaveCount(6); // five machines and the crew's quarters
+  expect(asked.filter((p) => p.startsWith("/holo/")).sort()).toEqual([
+    "/holo/lite/node.bin", "/holo/lite/rack.bin", "/holo/lite/storage.bin", "/holo/lite/wick-cut.bin", "/holo/lite/workstation.bin"]);
   expect(errors).toEqual([]);
   expect(await csp()).toEqual([]);
 });

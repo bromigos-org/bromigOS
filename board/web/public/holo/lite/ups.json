@@ -1,0 +1,38 @@
+{
+ "name": "ups",
+ "title": "BATTERY BACKUP",
+ "height": 1.0,
+ "radius": 0.5662,
+ "parts": [
+  {
+   "id": "front",
+   "label": "FRONT PANEL",
+   "hint": "Its display and buttons: charge and load, when NUT reports them",
+   "explode": [
+    0.0,
+    0.0,
+    0.22
+   ],
+   "anchor": [
+    0.0753,
+    0.7049,
+    0.4064
+   ]
+  },
+  {
+   "id": "battery",
+   "label": "BATTERY",
+   "hint": "The battery inside: what keeps a server up long enough to shut down cleanly",
+   "explode": [
+    0.0,
+    0.0,
+    -0.12
+   ],
+   "anchor": [
+    0.0602,
+    0.6111,
+    -0.2296
+   ]
+  }
+ ]
+}

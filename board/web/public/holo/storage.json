@@ -1,0 +1,128 @@
+{
+ "name": "storage",
+ "title": "STORAGE SERVER",
+ "height": 0.5962,
+ "radius": 0.6933,
+ "parts": [
+  {
+   "id": "bay1",
+   "label": "BAY 1",
+   "hint": "Drive bay 1: one bay a drive found, lit by that drive's verdict (bromigos storage health)",
+   "explode": [
+    0.0,
+    0.0,
+    0.32
+   ],
+   "anchor": [
+    -0.2755,
+    0.439,
+    0.4433
+   ]
+  },
+  {
+   "id": "bay2",
+   "label": "BAY 2",
+   "hint": "Drive bay 2: one bay a drive found, lit by that drive's verdict (bromigos storage health)",
+   "explode": [
+    0.0,
+    0.0,
+    0.32
+   ],
+   "anchor": [
+    -0.1776,
+    0.4402,
+    0.4428
+   ]
+  },
+  {
+   "id": "bay3",
+   "label": "BAY 3",
+   "hint": "Drive bay 3: one bay a drive found, lit by that drive's verdict (bromigos storage health)",
+   "explode": [
+    0.0,
+    0.0,
+    0.32
+   ],
+   "anchor": [
+    -0.0688,
+    0.4406,
+    0.4425
+   ]
+  },
+  {
+   "id": "bay4",
+   "label": "BAY 4",
+   "hint": "Drive bay 4: one bay a drive found, lit by that drive's verdict (bromigos storage health)",
+   "explode": [
+    0.0,
+    0.0,
+    0.32
+   ],
+   "anchor": [
+    0.056,
+    0.4405,
+    0.4422
+   ]
+  },
+  {
+   "id": "bay5",
+   "label": "BAY 5",
+   "hint": "Drive bay 5: one bay a drive found, lit by that drive's verdict (bromigos storage health)",
+   "explode": [
+    0.0,
+    0.0,
+    0.32
+   ],
+   "anchor": [
+    0.1673,
+    0.4315,
+    0.432
+   ]
+  },
+  {
+   "id": "bay6",
+   "label": "BAY 6",
+   "hint": "Drive bay 6: one bay a drive found, lit by that drive's verdict (bromigos storage health)",
+   "explode": [
+    0.0,
+    0.0,
+    0.32
+   ],
+   "anchor": [
+    0.3039,
+    0.4413,
+    0.4436
+   ]
+  },
+  {
+   "id": "controls",
+   "label": "CONTROLS",
+   "hint": "The power button, the status lights and a USB port: where a battery backup plugs in",
+   "explode": [
+    0.12,
+    0.0,
+    0.16
+   ],
+   "anchor": [
+    0.4459,
+    0.3592,
+    0.4375
+   ]
+  },
+  {
+   "id": "chassis",
+   "label": "CHASSIS",
+   "hint": "The storage server's case: its board, supply and fans",
+   "explode": [
+    0.0,
+    0.0,
+    -0.12
+   ],
+   "anchor": [
+    -0.218,
+    0.3379,
+    -0.2432
+   ]
+  }
+ ]
+}

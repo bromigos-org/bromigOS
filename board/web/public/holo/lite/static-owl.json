@@ -1,0 +1,23 @@
+{
+ "name": "static-owl",
+ "title": "STATIC \u00b7 RECON OWL",
+ "height": 1.0,
+ "radius": 0.291,
+ "parts": [
+  {
+   "id": "shell",
+   "label": "RECON OWL",
+   "hint": "RECON OWL: STATIC's watch shell. Keeps watch over the lab; says nothing the data doesn't",
+   "explode": [
+    0.0,
+    0.0287,
+    0.0958
+   ],
+   "anchor": [
+    -0.0418,
+    0.7138,
+    0.0878
+   ]
+  }
+ ]
+}

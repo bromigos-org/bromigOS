@@ -1,0 +1,53 @@
+{
+ "name": "node",
+ "title": "SMALL NODE",
+ "height": 1.0,
+ "radius": 0.4571,
+ "parts": [
+  {
+   "id": "stand",
+   "label": "STAND",
+   "hint": "Its foot stand",
+   "explode": [
+    0.0,
+    -0.15,
+    0.0
+   ],
+   "anchor": [
+    0.0814,
+    0.0222,
+    0.1465
+   ]
+  },
+  {
+   "id": "front",
+   "label": "FRONT",
+   "hint": "Its front: the power button, the status light and two USB ports",
+   "explode": [
+    0.0,
+    0.0,
+    0.25
+   ],
+   "anchor": [
+    -0.0646,
+    0.4266,
+    0.4018
+   ]
+  },
+  {
+   "id": "case",
+   "label": "CASE",
+   "hint": "The case: a one-litre computer, its vented side breathing for the processor inside",
+   "explode": [
+    0.0,
+    0.0,
+    -0.1
+   ],
+   "anchor": [
+    -0.0641,
+    0.335,
+    -0.2161
+   ]
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+# No file that must never ship is committed: tools/assets/check-blocked.py against
+# tools/assets/blocked.sha256 (the meshes made with Pixal3D and everything baked from them;
+# docs/ASSETS.md, 3D holograms). Every pull request, whatever it touches: a file can come back
+# under any name.
+name: assets
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked:
+    name: No blocked file is committed
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: check
+        run: python3 tools/assets/check-blocked.py

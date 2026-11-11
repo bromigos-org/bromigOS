@@ -53,8 +53,17 @@ names, in backticks, with an explicit decision: **yes** (who, date) or **no**
 | Tidewell art: comp, plates and layers | Generated with nolgia; each job in `themes/tidewell/art.log.jsonl` | **yes** (operator, 2026-10-08) | On bromigos.org |
 | Tidewell actors and loops | Generated with nolgia, matted locally | **yes** (operator, 2026-10-08) | The Choir is an original creature |
 | Craft overhead in Mire and Tidewell | Generated with nolgia, cut locally | **yes** (operator, 2026-10-08) | Original designs |
-| 3D holograms: the workstation, the Wick and the rack | nolgia concepts, image-to-3D; the rack's job in `homelab/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | On bromigos.org, without live readings |
-| The Lab board's holograms (`board/web/public/holo/`: `rack.bin` and `workstation.bin` with their part lists, and the lighter bakes in `lite/`: the rack, the workstation and `wick-cut`, the station) | The same rack, workstation and Wick as bromigos.org, in its `bromigos-holo-web/1` format. The lighter bakes are the same meshes with fewer faces. `wick-cut` is the Wick's mesh with the hull's front cut open and three deck trays added in code: on the board it is a relay station of the Wick's class, never the Wick itself | yes | Lit by the server's own readings. The storage, node, router, battery, phone and dish meshes (Pixal3D, DINOv3 licence not cleared) are **not** shipped: those machines show their kind's icon on the station. The manifest of what the board may draw is `board/web/lib/lamplight-assets.ts` |
+| 3D holograms: the workstation and the Wick | nolgia concepts, image-to-3D | **yes** (operator, 2026-10-08) | On bromigos.org, without live readings. The rack made the same way (2026-10-04) was replaced by the remake below |
+| The Lab board's workstation and station (`board/web/public/holo/`: `workstation.bin` with its part list, and the lighter bakes `lite/workstation.bin` and `lite/wick-cut.bin`, the station) | The same workstation and Wick as bromigos.org, in its `bromigos-holo-web/1` format. The lighter bakes are the same meshes with fewer faces. `wick-cut` is the Wick's mesh with the hull's front cut open and three deck trays added in code: on the board it is a relay station of the Wick's class, never the Wick itself | yes | Lit by the server's own readings. The manifest of what the board may draw is `board/web/lib/lamplight-assets.ts` |
+| The rack hologram (`homelab/holo/`: `rack.holo.npz` from `src/rack.glb`; the board's `board/web/public/holo/rack.bin` and `lite/rack.bin`) | Built in Blender from a written spec, `homelab/holo/blender/SPEC.md` and `build.py`; baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | No image and no AI model went into it. It replaces the 2026-10-04 rack (Hunyuan3D v3 through nolgia). Lines in `homelab/holo/provenance.jsonl` and the board's `provenance.jsonl` |
+| The installers' turning rack (`desktop/art/server-rack.png`, `lib/bromigos_rack.py`) and the server card (`desktop/art/kind-server.jpg`) | Offscreen renders of the rack above in VECTOR's gallery, with made-up readings (`tools/installer-art/render-rack.py`, `make.py`) | **yes** (BLACKFLAME, 2026-11-11) | Rendered again from the remade rack on 2026-11-11 |
+| The Lab board's storage server (`board/web/public/holo/storage.bin`, `lite/storage.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with TRELLIS image-large (shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | Apache-2.0 and MIT models only. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
+| The Lab board's small node (`board/web/public/holo/node.bin`, `lite/node.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with Step1X-3D (Geometry-Label, shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | Apache-2.0 and MIT models only. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
+| The Lab board's router (`board/web/public/holo/router.bin`, `lite/router.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with Step1X-3D (Geometry-Label, shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | Apache-2.0 and MIT models only. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
+| The Lab board's battery backup (`board/web/public/holo/lite/ups.bin`) | Built in Blender from a written spec (`homelab/holo/blender/SPEC.md`, `build.py`), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | No image and no AI model went into it. One small bake: the board draws it on the station and on its page |
+| The phone hologram (`board/web/public/holo/phone.bin`, `lite/phone.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with TRELLIS image-large (shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | In the board's folder for pages to come; no machine kind draws it yet. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
+| The dish hologram, the lab's way out (`board/web/public/holo/dish.bin`, `lite/dish.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with Step1X-3D (Geometry-Label, shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | In the board's folder for pages to come; no machine kind draws it yet. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
+| STATIC's OWL as a hologram (`board/web/public/holo/static-owl.bin`, `lite/static-owl.bin`) | A Qwen-Image-Edit-2511 redraw of OWL's identity concept, cut out with Lucida, made 3D with TRELLIS image-large (shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | In the board's folder for pages to come. The mesh and every model that touched it are Apache-2.0 or MIT, but the redraw's reference is OWL's identity concept, painted with Qwen-Image 2.1 (non-commercial): as with the rest of STATIC, [see the notes](#static-the-mascot) before a commercial use |
 | 3D holograms made on the homelab: the worlds' posts, creatures and craft | Open models on the homelab, no credits; each job in `themes/*/holo/generations.jsonl` and `theme/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | Research and community licences. See [the notes](#3d-holograms) |
 | 3D burn-in emblem | Extruded from the Wick's emblem | yes, as a brand asset | In `bromigos-vector` |
 | The Drift map's lore catalogue (`live/lore/catalog.json`) | bromigos.org's public lore export, copied by `tools/lore/sync-catalog.py` | yes, as a brand asset | In `bromigos-live`. A user's `[driftmap] catalog` replaces it |
@@ -155,11 +164,33 @@ needs its own row.
 ### 3D holograms
 
 - **The workstation and the Wick** are in the vector repository's `assets/holo/`, in
-  `bromigos-vector`. **The rack** is in `homelab/holo/`, in `bromigos-homelab`, with its
-  subtitle made generic and no lab name. Each started as a gpt-image-2.5-flare concept
-  through nolgia, became 3D with hunyuan3d-v3 through fal, and was decimated and baked
-  locally with VECTOR's `tools/holo/`. They're on bromigos.org without their live-reading
-  bindings. A personal plugin's own model stays in that user's dotfiles.
+  `bromigos-vector`. Each started as a gpt-image-2.5-flare concept through nolgia, became 3D
+  with hunyuan3d-v3 through fal, and was decimated and baked locally with VECTOR's
+  `tools/holo/`. They're on bromigos.org without their live-reading bindings. A personal
+  plugin's own model stays in that user's dotfiles.
+- **The clean remakes** (2026-11-11; BLACKFLAME approved all eight that day). The rack in
+  `homelab/holo/`, in `bromigos-homelab` (with its subtitle made generic and no lab name),
+  and the Lab board's storage server, small node, router, battery backup, phone, dish and
+  OWL in `board/web/public/holo/`.
+  - **The rack and the battery backup** were built in Blender 5.2, headless, by
+    `homelab/holo/blender/build.py` from the sizes written in `SPEC.md`: no image and no AI
+    model. The script rebuilds the same `src/rack.glb`, byte for byte.
+  - **The storage server, node, router, phone and dish** each started as a Qwen-Image-2512
+    concept (Apache-2.0) made on the lab, cut out with Lucida (MIT). TRELLIS image-large
+    (MIT, on DINOv2 and FlexiCubes, Apache-2.0) made the storage server and the phone, and
+    Step1X-3D's Geometry-Label model (Apache-2.0) the node, the router and the dish. Both
+    made the shape only: no texture pass, so nothing went through nvdiffrast.
+  - **OWL** was made 3D the same way, with TRELLIS, from a Qwen-Image-Edit-2511 redraw
+    (Apache-2.0). The redraw's reference is OWL's identity concept, which was painted with
+    Qwen-Image 2.1 (Qwen Research License): the same lineage as every STATIC painting
+    ([STATIC, the mascot](#static-the-mascot)).
+  - All were baked with VECTOR's `tools/holo/` and packed in bromigos.org's
+    `bromigos-holo-web/1` format; each lighter bake in `lite/` is the same source with
+    fewer faces. Every step's line (model, licence, seed, prompt, settings, 0 credits) is in
+    `board/web/public/holo/provenance.jsonl` and `homelab/holo/provenance.jsonl`.
+  - They replace meshes made with Pixal3D, whose DINOv3 licence isn't cleared and which
+    never shipped, and the hosted rack. `tools/assets/blocked.sha256` names those files,
+    and `tools/assets/check-blocked.py` fails a pull request that commits one.
 - **Made on the homelab** on 2026-10-08, with no credits. These are the worlds' posts and
   creatures in `themes/*/holo/`: the stilt shack and a Sleeper, Greywater Light and the
   Choir, Station Nine, the Spine, the crane cab, the Low Note, the Petrel and the resonance
@@ -181,9 +212,11 @@ needs its own row.
   - The worlds' previews, `holo-<model>.jpg` and `holo-<model>-exploded.jpg` in each
     `themes/*/holo/previews/` and `theme/holo/previews/`, are drawn on the world's own
     background colour. They were rendered again on 2026-10-09.
-  - The rack's `homelab/holo/previews/holo-rack-isolated.jpg` and the vector repository's
+  - The rack's `homelab/holo/previews/holo-rack-isolated.jpg` (rendered again for the
+    remake by `tools/installer-art/render-rack.py`) and the vector repository's
     `assets/holo/previews/holo-*.jpg` are drawn over the packaged empty den
-    (`bromigos-den-empty`), with nobody in the chair.
+    (`bromigos-den-empty`), with nobody in the chair. Screenshots taken before 2026-11-11
+    (the README's and the manual's) may still show the old rack.
 - **The 3D burn-in emblem** (`assets/holo/emblem.holo.npz` in the vector repository) is
   extruded from the Wick theme's emblem SVG by `tools/holo/emblem.py`.
 - **The Swarm starship** is made procedurally by `live/tools/make-starship.py`.

@@ -7,7 +7,7 @@ a source configured. The manifest marks this with `"requires": "homelab"`.
 
 The package installs `manifest.json`, the baked `rack.holo.npz` and this README to
 `/usr/share/bromigos/homelab/holo/`. The sources stay in the repository: `src/`,
-`concepts/` and `previews/`.
+`blender/` and `previews/`.
 
 ## The rack's parts
 
@@ -26,15 +26,33 @@ The comment at the top of the file explains each key.
 
 ## How it was made
 
-The rack was made on 2026-10-04:
+The rack was remade on 2026-11-11, and BLACKFLAME approved it the same day. No image
+and no AI model went into it:
 
-1. A concept image from nolgia's `gpt-image-2.5-flare`, saved as
-   `concepts/server-rack.jpg`.
-2. Image to 3D with `hunyuan3d-v3`, giving `src/server-rack.glb`. `generations.jsonl`
-   records the job.
-3. Decimated and baked into `rack.holo.npz`.
+1. `blender/SPEC.md` writes the rack down: a 24U, 600 x 600 mm cabinet on casters with a
+   patch panel and switch, three 1U nodes, a 4U GPU server, a 3U storage chassis and a
+   2U UPS, in real sizes.
+2. `blender/build.py` builds it in Blender (5.2, headless, its Python API), one object per
+   feature, and exports `src/rack.glb`. It also measures each part's box from that part's
+   own objects; those are the boxes in `manifest.json`. The same script and template
+   rebuild the same file, byte for byte:
 
-[docs/ASSETS.md](../../docs/ASSETS.md) records that it may ship.
+   ```bash
+   python3 -c 'import json; json.dump(json.load(open("homelab/holo/manifest.json"))["models"]["rack"], open("/tmp/rack.json", "w"))'
+   blender -b --factory-startup --python homelab/holo/blender/build.py -- \
+       rack /tmp/rack.glb /tmp/rack.parts.json /tmp/rack.json
+   ```
+
+3. Baked into `rack.holo.npz` with VECTOR's `tools/holo/bake.py` (below).
+   `provenance.jsonl` records the build and the bake.
+
+`previews/rack-parts.png` is the bake's own parts preview; `previews/holo-rack-isolated.jpg`
+is an offscreen render of VECTOR's gallery with made-up readings, over the empty den.
+The installers' turning rack (`desktop/art/server-rack.png`, `lib/bromigos_rack.py`) is
+rendered from this model ([tools/installer-art/make.py](../../tools/installer-art/make.py)).
+
+The rack it replaces (2026-10-04) was an image-to-3D mesh made through a hosted service;
+[docs/ASSETS.md](../../docs/ASSETS.md) records both.
 
 ## Rebake it
 
