@@ -32,8 +32,9 @@ export interface Api {
   /** Opens the activity stream, and reopens it whenever it ends, until close(). `up` says
    *  whether it is connected; `ended` is called each time a connection is refused or lost. */
   activity(on: (ev: ActivityEvent) => void, up: (connected: boolean) => void, ended: () => void): Stream;
-  /** Add, restart or remove an app (the service's actions). */
-  act(verb: "add" | "restart" | "remove", app: string): Promise<ActionAnswer>;
+  /** Add, restart or remove an app (the service's actions). Removing keeps the app's data,
+   *  unless `more` asks to delete it: that takes a fresh one-time code, which root checks. */
+  act(verb: "add" | "restart" | "remove", app: string, more?: { delete_data: true; code: string }): Promise<ActionAnswer>;
 }
 
 const HEADERS = { "X-Bromigos-Board": "1", "Content-Type": "application/json" };
@@ -118,7 +119,7 @@ const realApi: Api = {
       },
     };
   },
-  act: async (verb, app) => readAction(await send("POST", "/api/actions", { verb, app })),
+  act: async (verb, app, more) => readAction(await send("POST", "/api/actions", { verb, app, ...(more ?? {}) })),
 };
 
 let chosen: Api | null = null;

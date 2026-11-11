@@ -309,7 +309,7 @@ export function AppTile({ t, now }: { t: Tile; now: number }) {
         <Icon id={ic.id} className={shape === "busy" ? "pulse" : ""} />
       </span>
       <span className="nm">
-        <a href={href("app", "", t.id)} title={`${t.job} (${t.app}): its page, with restart, logs, roll back and remove`}>
+        <a href={href("app", "", t.id)} title={`${t.job} (${t.app}): its page: what it takes, where its data lives, its logs, restart and remove`}>
           <b>{t.job}</b>
         </a>
         <State shape={shape} word={t.state_word ?? "Unknown"} />

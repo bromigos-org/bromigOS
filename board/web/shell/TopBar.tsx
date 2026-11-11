@@ -7,9 +7,10 @@ import { href, PLACE_NAME, TABS, type Place } from "@/lib/routes";
 import { KIND_ICON } from "./Rail";
 import { holoIcon } from "@/lib/icons";
 
-function crumb(place: Place, tab: string, id: string | null, sheet: string | null): string {
+function crumb(place: Place, tab: string, id: string | null, sheet: string | null, app: string | null): string {
   if (place === "machine") return (TABS.machine ?? []).find((t) => t.id === tab)?.label ?? (tab === "setup" ? "Set-up" : "Overview");
-  if (place === "app") return `Supply › ${id}`;
+  // an app is named as the household names it (Photos); its id when the apps couldn't be read
+  if (place === "app") return sheet === "remove" ? `Remove ${app ?? id}` : `Supply › ${app ?? id}`;
   if (place === "home") return sheet === "add-machine" ? "Add a machine" : "Home";
   const t = (TABS[place] ?? []).find((x) => x.id === tab);
   return t ? `${PLACE_NAME[place]} › ${t.label}` : PLACE_NAME[place];
@@ -145,7 +146,8 @@ export function TopBar({ signedIn }: { signedIn: boolean }) {
   const scoped = signedIn && !!scope && !machinePage && route.place !== "home" && !!TABS[route.place];
   const { door } = useLab();
   const labName = (board.state === "ok" ? board.doc.lab.name : door.state === "ok" ? door.doc.lab.name : "").toUpperCase() || "LAB";
-  const page = signedIn ? crumb(route.place, route.tab, route.id, route.sheet) : route.place === "signin" ? "Sign in" : "The door";
+  const app = route.place === "app" && board.state === "ok" ? (board.doc.apps?.find((t) => t.id === route.id)?.job ?? null) : null;
+  const page = signedIn ? crumb(route.place, route.tab, route.id, route.sheet, app) : route.place === "signin" ? "Sign in" : "The door";
   return (
     <header className="sh-top">
       <h1 className="sh-crumb" title="Where you are: the lab or a machine, then the place">
