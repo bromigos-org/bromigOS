@@ -122,7 +122,7 @@ class Presets(unittest.TestCase):
         path = os.path.join(d, "presets.toml")
         with open(path, "w") as f:
             f.write(text + '\n[[roles]]\nid = "mediabox"\ntitle = "Media box"\nsummary = "Films."\nhint = "Big disks."\n'
-                           'glyph = "drive"\npackages = ["mpv"]\nfirewall = ["web"]\nservices_on = ["front-door"]\n')
+                           'glyph = "drive"\npackages = ["mpv"]\nfirewall = ["web-lan"]\nservices_on = ["front-door"]\n')
         tomllib.loads(open(path).read())
         os.environ["BROMIGOS_SERVER_PRESETS"] = path
         try:
@@ -131,7 +131,7 @@ class Presets(unittest.TestCase):
             a = answers("mediabox")
             p = server.plan(a)
             self.assertIn("mpv", p["packages"], server.roles_of(server.srv(a)))
-            self.assertIn("web", p["firewall"])
+            self.assertIn("web-lan", p["firewall"])
         finally:
             del os.environ["BROMIGOS_SERVER_PRESETS"]
             server.presets(reload=True)
@@ -392,7 +392,8 @@ class Roles(unittest.TestCase):
     def test_home_services(self):
         p = self.doc("home")["server"]
         self.assertIn("caddy", p["packages"])
-        self.assertIn("web", p["firewall"])
+        self.assertIn("web-lan", p["firewall"])
+        self.assertNotIn("web", p["firewall"], "web is bromigos-server's name for 80 and 443 open to everyone")
         self.assertTrue({"photos", "start-page", "ingress"} <= set(p["provision"]), p["provision"])
 
     def test_game_server_without_a_lab_runs_podman(self):
@@ -728,25 +729,88 @@ class Apply(unittest.TestCase):
         self.assertIn('pelican_url = "https://panel.lab.example"', self.read(root, "/etc/bromigos/server.toml"))
         self.assertIn('enabled = ["game-server/pelican-wings"]', self.read(root, "/etc/bromigos/server.toml"))
 
-    def test_firewall_with_the_package(self):
-        """bromigos-server installed: its own rule sets by name, the rest as rules in its nftables.d."""
+    SERVER_SHARE = os.path.join(HERE, "../../../server")          # bromigos-server's rule sets, as the package ships them
+
+    def with_the_package(self, role, **keys):
+        """The install applied where bromigos-server is installed, with its real rule sets."""
+        import shutil
+        import tomllib
         from bromigos_installer import server_apply
-        a = answers("home")
-        doc = common.backend_answers(a, {"options": {}})
+        doc = common.backend_answers(answers(role, **keys), {"options": {}})
         root = tempfile.mkdtemp()
-        for f in ("usr/lib/bromigos/server/bromigos-server", "usr/share/bromigos/server/allow-web.nft"):
-            os.makedirs(os.path.join(root, os.path.dirname(f)), exist_ok=True)
-            open(os.path.join(root, f), "w").close()
+        os.makedirs(os.path.join(root, "usr/lib/bromigos/server"))
+        open(os.path.join(root, "usr/lib/bromigos/server/bromigos-server"), "w").close()
+        os.makedirs(os.path.join(root, "usr/share/bromigos/server"))
+        for f in os.listdir(self.SERVER_SHARE):
+            if f.startswith("allow-") and f.endswith(".nft"):
+                shutil.copy(os.path.join(self.SERVER_SHARE, f), os.path.join(root, "usr/share/bromigos/server", f))
         ap = server_apply.Apply(doc, root, "admin", dry=True, online=False)
         ap.all()
-        import tomllib
-        t = tomllib.loads(self.read(root, "/etc/bromigos/server.toml"))
-        self.assertEqual(t["firewall"]["allow"], ["web"])
-        extra = self.read(root, "/etc/bromigos/server/nftables.d/50-installer.nft")
+        extra = os.path.join(root, "etc/bromigos/server/nftables.d/50-installer.nft")
+        return root, ap, tomllib.loads(self.read(root, "/etc/bromigos/server.toml")), (open(extra).read() if os.path.exists(extra) else "")
+
+    def test_firewall_with_the_package(self):
+        """bromigos-server installed: its own rule sets by name, the rest as rules in its nftables.d."""
+        root, ap, t, extra = self.with_the_package("home")
+        self.assertEqual(t["firewall"]["allow"], ["web-lan"])
         self.assertIn('add rule inet bromigos-server input ip saddr @lan udp dport 5353 accept comment "mdns"', extra)
         self.assertNotIn("web", extra)
         self.assertFalse(os.path.exists(os.path.join(root, "etc/nftables.conf")))
         self.assertIn(["bromigos-server", "setup"], ap.cmds)
+
+    def test_no_role_opens_the_web_ports_to_everyone(self):
+        """Every role, alone: what the installer hands bromigos-server, and what it records, never
+        names "web" (80 and 443 from anywhere). The roles with a web server get the local
+        network's rule set. Opening a server to the internet is the owner's own step, afterwards
+        (sudo bromigos server firewall allow web)."""
+        want = {"home": True, "media": True, "lab": False, "storage": False, "games": False, "plain": False}
+        self.assertEqual(set(want), {r["id"] for r in server.roles()}, "a new role: say here whether it serves web pages")
+        for role, web in want.items():
+            root, ap, t, extra = self.with_the_package(role)
+            fw = t["firewall"]
+            self.assertNotIn("web", fw["allow"], role)
+            self.assertNotIn("web", fw["rule_sets"], role)
+            self.assertEqual("web-lan" in fw["allow"], web, role)
+            self.assertEqual("web-lan" in fw["rule_sets"], web, role)
+            # and no rule of the installer's own lets 80 or 443 in from anywhere
+            for line in extra.splitlines():
+                if line.startswith("add rule") and re.search(r"dport \{[^}]*\b(80|443)\b", line):
+                    self.assertRegex(line, r"saddr @lan6? ", f"{role}: {line}")
+
+    def test_without_the_package_the_web_ports_are_the_local_networks(self):
+        """No bromigos-server on the machine: the installer's own /etc/nftables.conf."""
+        for role in ("home", "media"):
+            root, ap = self.apply(role)
+            rules = [x.strip() for x in self.read(root, "/etc/nftables.conf").splitlines() if re.search(r"dport \{[^}]*\b(80|443)\b", x)]
+            self.assertEqual(len(rules), 2, rules)
+            for line in rules:
+                self.assertRegex(line, r"^ip6? saddr @lan6? tcp dport \{ 80, 443 \} accept", role)
+
+    def test_a_name_is_handed_over_only_where_it_means_the_same(self):
+        """The presets' rule sets and bromigos-server's share names. Wherever they do, they must
+        open the same ports to the same people; and if they ever don't, the installer writes the
+        presets' own rules and doesn't hand the name over."""
+        from bromigos_installer import server_apply
+        rules = server.presets(reload=True)["firewall"]
+        self.assertNotIn("web", rules, "the presets have no rule set named web: it is bromigos-server's 'open to everyone'")
+        shared = [n for n in rules if os.path.exists(os.path.join(self.SERVER_SHARE, f"allow-{n}.nft"))]
+        self.assertIn("web-lan", shared)
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "usr/share/bromigos/server"))
+        ap = server_apply.Apply(common.backend_answers(answers("home"), {"options": {}}), root, "admin", dry=True, online=False)
+        for n in shared:
+            text = open(os.path.join(self.SERVER_SHARE, f"allow-{n}.nft")).read()
+            with open(os.path.join(root, f"usr/share/bromigos/server/allow-{n}.nft"), "w") as f:
+                f.write(text)
+            local = all("@lan" in ln for ln in text.splitlines() if ln.startswith("add rule"))
+            self.assertEqual(local, rules[n].get("from", "lan") != "any", f"{n}: the presets and bromigos-server disagree on who it lets in")
+            self.assertTrue(ap.same_reach(n, rules[n]), n)
+        # the fault this guards against: a name that means "everyone" in the package and "the local network" here
+        with open(os.path.join(root, "usr/share/bromigos/server/allow-web.nft"), "w") as f:
+            f.write(open(os.path.join(self.SERVER_SHARE, "allow-web.nft")).read())
+        self.assertFalse(ap.same_reach("web", {"tcp": [80, 443], "from": "lan"}))
+        self.assertTrue(ap.same_reach("web", {"tcp": [80, 443], "from": "any"}))
+        self.assertFalse(ap.same_reach("nothing-there", {"tcp": [1], "from": "lan"}))
 
     def test_pending_packages_offline(self):
         root, ap = self.apply("home")

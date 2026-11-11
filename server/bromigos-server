@@ -146,6 +146,10 @@ HEALTH_D = "/etc/bromigos/server/health.d"
 BUILTIN_CHECKS = ("startup", "units", "network", "sshd")
 REBOOT_REQUIRED = "/run/reboot-required"     # what a lab's kured watches: it restarts its nodes one at a time
 STATE = "/var/lib/bromigos/server/update.json"
+# what this command itself did to the firewall's choices, and what the owner asked of it by
+# name: {"owner_allowed": [NAME…], "moved": {"from", "to", "at", "ts"}} (settle_web)
+FIREWALL_STATE = "/var/lib/bromigos/server/firewall.json"
+MOVED_SAID_DAYS = 30                         # how long status keeps saying that the web ports were closed to the internet
 HISTORY = "/var/lib/bromigos/server/history.jsonl"
 TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
 NEWS_FEED = os.environ.get("BROMIGOS_SERVER_NEWS_FEED", "https://archlinux.org/feeds/news/")
@@ -496,6 +500,8 @@ def print_status(d):
     print(f"  SSH          {'on' if d['ssh']['enabled'] else 'off'} ({d['ssh']['how']})" if d["ssh"]["enabled"] else
           "  SSH          off (sudo systemctl enable --now sshd turns it on, keys only)")
     print(f"  Firewall     {d['firewall']['running']}" + (f", also open: {', '.join(d['firewall']['allow'])}" if d["firewall"]["allow"] else ""))
+    for line in firewall_notes(config()):
+        print(f"               {line}")
     print(f"  Updates      {PHASE_WORDS.get(u['phase'], u['phase'])}" + (f" ({u['finished'] or u['started']})" if u.get("started") else "")
           + {"auto": "", "download": "; it downloads, then waits for you", "off": "; automatic updates are off"}[u["mode"]]
           + (f"; restarts {u['window']}" if u.get("window") else ""))
@@ -595,6 +601,67 @@ def ruleset(c):
     return text + "\n".join(extra) + "\n# the rest, dropped (the base chain's policy)\n"
 
 
+def firewall_state():
+    d = read_json(FIREWALL_STATE, {})
+    return d if isinstance(d, dict) else {}
+
+
+def web_was_the_installers(c, st=None):
+    """Whether this server has the rule set "web" (ports 80 and 443 open to everyone) only
+    because its installer wrote it.
+
+    The installers of 0.1.4-rc1 to 0.1.5 gave the Home services and Media roles "web" where
+    their own presets said "from the local network": they meant web-lan. The installer keeps
+    its own record of the rule sets it gave a server ([firewall] rule_sets, which this command
+    never writes), so "web" in both allow and rule_sets is the installer's. An owner who opened
+    the server on purpose did it with `firewall allow web`, which is noted (owner_allowed) and
+    is then theirs, whatever the installer wrote."""
+    st = firewall_state() if st is None else st
+    fw = c["firewall"]
+    record = fw.get("rule_sets") if isinstance(fw.get("rule_sets"), list) else []
+    mine = st.get("owner_allowed") if isinstance(st.get("owner_allowed"), list) else []
+    return "web" in fw["allow"] and "web" in record and "web" not in mine
+
+
+def settle_web(c):
+    """A server that has "web" only because its installer wrote it moves to "web-lan": 80 and 443
+    from the local network, as the installer's presets meant. The settings and the installer's
+    record are rewritten, and what was done is noted for status to say. An owner's own "web" is
+    left alone. Returns the settings (read again when they changed)."""
+    if not web_was_the_installers(c):
+        return c
+    for key in ("allow", "rule_sets"):
+        set_toml_list(["firewall", key], list(dict.fromkeys("web-lan" if n == "web" else n for n in c["firewall"][key])))
+    st = firewall_state()
+    st["moved"] = {"from": "web", "to": "web-lan", "at": now(), "ts": int(time.time())}
+    write_json(FIREWALL_STATE, st)
+    print("bromigos-server: the web ports (80, 443) now answer the local network only. The installer had opened them "
+          "to everyone by mistake. To open them to everyone on purpose: sudo bromigos server firewall allow web",
+          file=sys.stderr)
+    return config()
+
+
+def firewall_notes(c):
+    """What status says about the web ports, each one plain line: that they were closed to the
+    internet (for a month after), or that they are open to everyone, with the one command
+    that closes them."""
+    st, out = firewall_state(), []
+    moved = st.get("moved") if isinstance(st.get("moved"), dict) else None
+    if "web" in chosen_rulesets(c):
+        if web_was_the_installers(c, st):
+            out.append("ports 80 and 443 are open to everyone: the installer set that by mistake, and the next "
+                       "update closes them to the local network. Now: sudo bromigos server firewall apply")
+        elif "web" in c["firewall"]["allow"]:
+            out.append("ports 80 and 443 are open to everyone (the rule set web). To close them to the internet: "
+                       "sudo bromigos server firewall deny web")
+        else:
+            out.append("ports 80 and 443 are open to everyone: a role that is on opens the rule set web")
+    elif moved and isinstance(moved.get("ts"), (int, float)) and time.time() - moved["ts"] < MOVED_SAID_DAYS * 86400:
+        out.append("ports 80 and 443 now answer the local network only: the installer had opened them to everyone "
+                   "by mistake. To open them to everyone on purpose: sudo bromigos server firewall allow web")
+    return out
+
+
 def cmd_firewall(a):
     c = config()
     verb = a.verb or "status"
@@ -611,7 +678,19 @@ def cmd_firewall(a):
             sys.exit(f"bromigos-server: no rule set {a.name!r}: {'; '.join(f'{k} ({v})' for k, v in known.items())}")
         allow = [n for n in c["firewall"]["allow"] if n != a.name] + ([a.name] if verb == "allow" else [])
         set_toml_list(["firewall", "allow"], allow)
+        # asked for by name, it is the owner's own from here on (settle_web leaves it alone);
+        # denied, it is nobody's
+        st = firewall_state()
+        was = st.get("owner_allowed") if isinstance(st.get("owner_allowed"), list) else []
+        mine = [n for n in was if n != a.name] + ([a.name] if verb == "allow" else [])
+        if mine != was or (a.name == "web" and st.get("moved")):
+            st["owner_allowed"] = mine
+            if a.name == "web":
+                st.pop("moved", None)            # they have decided: status has nothing more to say of the move
+            write_json(FIREWALL_STATE, st)
         c = config()
+    elif verb == "apply" and not a.print:
+        c = settle_web(c)
     text = ruleset(c)
     if a.print:
         print(text)
@@ -1718,7 +1797,7 @@ def cmd_setup(a):
     """The settings applied: SSH's password rule, the firewall, the exporter's folder, the
     timers and the consoles, the boot menu, .local names, and every role that's on. Safe to
     run again; the package's install runs it."""
-    c = config()
+    c = settle_web(config())
     done = []
     # SSH's password rule: this file is setup's own only when it says so; one the installer wrote
     # (the same name, its own words) is left as it is, as are its other drop-ins (01-keys-only,

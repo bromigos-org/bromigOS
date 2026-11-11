@@ -81,6 +81,11 @@ notify = true                  # alerts to BRODEC on your phone, once it's paire
 arch_news_hold = true          # an Arch news item asking for manual steps pauses the update
 
 # ── firewall rule sets: "lan" is the private ranges (bromigos-server's), "any" the world ─
+# A name here is the name of bromigos-server's own rule set (/usr/share/bromigos/server/
+# allow-NAME.nft) wherever it has one, so it must open the same ports to the same people: the
+# installer checks that, and writes the rules itself where they differ. There is no "web" here:
+# that is bromigos-server's name for ports 80 and 443 open to everyone, which nobody gets
+# without asking (sudo bromigos server firewall allow web). The local network's is "web-lan".
 [firewall.ssh]
 tcp = [22]
 from = "any"
@@ -100,7 +105,7 @@ from = "lan"
 [firewall.nfs]
 tcp = [2049]
 from = "lan"
-[firewall.web]
+[firewall.web-lan]
 tcp = [80, 443]
 from = "lan"
 [firewall.games]
@@ -163,7 +168,7 @@ glyph = "house"
 icon = "people"
 packages = ["caddy"]
 services = ["caddy.service"]
-firewall = ["web"]
+firewall = ["web-lan"]
 health = ["apps"]
 services_on = ["front-door"]
 apps_on = ["homepage", "uptime-kuma"]
@@ -202,7 +207,7 @@ glyph = "monitor"
 icon = "desktop"
 packages = []
 services = []
-firewall = ["web"]
+firewall = ["web-lan"]
 health = ["apps"]
 services_on = ["front-door"]
 
@@ -391,7 +396,7 @@ words = "Each app at its own name, like photos-<server>.local, with HTTPS from y
 roles = ["home", "media"]
 packages = ["caddy"]
 units = ["caddy.service"]
-firewall = ["web"]
+firewall = ["web-lan"]
 
 [[services]]
 id = "performance"
