@@ -9,8 +9,8 @@
 
 import { ApiError, cleanCode } from "./errors";
 import { fixtureApi, fixtureName } from "./fixtures";
-import { readAction, readBoard, readDoor, readEvent, readSession, readVitals } from "./read";
-import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session, Vitals, VitalsRange , JobBody, JobVerb } from "./types";
+import { readAction, readBoard, readDoor, readEvent, readLabStatus, readSession, readVitals } from "./read";
+import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, LabStatus, Session, Vitals, VitalsRange , JobBody, JobVerb } from "./types";
 
 export { ApiError, cleanCode } from "./errors";
 
@@ -38,6 +38,10 @@ export interface Api {
   /** A job's own action (the service's POST /api/activity/<id>/<verb>): answer its question
    *  (a choice that can't be undone also carries a fresh code), stop it, or start it again. */
   jobAct(verb: JobVerb, job: string, body: JobBody): Promise<ActionAnswer>;
+  /** The lab follower's word on each ComfyUI (GET /api/lab). */
+  lab(): Promise<LabStatus>;
+  /** Where a picture, clip or model the lab follower keeps is served: same origin, by its name. */
+  mediaUrl(name: string): string;
 }
 
 const HEADERS = { "X-Bromigos-Board": "1", "Content-Type": "application/json" };
@@ -133,6 +137,8 @@ const realApi: Api = {
   },
   act: async (verb, app, more) => readAction(await send("POST", "/api/actions", { verb, app, ...(more ?? {}) })),
   jobAct: async (verb, job, body) => readAction(await send("POST", `/api/activity/${encodeURIComponent(job)}/${verb}`, body)),
+  lab: async () => readLabStatus(await call("/api/lab")),
+  mediaUrl: (name) => `/api/lab/media/${encodeURIComponent(name)}`,
 };
 
 let chosen: Api | null = null;

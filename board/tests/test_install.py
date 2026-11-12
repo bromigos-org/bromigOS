@@ -174,9 +174,11 @@ class UnitTests(unittest.TestCase):
         # where root's reader writes, and nothing the board's user owns is above it
         self.assertEqual(os.path.dirname(paths.SNAPSHOT), paths.RUN)
         requests = "/run/bromigos-board/requests"       # the one folder under root's that is the board's: requests for the helper
+        # the lab follower's own two folders (test_lab.py), outside root's
+        follower = {"/run/bromigos-labjobs", "/var/cache/bromigos-labjobs"}
         for path, (kind, mode, user, group) in t.items():
             if user != "root":
-                self.assertTrue(path == requests or path == paths.STATE or path.startswith(paths.STATE + "/"), path)
+                self.assertTrue(path == requests or path in follower or path == paths.STATE or path.startswith(paths.STATE + "/"), path)
             if path.startswith(paths.RUN) and kind == "d" and path != requests:
                 self.assertEqual((user, int(mode, 8) & 0o022), ("root", 0), path)
         self.assertIn("u bromigos-board -", (BOARD / "bromigos-board.sysusers").read_text())

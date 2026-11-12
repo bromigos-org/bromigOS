@@ -19,7 +19,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, byNewest } from "./api/client";
 import { ApiError } from "./api/errors";
-import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session , JobBody, JobVerb } from "./api/types";
+import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, LabStatus, Session , JobBody, JobVerb } from "./api/types";
 import { parse, type Route } from "./routes";
 import { wearWorld } from "./world";
 
@@ -63,6 +63,10 @@ export interface Lab {
   jobAct(verb: JobVerb, job: string, body: JobBody): Promise<ActionAnswer>;
   drawer: "activity" | "depth" | null;
   setDrawer(d: "activity" | "depth" | null): void;
+  /** The lab follower's word on each ComfyUI (GET /api/lab), read every 15 seconds; null until read. */
+  labStatus: LabStatus | null;
+  /** Where a picture, clip or model of the lab's is served (the service's own address for it). */
+  mediaUrl(name: string): string;
 }
 
 const Ctx = createContext<Lab | null>(null);
@@ -98,6 +102,7 @@ export function LabProvider({ children }: { children: ReactNode }) {
   const [live, setLive] = useState(false);
   const [scope, setScope] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<"activity" | "depth" | null>(null);
+  const [labStatus, setLabStatus] = useState<LabStatus | null>(null);
   const [, setTick] = useState(0);
   const route = useHashRoute();
   const signedIn = session.state === "ok" && session.doc.signed_in;
@@ -225,6 +230,21 @@ export function LabProvider({ children }: { children: ReactNode }) {
     };
   }, [a, signedIn]);
 
+  // the lab follower's word, while signed in and looked at (it also keeps the follower running)
+  useEffect(() => {
+    if (!a || !signedIn) return;
+    let over = false;
+    const read = () => !document.hidden && a.lab().then((s) => !over && setLabStatus(s), () => {});
+    read();
+    const t = window.setInterval(read, BOARD_EVERY_MS);
+    document.addEventListener("visibilitychange", read);
+    return () => {
+      over = true;
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", read);
+    };
+  }, [a, signedIn]);
+
   // the scope follows the rail: a machine's page picks it, Home lets go of it
   const lastPlace = useRef(route.place);
   useEffect(() => {
@@ -298,6 +318,8 @@ export function LabProvider({ children }: { children: ReactNode }) {
     },
     drawer,
     setDrawer,
+    labStatus,
+    mediaUrl: (name) => (a ? a.mediaUrl(name) : `/api/lab/media/${encodeURIComponent(name)}`),
   };
   return <Ctx.Provider value={lab}>{children}</Ctx.Provider>;
 }

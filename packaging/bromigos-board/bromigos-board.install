@@ -31,9 +31,10 @@ post_upgrade() {
   fi
   rm -f var/lib/bromigos-board-root/upgrade-actions
   systemctl try-restart bromigos-board.service >/dev/null 2>&1 || true
-  # a server set up before the page could act: its helper's watch starts with the rest
+  # a server set up before the page could act, or before it showed the lab's jobs: the helper's
+  # watch and the lab follower's start with the rest
   if systemctl is-enabled -q bromigos-board.socket 2>/dev/null; then
-    systemctl enable --now bromigos-board-act.path >/dev/null 2>&1 || true
+    systemctl enable --now bromigos-board-act.path bromigos-board-lab.path >/dev/null 2>&1 || true
   fi
 }
 
@@ -43,7 +44,8 @@ post_upgrade() {
 # they'd be good for 30 days if the package came back.
 pre_remove() {
   systemctl disable --now bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path \
-    bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service >/dev/null 2>&1 || true
+    bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service \
+    bromigos-board-lab.path bromigos-board-lab.service >/dev/null 2>&1 || true
   if [ -e etc/caddy/conf.d/bromigos-board.caddy ]; then
     rm -f etc/caddy/conf.d/bromigos-board.caddy
     systemctl reload caddy.service >/dev/null 2>&1 || true

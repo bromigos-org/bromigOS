@@ -9,7 +9,10 @@ client: it serves the page's files and passes /api here.
   DELETE /api/session         sign this browser out
   DELETE /api/session/{id}    sign another browser out
   GET    /api/board           everything the board shows (signed in)
-  GET    /api/activity        the jobs, live, as server-sent events (signed in)
+  GET    /api/activity        the jobs, live, as server-sent events (signed in): this server's and
+                              the lab's (ComfyUI generations, job feeds: the lab follower's files)
+  GET    /api/lab             the lab follower's ComfyUIs: answering, live, relayed (signed in)
+  GET    /api/lab/media/NAME  a preview, thumbnail or output the lab follower keeps (signed in)
   POST   /api/actions         {verb, app[, delete_data, code]}: restart, add or remove an app, as a
                               job (signed in; deleting its data needs a fresh console code too)
   POST   /api/activity/{job}/answer   {question, choice}: answer what a job asks (signed in)
@@ -30,7 +33,7 @@ import time
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from . import SCHEMA, actions, auth, board, door, net, paths
@@ -314,10 +317,22 @@ def _activity():
 _jobs_trouble = [None]
 
 
+def _labjobs():
+    import bromigos_labjobs
+    return bromigos_labjobs
+
+
+def lab_where():
+    """The machine's lab follower's folders (docs/activity.md, "Lab jobs"): its jobs.json, never
+    a ComfyUI (the API has no network) and never a feed's own file (its paths are the server's)."""
+    A = _activity()
+    return _labjobs().Where(A.Env(), system=True)
+
+
 def jobs_now(limit=50):
     try:
         A = _activity()
-        return A.list_jobs(A.Env(), limit=limit)
+        return A.list_jobs(A.Env(), limit=limit, lab={"where": lab_where(), "live": False, "files": False})
     except Exception as e:     # no bromigos-core here, or an unreadable folder: no jobs, not a crash
         why = f"{type(e).__name__}: {e}"
         if why != _jobs_trouble[0]:           # said once in the service's log, not at every look
@@ -372,6 +387,54 @@ async def get_activity(request):
     st = request.app.state
     gen = activity_events(request, request.cookies.get(auth.COOKIE), poll=st.poll, limit_s=st.stream_s)
     return StreamingResponse(gen, media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
+
+
+# a media file's answer: its own type, kept by the browser (its name is its content), and nothing
+# in it may run (an image or a video opened on its own is still under this policy)
+MEDIA_HEADERS = {"Cache-Control": "private, max-age=604800, immutable", "X-Content-Type-Options": "nosniff",
+                 "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+                 "Cross-Origin-Resource-Policy": "same-origin"}
+
+
+def lab_state():
+    """The lab follower's jobs.json and media folder, as lab_where reads them: (doc, folder)."""
+    try:
+        return _labjobs().read_state(lab_where())
+    except Exception:          # no bromigos-core's lab module here: no lab
+        return None, None
+
+
+async def get_lab(request):
+    """The lab follower's word on each ComfyUI it follows: whether it answers, whether its live
+    progress comes (the websocket), and whether the relay node sends everyone's. `following` is
+    false while the follower hasn't written for 15 seconds (it starts with the reader)."""
+    rec = session_of(request)
+    if not rec:
+        return error(401, SIGNED_OUT)
+    touch_wanted()
+    doc, _ = await run_in_threadpool(lab_state)
+    insts = []
+    for i in (doc or {}).get("instances") or []:
+        if isinstance(i, dict) and isinstance(i.get("name"), str):
+            insts.append({"name": i["name"], "state": "ok" if i.get("state") == "ok" else "down",
+                          "words": str(i.get("words") or ""), "live": bool(i.get("live")), "relay": bool(i.get("relay"))})
+    return JSONResponse({"schema": SCHEMA, "following": doc is not None, "at": (doc or {}).get("at"), "instances": insts})
+
+
+async def get_lab_media(request):
+    """One file of the lab follower's media folder, by the name the follower gave it (pv-, th-,
+    of-, fm- and 16 hex digits, and its type): any other name is 404, as is a link."""
+    rec = session_of(request)
+    if not rec:
+        return error(401, SIGNED_OUT)
+    name = request.path_params["name"]
+    _, folder = await run_in_threadpool(lab_state)
+    L = _labjobs()
+    path = L.media_path(folder or paths.at(L.SYSTEM_MEDIA), name)
+    if not path:
+        return error(404, ("no-media", "The lab keeps no such picture: it may have made room for newer ones."))
+    kind = L.MEDIA_TYPES[name.rsplit(".", 1)[1]]
+    return FileResponse(path, media_type=kind, headers=dict(MEDIA_HEADERS))
 
 
 async def post_actions(request):
@@ -477,6 +540,8 @@ ROUTES = [
     Route("/api/session/{sid}", delete_session_id, methods=["DELETE"]),
     Route("/api/board", get_board, methods=["GET"]),
     Route("/api/activity", get_activity, methods=["GET"]),
+    Route("/api/lab", get_lab, methods=["GET"]),
+    Route("/api/lab/media/{name}", get_lab_media, methods=["GET"]),
     Route("/api/actions", post_actions, methods=["POST"]),
     Route("/api/activity/{job}/{verb}", post_job_action, methods=["POST"]),
 ]

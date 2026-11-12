@@ -16,3 +16,64 @@
 .job-danger p { margin: 0; max-width: none; font-size: 13px; }
 .job-danger .fld { margin-top: 0; max-width: 320px; }
 .job-danger .wordbtn.back { color: var(--soft); border-color: var(--frame); }
+/* the lab's jobs (docs/activity.md, "Lab jobs"): which jobs, the lab's ComfyUIs, and a lab job's card
+   with its picture on glass (the Scanline and the lit corners), its ring, its stages and its queue */
+.ac-top { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 12px; }
+.ac-filter { display: flex; gap: 8px; }
+.ac-filter .ib { position: relative; }
+.ac-lab { gap: 6px 14px; font-size: 12px; }
+.job.lab { padding: 12px; }
+.job.lab.run { border-color: var(--lit); box-shadow: 0 0 14px var(--glow) inset; }
+.lab-grid { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 14px; align-items: start; }
+.job.lab.hero .lab-grid, .job.lab.big .lab-grid { grid-template-columns: minmax(220px, 360px) minmax(0, 1fr); }
+.lab-pv { margin: 0; aspect-ratio: 1; max-width: none; display: grid; place-items: center; border: 1px solid var(--line); }
+.lab-pv.live { border-color: var(--lit); }
+.lab-pv .lab-img { width: 100%; height: 100%; object-fit: contain; display: block; position: relative; z-index: 0; }
+.lab-pv .lab-none { color: var(--dim); }
+.lab-pv .h-scan, .lab-pv .h-edge { z-index: 1; }
+.lab-ring { position: absolute; right: 8px; bottom: 8px; z-index: 2; display: grid; place-items: center; background: color-mix(in srgb, var(--void) 55%, transparent); border-radius: 50%; }
+.lab-ring svg { display: block; }
+.lab-ring b { position: absolute; font-size: 12px; color: var(--phosphor); font-variant-numeric: tabular-nums; text-shadow: 0 0 6px var(--glow); }
+.lab-ring.est .ring-done { stroke: var(--soft); stroke-opacity: .75; }
+.lab-ring .ring-track, .lab-ring .ring-done { stroke-width: 5; }
+.lab-turn { all: unset; cursor: pointer; display: grid; place-items: center; gap: 6px; color: var(--phosphor); width: 100%; height: 100%; position: relative; z-index: 2; }
+.lab-turn:hover, .lab-turn:focus-visible { background: color-mix(in srgb, var(--phosphor) 8%, transparent); }
+.lab-holo { position: absolute; inset: 0; z-index: 0; }
+.lab-holo-gl { position: absolute; inset: 0; }
+.lab-holo-flat { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 10px; text-align: center; color: var(--phosphor); }
+.lab-holo.ready .lab-holo-flat { display: none; }
+.lab-body { min-width: 0; }
+.lab-stage { margin: 8px 0 0; color: var(--phosphor); font-weight: 700; font-size: 14px; max-width: none; }
+.lab-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; }
+.lab-steps li { display: inline-flex; align-items: center; gap: 4px; }
+.lab-steps li.done { color: var(--soft); } .lab-steps li.now { color: var(--phosphor); font-weight: 700; } .lab-steps li.todo { color: var(--faint); }
+.lab-steps li.fail { color: var(--danger); } .lab-steps li.skip { color: var(--static); }
+.lab-time, .lab-prompt { margin: 6px 0 0; max-width: none; overflow-wrap: anywhere; }
+.lab-prompt { color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lab-queue { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.lab-queue .k { font-size: 11px; font-weight: 700; letter-spacing: .2em; color: var(--phosphor); }
+.lab-queue ol { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.lab-queue a { display: inline-flex; gap: 6px; align-items: center; color: var(--soft); text-decoration: none; overflow-wrap: anywhere; }
+.lab-queue a:hover, .lab-queue a:focus-visible { color: var(--phosphor); }
+.lab-outs { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.lab-outs a, .lab-outs span { display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid var(--line); color: var(--phosphor); }
+.lab-outs img { width: 100%; height: 100%; object-fit: cover; }
+.ac-making .job.lab { border: 0; padding: 0; background: none; box-shadow: none; }
+@container view (max-width: 600px) {
+  .lab-grid, .job.lab.hero .lab-grid, .job.lab.big .lab-grid { grid-template-columns: minmax(0, 1fr); }
+  .lab-pv { max-height: 70vw; aspect-ratio: auto; height: min(70vw, 360px); }
+  .ac-top { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { .lab-pv .h-scan::after { animation: none; } }
+.lab-body > .head { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.lab-body > .head b { color: var(--soft); font-size: 14px; display: block; overflow-wrap: anywhere; }
+.lab-body > .head span.sub { color: var(--static); font-size: 12px; display: block; overflow-wrap: anywhere; }
+.lab-body > .head .tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.job.lab.compact .lab-grid { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+.job.lab.compact .job-acts { margin-top: 6px; }
+@container view (max-width: 600px) {
+  .job.lab.compact .lab-grid { grid-template-columns: 72px minmax(0, 1fr); }
+  .job.lab.compact .lab-pv { height: 72px; aspect-ratio: 1; }
+  .lab-body > .head { grid-template-columns: 20px minmax(0, 1fr); }
+  .lab-body > .head .tags { grid-column: 2; justify-content: flex-start; }
+}

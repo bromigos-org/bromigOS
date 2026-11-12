@@ -1,0 +1,55 @@
+# The Lab board's lab follower (docs/board.md, "The lab's jobs"): `bromigos activity follow`
+# keeps the lab's creation jobs (ComfyUI generations and job feeds, docs/activity.md "Lab jobs")
+# in /run/bromigos-labjobs/jobs.json, with their previews and outputs in
+# /var/cache/bromigos-labjobs, for the API to read and serve. Started with the reader while a
+# signed-in browser is connected (bromigos-board-lab.path); it stops when nobody has looked for
+# 45 seconds. Its own user; it reads the network, listens on none, and talks only to private
+# addresses: the lab's ComfyUIs.
+[Unit]
+Description=bromigOS Lab board: follow the lab's creation jobs
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/bromigos/bin/bromigos-activity follow --system --idle 45 --wanted /run/bromigos-labjobs-wanted
+User=bromigos-labjobs
+Group=bromigos-labjobs
+Nice=10
+IOSchedulingClass=idle
+# its files: 0640, and the group is the board's (the folders are setgid bromigos-board)
+UMask=0027
+# what the board's user marks (`wanted`), shown here read-only: the follower can't look inside
+# root's folder, and needs only the file's time
+BindReadOnlyPaths=/run/bromigos-board/wanted:/run/bromigos-labjobs-wanted
+ProtectSystem=strict
+ReadOnlyPaths=/run
+ReadWritePaths=/run/bromigos-labjobs /var/cache/bromigos-labjobs
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# out to the lab's ComfyUIs: this machine and private addresses only, and no listening socket
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost link-local 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
+SocketBindDeny=any
+MemoryMax=256M
+TasksMax=32

@@ -818,7 +818,7 @@ class CatalogueFormatTwo(unittest.TestCase):
                          ["photos-box.local", "home-box.local"])
         calls = [" ".join(c) for c in self.m.calls]
         self.assertIn("pacman -S --needed --noconfirm bromigos-board", calls)
-        for u in ("bromigos-board.socket", "bromigos-board-snapshot.path", "bromigos-board-act.path"):
+        for u in ("bromigos-board.socket", "bromigos-board-snapshot.path", "bromigos-board-act.path", "bromigos-board-lab.path"):
             self.assertIn(f"systemctl enable {u}", calls)
         # the site is written once the package it imports is there, then Caddy loads it
         self.assertLess(calls.index("pacman -S --needed --noconfirm bromigos-board"),

@@ -1,0 +1,12 @@
+# The Lab board's lab follower (docs/board.md, "The lab's jobs"): started when the API marks
+# `wanted`, as the reader is; it ends by itself when nobody has looked for 45 seconds.
+[Unit]
+Description=bromigOS Lab board: follow the lab's jobs when the page asks
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Path]
+PathModified=/run/bromigos-board/wanted
+Unit=bromigos-board-lab.service
+
+[Install]
+WantedBy=paths.target

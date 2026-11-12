@@ -373,6 +373,68 @@ def two_levels(doc):
     return "\n".join(lines + ["}"]) + "\n"
 
 
+def moved(doc, shift):
+    """A recorded ComfyUI answer with its times moved by `shift` ms (its prompts' create_time and
+    its messages' timestamps), so they sit just before the samples' NOW."""
+    if isinstance(doc, dict):
+        return {k: (v + shift if k in ("timestamp", "create_time") and isinstance(v, int) else moved(v, shift)) for k, v in doc.items()}
+    if isinstance(doc, list):
+        return [moved(v, shift) for v in doc]
+    return doc
+
+
+def lab_case(root, c):
+    """The lab's jobs, as the API passes them on (docs/board.md, "The lab's jobs"): the real lab
+    follower (bromigos_labjobs.Follower), fed a real ComfyUI's recorded queue, history and websocket
+    (tests/activity/fixtures/comfyui) by the activity tests' stand-in, and a job feed's run with a
+    thumbnail. Its times are moved so the newest prompt ended 30 seconds before NOW."""
+    import bromigos_activity as A
+    import bromigos_labjobs as L
+    # (tests/alerts has a `fake` too, imported first: the activity tests' own is put in its place)
+    other = sys.modules.pop("fake", None)
+    try:
+        import test_labjobs as T
+    finally:
+        sys.modules.pop("fake", None)
+        if other is not None:
+            sys.modules["fake"] = other
+    shift = NOW - T.NOW
+    queue, history, frames = moved(T.QUEUE, shift), moved(T.HISTORY, shift), moved(T.WS["frames"], shift)
+    (root / "etc/bromigos/labjobs.toml").write_text('[[comfyui]]\nname = "studio"\nurl = "http://127.0.0.1:8188"\n')
+    os.environ["BROMIGOS_ACTIVITY_NOW_MS"] = str(NOW)
+    every, L.PREVIEW_EVERY_S = L.PREVIEW_EVERY_S, 0.0
+    out = {}
+    try:
+        env = A.Env()
+        feed = root / "var/lib/bromigos/activity/feed"
+        (feed / "ships").mkdir(parents=True, exist_ok=True)
+        (feed / "ships" / "cut.png").write_bytes(T.PNG)
+        f = L.Feed("ships-20261110", "Universe assets: ships", folder=str(feed), env=env, pid=None)
+        f.step("cutout", "Cut out ship-a")
+        f.media(str(feed / "ships" / "cut.png"))
+        f.step("shape", "Shape ship-a")
+        fol = L.Follower(L.Where(env, system=True), websocket=False, http={"studio": T.FakeHttp(queue, history)}, log=lambda w: None)
+        fol.graphs[("studio", T.RUNNING)] = queue["queue_running"][0][2]
+        for fr in frames:
+            fol.on_message({"name": "studio"}, json.dumps(fr["text"]) if "text" in fr else __import__("base64").b64decode(fr["binary"]))
+        doc = fol.pass_once()
+        with c.stream("GET", "/api/activity") as s:
+            out["activity_lab"] = {"request": "GET /api/activity", "status": s.status_code,
+                                   "headers": {"content-type": s.headers["content-type"]}, "body": "".join(s.iter_text())}
+        out["lab"] = exchange(c.get("/api/lab"))
+        name = next(r for r in doc if r["state"] == "succeeded")["result"]["outputs"][0]["media"]
+        r = c.get(f"/api/lab/media/{name}")
+        out["lab_media"] = {"request": f"GET /api/lab/media/{name}", "status": r.status_code, "body": f"<{len(r.content)} bytes>",
+                            "headers": {k: v for k, v in r.headers.items() if k.lower() in (
+                                "content-type", "cache-control", "content-security-policy", "x-content-type-options")}}
+        out["lab_media_unknown"] = exchange(c.get("/api/lab/media/of-0000000000000000.png"))
+    finally:
+        os.environ.pop("BROMIGOS_ACTIVITY_NOW_MS", None)
+        L.PREVIEW_EVERY_S = every
+        (root / "etc/bromigos/labjobs.toml").unlink()
+    return out
+
+
 # ---------------------------------------------------------------- the service
 def service_lib(args, stack):
     here = REPO / "board/lib/bromigos_board"
@@ -533,6 +595,8 @@ def build(args):
                     "job_retry_cant": (run_, "retry", {}),
                 }.items():
                     http[key] = exchange(c.post(f"/api/activity/{job_id}/{verb}", json=body, headers=page), body)
+        # the lab's jobs: the lab follower's files, the stream, GET /api/lab and a media file
+        http.update(lab_case(root, c))
         (root / "etc/bromigos/server.toml").write_text("[board]\ndoor = false\nworld = \"tidewell\"\n")
         snap()
         doors["off"] = c.get("/api/door").json()

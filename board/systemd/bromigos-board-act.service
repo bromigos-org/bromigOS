@@ -19,8 +19,9 @@ ExecStart=/usr/lib/bromigos/board/bromigos-board act
 # Each answer gets its own mode, 0640, on the open file)
 UMask=0022
 TimeoutStartSec=15min
-# It is root, and may write five places: the requests it takes out, the answers it leaves, the
-# two folders the codes are in (the board's own, and root's), and the activity records. The job
+# It is root, and may write six places: the requests it takes out, the answers it leaves, the
+# two folders the codes are in (the board's own, and root's), the activity records, and the lab
+# follower's asks. The job
 # itself runs in a unit of its own (systemd-run), outside this sandbox. Everything else is
 # read-only here: even with a way to make root write where it shouldn't, /etc and /usr stay shut.
 ProtectSystem=strict
@@ -30,6 +31,9 @@ ReadOnlyPaths=/run
 ReadWritePaths=/run/bromigos-board/requests /run/bromigos-board/results
 ReadWritePaths=/var/lib/bromigos-board /var/lib/bromigos-board-root
 ReadWritePaths=-/var/lib/bromigos/activity -/var/lib/bromigos/server/activity
+# stopping a lab generation: `bromigos activity cancel` hands it to the lab follower here, having
+# no network itself (docs/board.md, "The lab's jobs")
+ReadWritePaths=-/run/bromigos-labjobs-asks
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

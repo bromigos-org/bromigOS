@@ -1289,7 +1289,8 @@ STEP_UNITS = {"k3s": ["k3s.service"], "openbao": ["openbao.service", "bromigos-o
               "monitoring": ["prometheus.service", "grafana.service"], "backups": ["bromigos-lab-backup.timer"],
               "caddy": ["caddy.service"], "passwords": ["vaultwarden.service"], "file-sync": ["syncthing@syncthing.service"],
               "adblock": ["adguardhome.service"], "smb": ["smb.service"], "wings": ["docker.service", "wings.service"],
-              "lab-network": ["tailscaled.service"], "board": ["bromigos-board.socket", "bromigos-board-snapshot.path", "bromigos-board-act.path"]}
+              "lab-network": ["tailscaled.service"], "board": ["bromigos-board.socket", "bromigos-board-snapshot.path", "bromigos-board-act.path",
+                        "bromigos-board-lab.path"]}
 STEP_DOWNLOADS = {"k3s": ["k3s " + K3S_VERSION + " from get.k3s.io"], "helm-chart": ["package helm", "Helm chart"],
                   "openbao": ["package openbao"], "monitoring": ["package prometheus", "package grafana"],
                   "backups": ["package restic"], "caddy": ["package caddy"],

@@ -16,8 +16,22 @@ const KIND_ICON: Record<string, string> = {
   "pool.check": "i-find",
   "server.update": "i-update",
   "salvage.scan": "i-chip",
+  // the lab's jobs (docs/activity.md, "Lab jobs"): what each makes
+  "lab.image": "i-photos",
+  "lab.edit": "i-layers",
+  "lab.cutout": "i-photos",
+  "lab.upscale": "i-find",
+  "lab.video": "i-film",
+  "lab.model3d": "i-models",
+  "lab.pipeline": "i-lab",
+  "lab.comfyui": "i-lab",
 };
-export const jobIcon = (j: JobRecord) => (j.children.length > 1 && j.kind === "app.update" ? "i-updateall" : KIND_ICON[j.kind] ?? "i-job");
+export const jobIcon = (j: JobRecord) =>
+  j.children.length > 1 && j.kind === "app.update" ? "i-updateall" : KIND_ICON[j.kind] ?? (j.lab ? "i-lab" : "i-job");
+
+/** Which jobs a list shows: all of them, this server's own, or the lab's (ComfyUI, job feeds). */
+export type JobFilter = "all" | "server" | "lab";
+export const inFilter = (j: JobRecord, f: JobFilter) => f === "all" || (f === "lab") === !!j.lab;
 
 /** The words the activity command uses for each state (bin/bromigos-activity). */
 export const STATE_WORD: Record<JobState, string> = {
