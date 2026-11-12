@@ -777,9 +777,10 @@ class CatalogueFormatTwo(unittest.TestCase):
 
     def host(self, ids, hw=HW):
         plan = L.build_plan(ids, hw=hw)
+        self.studio = []
         return L.Host(plan, root=self.root, run_=self.m, online=lambda: True, sleep=lambda s: None,
                       store=S.LocalStore(self.root, self.m, "box"), emit=lambda line: None, hw=hw, hostname="box",
-                      tz="America/Los_Angeles")
+                      tz="America/Los_Angeles", steps={"studio-models": lambda h, it: self.studio.append(it["id"])})
 
     def test_names_ports_and_links_come_out_as_before(self):
         host = self.host(["caddy", "start-page", "monitoring", "passwords", "photos", "s3", "file-sync", "sonarr", "plex"])
@@ -869,8 +870,10 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertIn("PublishPort=127.0.0.1:8188:8188", amd, "a desktop has no firewall: the page is its own")
         self.assertIn("Exec=bash /bromigos/launch.sh", amd)
         self.assertNotIn("{{", amd)
-        self.assertEqual(L.downloads_of(it, {"gpu": "amd"}), ["image docker.io/yanwk/comfyui-boot:rocm-20261104"])
-        self.assertEqual(L.downloads_of(it, {"gpu": "nvidia"}), ["image docker.io/yanwk/comfyui-boot:cu130-slim-v2-20261104"])
+        models = "the models that fit this card, each checked against its sha256"
+        self.assertEqual(L.downloads_of(it, {"gpu": "amd"}), ["image docker.io/yanwk/comfyui-boot:rocm-20261104", models])
+        self.assertEqual(L.downloads_of(it, {"gpu": "nvidia"}),
+                         ["image docker.io/yanwk/comfyui-boot:cu130-slim-v2-20261104", models])
 
     def test_an_nvidia_card_is_described_to_podman_before_the_app_starts(self):
         hw = dict(HW, gpu="nvidia", gpu_vram_gb=24, disk_gb=900, ram_gb=64)
@@ -882,6 +885,7 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertTrue(cdi.endswith("/etc/cdi/nvidia.yaml"))
         self.assertLess(calls.index(cdi), calls.index("systemctl daemon-reload"))
         self.assertTrue(Path(self.root, L.QUADLET_DIR, "comfyui.container").exists())
+        self.assertEqual(self.studio, ["comfyui"], "the models come once ComfyUI runs")
         # a spec already there (the toolkit's own refresh made it) is left alone
         self.m.calls.clear()
         Path(self.root, "etc/cdi").mkdir(parents=True, exist_ok=True)

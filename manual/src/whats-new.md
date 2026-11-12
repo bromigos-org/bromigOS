@@ -25,6 +25,15 @@ Developers can read every change in the repository's `CHANGELOG.md`.
 These changes are already on the `edge` channel. They are not a new stable release.
 Run `bromigos update` to get them. The next release notes will include these highlights.
 
+### New
+
+- **The Creation studio.** One choice sets up ComfyUI on your own NVIDIA or AMD card,
+  with the best open models that fit it and bromigOS's workflows: pictures, edits,
+  cutouts, video loops and 3D models, at no cost per picture. Every model file is checked
+  before it's used, and upgrades keep the model they replace for 14 days. Tick it in the
+  Server installer, Add it on the Lab board, or see
+  [The Creation studio](lab.md#the-creation-studio).
+
 ### Fixed
 
 - On a computer whose network runs on iwd or systemd-networkd, NetworkManager no longer

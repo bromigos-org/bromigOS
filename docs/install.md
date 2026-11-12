@@ -276,6 +276,13 @@ so your other keys and comments stay. More about some sections:
   - A ComfyUI is offered only where it has a shipped workflow's models. Setup looks for
     one on this machine at `127.0.0.1:8188`, a `comfyui` source in `homelab.toml`, or
     `BROMIGOS_COMFYUI_URL`.
+  - **The Creation studio** is offered on a machine with a graphics card and
+    `bromigos-homelab`: ComfyUI with the models that fit the card. Choosing it runs
+    `bromigos lab apps add comfyui` ([lab.md](lab.md#the-creation-studio)). It's never the
+    default, because it downloads a lot.
+  - **Creative apps**: none, Blender, Godot or both, from Arch's repositories. Setup
+    installs them with `sudo pacman -S --needed` (unattended, `sudo -n` and
+    `--noconfirm`, so it never asks).
   - nolgia is a cloud service that costs credits. Signing in runs `nolgia auth login`. An
     unattended install can pass a personal access token in a file instead. It's stored
     with mode 0600 in `~/.local/share/bromigos/nolgia-token`, for `bromigos art`, and
@@ -330,6 +337,8 @@ cloud_for = ["video.loop"]     # optional: services that may use the cloud last
 
 [create]
 nolgia_token_file = "/home/me/nolgia-token"   # optional: sign in to nolgia unattended
+studio = true                                 # optional: set up the Creation studio
+apps = ["blender", "godot"]                   # optional: creative apps
 
 [create.providers]       # a capability's providers, in order
 "image.generate" = ["comfyui:local", "nolgia"]

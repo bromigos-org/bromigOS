@@ -238,9 +238,15 @@ def main(argv):
                 print(said)
             return 0
         if "--apply" in argv:
-            print("Applying an upgrade lands with Phase 2 (bromigos lab models replace): a pull request to "
-                  "your homelab repo, deployed beside the old model, smoke-tested, then switched. Nothing was "
-                  "changed. What the policy would do now:", file=sys.stderr)
+            from . import studio
+            if studio.Studio().installed():                  # the Creation studio on this machine: apply here
+                return studio.main(["upgrade", "--apply"] + (["--json"] if js else []),
+                                   [os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "bromigos-lab"),
+                                    "studio"])
+            print("Applying an upgrade to a lab's own servers lands with Phase 2 (bromigos lab models replace): a "
+                  "pull request to your homelab repo, deployed beside the old model, smoke-tested, then switched. "
+                  "The Creation studio on this machine upgrades now (bromigos lab studio upgrade --apply); this "
+                  "machine doesn't run one. Nothing was changed. What the policy would do now:", file=sys.stderr)
         ev = evaluate(**_plan_settings())
     except C.CatalogError as e:
         print(f"bromigos lab models upgrades: {e}", file=sys.stderr)
