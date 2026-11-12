@@ -343,6 +343,22 @@ class ApplyTest(unittest.TestCase):
         self.assertFalse(s.apply(plan(NV8), CAT, WFS)["relocked"])
         self.assertNotIn(["systemctl", "restart", "comfyui.service"], self.m.calls)
 
+    def test_apply_puts_the_relay_and_its_token_back(self):
+        """bromigos lab studio apply re-asserts the relay node, its token and labjobs.toml's reference."""
+        s = self.studio()
+        s.apply(plan(NV8), CAT, WFS)
+        relay = Path(self.root, "srv/apps/comfyui/custom_nodes/bromigos-relay")
+        token = (relay / "token").read_text()
+        (relay / "__init__.py").unlink()
+        Path(self.root, "etc/bromigos/labjobs.toml").write_text('[[comfyui]]\nname = "studio"\nurl = "http://127.0.0.1:8188"\n')
+        self.m.calls.clear()
+        self.assertTrue(s.apply(plan(NV8), CAT, WFS)["relocked"])
+        self.assertIn(["systemctl", "restart", "comfyui.service"], self.m.calls, "ComfyUI starts again to load the node")
+        self.assertTrue((relay / "__init__.py").is_file())
+        self.assertEqual((relay / "token").read_text(), token, "the same token")
+        self.assertIn('relay_token = "@file:/srv/apps/comfyui/custom_nodes/bromigos-relay/token"',
+                      Path(self.root, "etc/bromigos/labjobs.toml").read_text())
+
     def test_a_manager_that_answers_or_the_image_s_own_start_is_a_problem(self):
         s = self.studio()
         s.apply(plan(NV8), CAT, WFS)

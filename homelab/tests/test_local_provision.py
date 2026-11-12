@@ -920,12 +920,39 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertTrue(L.studio_lock(host))
         self.assertIn("security_level = strong", Path(self.root, "srv/apps/comfyui/user/__manager/config.ini").read_text())
         self.assertFalse(L.studio_lock(host), "nothing to change the second time")
-        # the Lab board follows the studio's jobs: it names itself in labjobs.toml, once
+        # the relay node, with a token made once and kept, readable by the follower only
+        relay = Path(self.root, "srv/apps/comfyui/custom_nodes/bromigos-relay")
+        self.assertIn("bromigos-watch-", (relay / "__init__.py").read_text())
+        token = (relay / "token").read_text().strip()
+        self.assertRegex(token, r"^[0-9a-f]{48}$")
+        self.assertEqual((relay / "token").stat().st_mode & 0o777, 0o640)
+        self.assertFalse(L.studio_lock(host), "the token is kept")
+        self.assertEqual((relay / "token").read_text().strip(), token)
+        (relay / "token").write_text("short\n")
+        self.assertTrue(L.studio_lock(host), "a broken token is made again, and ComfyUI restarts for it")
+        self.assertNotEqual((relay / "token").read_text().strip(), token)
+        # the Lab board follows the studio: labjobs.toml names it and its token (by reference only)
         labjobs = Path(self.root, "etc/bromigos/labjobs.toml")
-        self.assertIn('url = "http://127.0.0.1:8188"', labjobs.read_text())
-        labjobs.write_text("# mine\n")
+        text = labjobs.read_text()
+        self.assertIn('url = "http://127.0.0.1:8188"', text)
+        self.assertIn('relay_token = "@file:/srv/apps/comfyui/custom_nodes/bromigos-relay/token"', text)
+        self.assertNotIn((relay / "token").read_text().strip(), text, "never the token itself")
+        # the owner's file: their comments and entries stay; only the studio's relay_token comes back
+        labjobs.write_text('# mine\n[[comfyui]]\nname = "gpu"\nurl = "http://10.0.0.5:8188"\n\n'
+                           '[[comfyui]]\nname = "studio"  # here\nurl = "http://127.0.0.1:8188"\nrelay_token = "x"\n')
         L.prepare_comfyui(host, None)
-        self.assertEqual(labjobs.read_text(), "# mine\n", "the owner's file is never written again")
+        text = labjobs.read_text()
+        self.assertTrue(text.startswith('# mine\n[[comfyui]]\nname = "gpu"'))
+        self.assertIn('name = "studio"  # here\nurl = "http://127.0.0.1:8188"\n'
+                      'relay_token = "@file:/srv/apps/comfyui/custom_nodes/bromigos-relay/token"', text)
+        labjobs.write_text("# mine, no studio\n")
+        L.prepare_comfyui(host, None)
+        self.assertEqual(labjobs.read_text(), "# mine, no studio\n", "a file without the studio is left alone")
+        # and the token is what the lab's readers use
+        import tomllib
+        self.assertEqual(L.labjobs_with_token('[[comfyui]]\nname = "studio"\n', "@file:/t"),
+                         '[[comfyui]]\nname = "studio"\nrelay_token = "@file:/t"\n')
+        tomllib.loads(L.STUDIO_LABJOBS.format(token="@file:/t"))
 
     def test_an_amd_card_needs_no_toolkit(self):
         host = self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24, disk_gb=900, ram_gb=64))
