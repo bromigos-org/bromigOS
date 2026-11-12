@@ -8,7 +8,8 @@ the start page can show any prompt live, whoever queued it. It changes nothing e
 client already got, it still gets, once.
 
 The token is the first line of the file named by BROMIGOS_RELAY_TOKEN_FILE, or the variable
-BROMIGOS_RELAY_TOKEN: at least 16 letters and digits. Without one the relay copies nothing. The
+BROMIGOS_RELAY_TOKEN, or the file `token` beside this one (where the Creation studio puts it):
+at least 16 letters and digits. Without one the relay copies nothing. The
 watchers read the same token (labjobs.toml's `relay_token`, a reference such as
 "@file:/etc/bromigos/comfyui-relay.token").
 
@@ -34,13 +35,17 @@ NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
 
-def read_token(environ=None):
+HERE_TOKEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "token")
+
+
+def read_token(environ=None, beside=HERE_TOKEN):
     """The relay's token, or None (then it copies nothing)."""
     e = os.environ if environ is None else environ
     token = e.get("BROMIGOS_RELAY_TOKEN") or ""
-    if e.get("BROMIGOS_RELAY_TOKEN_FILE"):
+    path = e.get("BROMIGOS_RELAY_TOKEN_FILE") or (beside if not token else None)
+    if path:
         try:
-            with open(e["BROMIGOS_RELAY_TOKEN_FILE"]) as f:
+            with open(path) as f:
                 token = f.readline().strip()
         except OSError:
             token = ""

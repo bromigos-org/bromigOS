@@ -26,7 +26,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import grp
 import re
+import secrets
 import shlex
 import shutil
 import socket
@@ -1378,28 +1380,127 @@ allow_pip_install = false
 
 
 def studio_lock(host):
-    """The studio's launcher and the Manager's locked settings, written again whatever is there:
-    True when something had changed (ComfyUI must start again to take it)."""
+    """The studio's launcher, the Manager's locked settings and the relay node with its token,
+    written again whatever is there: True when something had changed (ComfyUI must start again
+    to take it)."""
     base = APPS + "/comfyui/"
     changed = host.write(base + STUDIO_LAUNCH_FILE, STUDIO_LAUNCH, 0o755)
     for rel in STUDIO_MANAGER_CONFIGS:
         changed = host.write(base + rel, STUDIO_MANAGER_CONFIG, 0o644) or changed
+    changed = studio_relay(host) or changed
+    return changed
+
+
+# The relay node (bromigos-core's /usr/share/bromigos/art/comfyui-relay, docs/activity.md "Live
+# progress and previews"): ComfyUI sends a prompt's progress and preview frames only to the
+# client that queued it; the relay copies them to the watchers that name its token (the Lab
+# board's follower, a desktop's). The studio puts the node in ComfyUI's custom_nodes with a token
+# file beside it, which the node reads; the token is made once, at random, and kept. The file is
+# root's, and readable by the follower's group only (bromigos-labjobs on a Server; the person's
+# own group on a desktop). labjobs.toml's studio entry names it as its relay_token.
+STUDIO_RELAY = "custom_nodes/bromigos-relay"
+RELAY_SOURCES = ("usr/share/bromigos/art/comfyui-relay/__init__.py",)
+RELAY_TOKEN_OK = re.compile(r"[A-Za-z0-9]{16,128}\Z")
+
+
+def relay_source(host):
+    """The relay node's code: the installed copy, else this checkout's (tests, a source run)."""
+    for rel in RELAY_SOURCES:
+        p = host.path(rel)
+        if p.is_file():
+            return p.read_text()
+    here = Path(__file__).resolve().parents[3] / "core/crates/bromigos-art/comfyui-relay/__init__.py"
+    return here.read_text() if here.is_file() else None
+
+
+def relay_group(host):
+    """The group that may read the token: the Lab board's follower's on a Server, else the person
+    the studio is for (a desktop's start page and `bromigos activity watch`), else root's."""
+    try:
+        return grp.getgrnam("bromigos-labjobs").gr_gid
+    except KeyError:
+        pass
+    try:
+        from . import studio as ST
+        who = ST.user_home(getattr(host, "environ", None))
+        return who[2] if who else 0
+    except Exception:
+        return 0
+
+
+def studio_relay(host):
+    """The relay node and its token in the studio's ComfyUI, and labjobs.toml's studio entry
+    naming that token. True when ComfyUI must start again (the node or the token changed)."""
+    src = relay_source(host)
+    if src is None:
+        return False
+    base = APPS + "/comfyui/" + STUDIO_RELAY + "/"
+    changed = host.write(base + "__init__.py", src, 0o644)
+    tok = host.path(base + "token")
+    token = ""
+    with contextlib.suppress(OSError):
+        token = tok.read_text().strip()
+    if not RELAY_TOKEN_OK.match(token):
+        token = secrets.token_hex(24)
+    changed = host.write(base + "token", token + "\n", 0o640) or changed
+    if os.geteuid() == 0 and str(host.path("/")) == "/":
+        with contextlib.suppress(OSError):
+            st = tok.stat()
+            gid = relay_group(host)
+            if (st.st_uid, st.st_gid) != (0, gid):
+                os.chown(tok, 0, gid)
+    studio_labjobs(host, "@file:/" + base + "token")
     return changed
 
 
 # The Lab board follows only the ComfyUIs labjobs.toml names (docs/board.md, "The lab's jobs"):
-# the studio names itself there, once. The file is the owner's after that: never written again.
+# the studio names itself there once. After that the file is the owner's: only the studio
+# entry's relay_token is put back on each set-up and studio apply.
 STUDIO_LABJOBS = """# bromigos lab provision --local: the ComfyUIs the Lab board shows the jobs of (docs/board.md,
-# "The lab's jobs"). Written once, when the Creation studio was set up; yours to change.
+# "The lab's jobs"). Written once, when the Creation studio was set up; yours to change. The
+# studio's relay_token is put back on each set-up and `bromigos lab studio apply`.
 [[comfyui]]
 name = "studio"
 url = "http://127.0.0.1:8188"
+relay_token = "{token}"
 """
 
 
+def labjobs_with_token(text, ref):
+    """labjobs.toml's text with the studio entry's relay_token set to `ref` (a reference, never
+    the token itself), comments and other entries as they were; the text unchanged when it has
+    no studio entry (the owner took it out)."""
+    lines = text.splitlines()
+    starts = [i for i, ln in enumerate(lines) if ln.strip().startswith("[")] + [len(lines)]
+    for a, b in zip(starts, starts[1:]):
+        if lines[a].strip() != "[[comfyui]]":
+            continue
+        block = range(a + 1, b)
+        if not any(re.match(r'\s*name\s*=\s*"studio"\s*(#.*)?$', lines[i]) for i in block):
+            continue
+        want = f'relay_token = "{ref}"'
+        for i in block:
+            if re.match(r"\s*relay_token\s*=", lines[i]):
+                lines[i] = want
+                break
+        else:
+            name = next(i for i in block if re.match(r'\s*name\s*=\s*"studio"', lines[i]))
+            lines.insert(name + 1, want)
+        return "\n".join(lines) + "\n"
+    return text
+
+
+def studio_labjobs(host, ref):
+    rel = "etc/bromigos/labjobs.toml"
+    p = host.path(rel)
+    if not p.exists():
+        return host.write(rel, STUDIO_LABJOBS.format(token=ref))
+    text = p.read_text()
+    new = labjobs_with_token(text, ref)
+    return host.write(rel, new, p.stat().st_mode & 0o777) if new != text else False
+
+
 def prepare_comfyui(host, it):
-    if not host.path("etc/bromigos/labjobs.toml").exists():
-        host.write("etc/bromigos/labjobs.toml", STUDIO_LABJOBS)
     return studio_lock(host)
 
 

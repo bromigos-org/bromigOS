@@ -1206,6 +1206,27 @@ it, and also asks the page whether a Manager answers; anything wrong shows in `s
 
 Signing in to the page with the Lab board's sign-in, through Caddy, is planned.
 
+### Watching it work
+
+The Lab board's Activity page, `bromigos activity watch` and the desktop start page show what
+the studio is making, with the picture as it's made ([lab jobs](activity.md#lab-jobs)).
+ComfyUI sends a prompt's progress and pictures only to whoever queued it, so the studio
+installs the relay node, which copies them to the watchers that know its token:
+
+- The node is `/srv/apps/comfyui/custom_nodes/bromigos-relay/`, copied from bromigos-core's
+  `/usr/share/bromigos/art/comfyui-relay/`.
+- Its token is `token` beside it: 48 random hex digits, made once, and kept. The file is
+  root's, mode 0640, group `bromigos-labjobs` (the Lab board's follower) on a Server, or the
+  person's own group on a desktop. Nobody else can read it.
+- `/etc/bromigos/labjobs.toml` names the studio for the board, written when the studio was set
+  up and yours after that. Its studio entry reads the token by reference,
+  `relay_token = "@file:/srv/apps/comfyui/custom_nodes/bromigos-relay/token"`, never the
+  token itself.
+
+Every `apply` (and every set-up) puts the node, the token and that reference back, and
+restarts ComfyUI when the node or the token changed. To make a new token, delete the file and
+run `sudo bromigos lab studio apply`.
+
 ### What it picks
 
 For each kind of art (create.toml's capabilities), the studio looks at the shipped

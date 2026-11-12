@@ -670,8 +670,14 @@ class Relay(unittest.TestCase):
     def test_at_most_four_watchers_and_the_token_from_a_file(self):
         self.server.sockets = {f"bromigos-watch-{TOKEN}-{i}": object() for i in range(10)}
         self.assertEqual(len(self.relay.watchers(self.server, "x", TOKEN)), 4)
-        self.assertIsNone(self.relay.read_token({"BROMIGOS_RELAY_TOKEN": "short"}))
+        self.assertIsNone(self.relay.read_token({"BROMIGOS_RELAY_TOKEN": "short"}, beside="/nonexistent"))
         self.assertEqual(self.relay.read_token({"BROMIGOS_RELAY_TOKEN": TOKEN}), TOKEN)
+        # the Creation studio's way: a token file beside the node
+        m = FakeMachine()
+        self.addCleanup(m.close)
+        (m.tmp / "token").write_text(TOKEN + "\n")
+        self.assertEqual(self.relay.read_token({}, beside=str(m.tmp / "token")), TOKEN)
+        self.assertIsNone(self.relay.read_token({}, beside=str(m.tmp / "none")))
 
 
 class ActivityHooks(unittest.TestCase):
