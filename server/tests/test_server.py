@@ -521,6 +521,24 @@ class Files(unittest.TestCase):
         for line in ("PasswordAuthentication no", "KbdInteractiveAuthentication no", "PermitRootLogin no"):
             self.assertIn(line, text)
 
+    def test_the_creation_studios_port_answers_the_home_and_lab_networks_only(self):
+        # a published container port skips the input chain: the forward chain is what scopes it
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "etc/bromigos").mkdir(parents=True)
+            (Path(d) / "etc/bromigos/server.toml").write_text('[firewall]\nallow = ["web-lan"]\n')
+            env = dict(os.environ, BROMIGOS_SERVER_ROOT=d, BROMIGOS_SERVER_SHARE=str(HERE))
+            rules = subprocess.run([sys.executable, "-I", str(SCRIPT), "firewall", "apply", "--print"],
+                                   env=env, capture_output=True, text=True, check=True).stdout
+        fwd = rules[rules.index("chain forward {"):]
+        fwd = fwd[:fwd.index("}")]
+        lines = [l.strip() for l in fwd.splitlines() if "8188" in l]
+        self.assertEqual([l.split(" comment")[0] for l in lines], [
+            "ip saddr @lan ct status dnat tcp dport 8188 accept",
+            'iifname "tailscale0" ip saddr @lab ct status dnat tcp dport 8188 accept',
+            "ip6 saddr @lan6 ct status dnat tcp dport 8188 accept",
+            "ct status dnat tcp dport 8188 drop"])
+        self.assertIn("policy accept", fwd, "everything else passing through is left alone")
+
     def test_ruleset_loads_where_nft_can_check_it(self):
         import shutil
         if not (shutil.which("nft") and shutil.which("unshare")):

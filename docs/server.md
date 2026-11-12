@@ -361,7 +361,18 @@ What it lets in:
   work.
 
 Everything else coming in is dropped. Traffic going out, and traffic passing through to
-containers and the cluster, is left alone.
+containers and the cluster, is left alone, with one exception below.
+
+**Apps without a sign-in.** A container's published port (Podman's `PublishPort`) is passed
+straight to the container: it never reaches the rules above. So for the apps whose page has no
+sign-in of their own, the firewall's forward chain lets their port in from the local network
+and the lab's network only, and drops it from anywhere else, even when the router forwards it:
+
+| Port | App |
+|---|---|
+| 8188 | the Creation studio (ComfyUI, [lab.md](lab.md#the-creation-studio)) |
+
+Nothing else passing through is touched.
 
 "The local network" means private addresses: `10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, and IPv6's `fc00::/7` and `fe80::/10`.

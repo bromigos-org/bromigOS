@@ -777,9 +777,10 @@ class CatalogueFormatTwo(unittest.TestCase):
 
     def host(self, ids, hw=HW):
         plan = L.build_plan(ids, hw=hw)
+        self.studio = []
         return L.Host(plan, root=self.root, run_=self.m, online=lambda: True, sleep=lambda s: None,
                       store=S.LocalStore(self.root, self.m, "box"), emit=lambda line: None, hw=hw, hostname="box",
-                      tz="America/Los_Angeles")
+                      tz="America/Los_Angeles", steps={"studio-models": lambda h, it: self.studio.append(it["id"])})
 
     def test_names_ports_and_links_come_out_as_before(self):
         host = self.host(["caddy", "start-page", "monitoring", "passwords", "photos", "s3", "file-sync", "sonarr", "plex"])
@@ -854,6 +855,78 @@ class CatalogueFormatTwo(unittest.TestCase):
         photos = {d["path"]: d["kind"] for d in L.data_paths(PC.by_id()["photos"])}
         self.assertEqual(photos, {"/srv/apps/photos/library": "library", "/srv/apps/photos/postgres": "database",
                                   "/srv/apps/photos/model-cache": "cache"})
+
+    def test_the_creation_studio_gets_the_card_its_vendor_needs(self):
+        it = PC.by_id()["comfyui"]
+        unit = L.template_files("comfyui")[0].read_text()
+        nvidia = L.render(unit, it, self.host(["comfyui"], hw=dict(HW, gpu="nvidia", gpu_vram_gb=24)))
+        self.assertIn("AddDevice=nvidia.com/gpu=all\n", nvidia)
+        self.assertNotIn("/dev/kfd", nvidia)
+        self.assertIn("Image=docker.io/yanwk/comfyui-boot:cu130-slim-v2-", nvidia)
+        amd = L.render(unit, it, self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24)))
+        self.assertIn("AddDevice=/dev/kfd\nAddDevice=/dev/dri\n", amd)
+        self.assertNotIn("nvidia.com", amd)
+        self.assertIn("Image=docker.io/yanwk/comfyui-boot:rocm-", amd)
+        self.assertIn("PublishPort=127.0.0.1:8188:8188", amd, "a desktop has no firewall: the page is its own")
+        self.assertIn("Exec=bash /bromigos/launch.sh", amd)
+        self.assertNotIn("{{", amd)
+        models = "the models that fit this card, each checked against its sha256"
+        self.assertEqual(L.downloads_of(it, {"gpu": "amd"}), ["image docker.io/yanwk/comfyui-boot:rocm-20261104", models])
+        self.assertEqual(L.downloads_of(it, {"gpu": "nvidia"}),
+                         ["image docker.io/yanwk/comfyui-boot:cu130-slim-v2-20261104", models])
+
+    def test_an_nvidia_card_is_described_to_podman_before_the_app_starts(self):
+        hw = dict(HW, gpu="nvidia", gpu_vram_gb=24, disk_gb=900, ram_gb=64)
+        host = self.host(["comfyui"], hw=hw)
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        calls = [" ".join(c) for c in self.m.calls]
+        self.assertIn("pacman -S --needed --noconfirm nvidia-container-toolkit", calls)
+        cdi = next(c for c in calls if c.startswith("nvidia-ctk cdi generate"))
+        self.assertTrue(cdi.endswith("/etc/cdi/nvidia.yaml"))
+        self.assertLess(calls.index(cdi), calls.index("systemctl daemon-reload"))
+        self.assertTrue(Path(self.root, L.QUADLET_DIR, "comfyui.container").exists())
+        self.assertEqual(self.studio, ["comfyui"], "the models come once ComfyUI runs")
+        # a spec already there (the toolkit's own refresh made it) is left alone
+        self.m.calls.clear()
+        Path(self.root, "etc/cdi").mkdir(parents=True, exist_ok=True)
+        Path(self.root, "etc/cdi/nvidia.yaml").write_text("cdiVersion: 0.8.0\n")
+        L.nvidia_cdi(host)
+        self.assertFalse(self.m.ran("nvidia-ctk"))
+
+    def test_the_studio_page_installs_nothing_and_answers_only_where_the_firewall_allows(self):
+        hw = dict(HW, gpu="nvidia", gpu_vram_gb=24, disk_gb=900, ram_gb=64)
+        Path(self.root, "etc/bromigos").mkdir(parents=True)
+        Path(self.root, "etc/bromigos/server.toml").write_text("")
+        host = self.host(["comfyui"], hw=hw)
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        unit = Path(self.root, L.QUADLET_DIR, "comfyui.container").read_text()
+        # a Server: on its network; its firewall's forward chain keeps 8188 to the home and lab networks
+        self.assertIn("PublishPort=8188:8188\n", unit)
+        self.assertIn("Volume=/srv/apps/comfyui/launch.sh:/bromigos/launch.sh:ro,Z", unit)
+        self.assertIn("Exec=bash /bromigos/launch.sh", unit)
+        launch = Path(self.root, "srv/apps/comfyui/launch.sh")
+        text = launch.read_text()
+        self.assertIn("main.py --listen 0.0.0.0 --port 8188\n", text)
+        self.assertNotIn("--enable-manager", text)
+        self.assertIn("rm -rf /root/ComfyUI/custom_nodes/ComfyUI-Manager", text)
+        self.assertEqual(launch.stat().st_mode & 0o777, 0o755)
+        for rel in ("user/__manager/config.ini", "user/default/ComfyUI-Manager/config.ini"):
+            cfg = Path(self.root, "srv/apps/comfyui", rel).read_text()
+            for line in ("security_level = strong", "network_mode = private", "allow_git_url_install = false",
+                         "allow_pip_install = false"):
+                self.assertIn(line + "\n", cfg, rel)
+        # put back on the next apply, and ComfyUI starts again to take it
+        Path(self.root, "srv/apps/comfyui/user/__manager/config.ini").write_text("[default]\nsecurity_level = weak\n")
+        self.assertTrue(L.studio_lock(host))
+        self.assertIn("security_level = strong", Path(self.root, "srv/apps/comfyui/user/__manager/config.ini").read_text())
+        self.assertFalse(L.studio_lock(host), "nothing to change the second time")
+
+    def test_an_amd_card_needs_no_toolkit(self):
+        host = self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24, disk_gb=900, ram_gb=64))
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        self.assertFalse(self.m.ran("nvidia-ctk"))
+        self.assertFalse(self.m.ran("pacman -S --needed --noconfirm nvidia-container-toolkit"))
+        self.assertTrue(self.m.ran("podman pull docker.io/yanwk/comfyui-boot:rocm-20261104@sha256:"))
 
     def test_an_older_catalogue_is_refused_not_half_read(self):
         # format 1 has no web names: the front door would be written with no apps, and say nothing

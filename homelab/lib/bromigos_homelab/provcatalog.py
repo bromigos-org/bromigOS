@@ -40,7 +40,7 @@ FORMAT = 2               # the file's `format`: 2 added what an app manager need
 # name beside the job tells them apart.
 HOLO = ("photos", "passwords", "documents", "home", "file-sync", "uptime", "films", "music", "books", "requests",
         "library", "downloads", "private-network", "ad-blocking", "shares", "backups", "front-door", "model-serving",
-        "voice", "game-server", "phone", "cluster", "board")
+        "voice", "creation", "game-server", "phone", "cluster", "board")
 DATA_KINDS = ("library", "database", "config", "cache")
 STATUSES = ("stable", "testing", "held")
 OS_RAM_GB = 1.0          # what the Server base itself uses
@@ -496,8 +496,10 @@ def fits_item(it, hw):
     vendor = _gpu_vendor(hw)
     if req.get("gpu") and not vendor:
         return f"{it['name']} needs a graphics card, and this server has none that's ready."
-    if req.get("gpu_vendor") and vendor not in (req["gpu_vendor"], "any"):
-        return f"{it['name']} needs an {req['gpu_vendor'].upper()} card."
+    vendors = req.get("gpu_vendor") or []
+    vendors = [vendors] if isinstance(vendors, str) else list(vendors)
+    if vendors and vendor not in (*vendors, "any"):
+        return f"{it['name']} needs an {' or '.join(v.upper() for v in vendors)} card."
     if req.get("gpu_vram_gb") and float(hw.get("gpu_vram_gb") or 0) < req["gpu_vram_gb"]:
         return f"{it['name']} needs {req['gpu_vram_gb']:g} GB of graphics memory; this card has {float(hw.get('gpu_vram_gb') or 0):g} GB."
     if req.get("ram_gb") and hw.get("ram_gb") is not None and req["ram_gb"] + OS_RAM_GB > hw["ram_gb"]:

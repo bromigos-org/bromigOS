@@ -39,6 +39,7 @@ export const SPRITE = String.raw`<defs>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10"/><circle cx="9.5" cy="12" r="3"/><circle class="dot" cx="9.5" cy="12" r=".9"/><path d="M15 9.500v5M18 9.500v5M6 17v3M14 17v3"/></symbol>
   <symbol id="i-models" viewBox="0 0 24 24"><path d="M12 3l8 3-8 3-8-3zM12 8l8 3-8 3-8-3zM12 13l8 3-8 3-8-3z"/></symbol>
   <symbol id="i-voice" viewBox="0 0 24 24"><rect x="9.5" y="3.5" width="5" height="10"/><path d="M6.500 11c0 7.500 11 7.500 11 0M12 16.500v4M9 20.500h6"/></symbol>
+  <symbol id="i-creation" viewBox="0 0 24 24"><path d="M10 6.500l6 3v7l-6 3-6-3v-7zM4 9.500l6 3 6-3M10 12.500v7M18.500 3.500v4M16.500 5.500h4"/></symbol>
   <symbol id="i-game" viewBox="0 0 24 24"><path d="M12 3.500l8 4-8 4-8-4zM4 7.500v9l8 4 8-4v-9M12 11.500v9"/><rect class="dot" x="6.5" y="12" width="2" height="2"/><rect class="dot" x="15.5" y="14" width="2" height="2"/></symbol>
   <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7.5" y="3.5" width="9" height="17"/><rect class="dot" x="11" y="16.5" width="2" height="2"/></symbol>
   <symbol id="i-module" viewBox="0 0 24 24"><path d="M12 3.500l7.360 4.250v8.500L12 20.500l-7.360-4.250v-8.500z"/><circle class="dot" cx="12" cy="12" r="2"/></symbol>

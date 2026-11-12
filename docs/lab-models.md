@@ -40,7 +40,7 @@ bromigos lab models check              # check the data is consistent
 | `plan` | `--budget`, `--always`, `--want`, `--goal`, `--priority`, `--clients`, `--context`, `--prompt`, `--output`, `--hw`, `--ram`, `--unsupported` ([below](#planning-the-whole-lab-plan)) |
 | `pick CAPABILITY [VRAM]` | `--gpu NAME`, `--gpus N`, `--vendor amd` or `apple`, `--goal G`, `--ram GiB`, `--parts` (only models that make separate parts), `--unsupported` |
 | `tiers CAPABILITY` | `--markdown` prints the tables at the end of this page. |
-| `upgrades` | `--apply` isn't built yet. It says so, changes nothing, and shows what the policy would do. |
+| `upgrades` | `--apply` applies the policy to the [Creation studio](lab.md#the-creation-studio) on this machine. For a lab's own servers it isn't built yet: it says so, changes nothing, and shows what the policy would do. |
 | `refresh` | `--hf` asks Hugging Face now. `--submit-bench` sends your bench results. |
 | `review` | `--all` adds the dismissed entries. `accept ID` and `ignore ID [--reason TEXT]` decide one ([below](#reviewing-what-the-refresh-finds)). `import CANDIDATES.toml` adds a survey's candidates. |
 | `check` | `--json`; `--no-assets` skips the shipped-asset check; `--repo PATH` names the checkout ([Licence lineage](#licence-lineage)). |
@@ -246,6 +246,12 @@ which ComfyUI's native nodes don't use.
 A licence whose terms are too unclear to call carries a `decision`, the question the owner
 has to answer. Hunyuan3D v3 through nolgia has one.
 
+A licence can also carry a `notice`: what anyone who passes the weights on must do. DINOv3's
+allows commercial use, and its notice says that a copy of the DINOv3 License and Meta's
+copyright notice go with the weights, or with a model built on them such as TRELLIS.2 or
+Pixal3D, and that its use restrictions bind whoever receives them. The notices of a whole
+chain come out as `notices` in `--json`, and after "passing it on:" in the plain output.
+
 Some licences changed in 2026, so older notes about them are wrong. DEIMv2 and TimesFM-3
 became non-commercial (TimesFM 2.5 is still Apache-2.0), and Mistral's Timestral has a
 revenue cap.
@@ -416,8 +422,8 @@ would fit".
 ## The model-selection contract
 
 Creation providers don't hard-code a model. For each capability, `create.toml` may give a
-provider a list of models in order of preference. The catalog's ranking is what
-`recommend` and provisioning will write there:
+provider a list of models in order of preference. The catalog's ranking is what the
+[Creation studio](lab.md#the-creation-studio) writes there for what it installed:
 
 ```toml
 [video.loop]
@@ -463,8 +469,13 @@ policy = { image = "safe", video = "any" }     # off, safe or any; a missing cap
 `bromigos lab models upgrades` shows what the policy would do now, with the reason, the
 gain and the cost in VRAM and licence.
 
-> **Planned.** Applying an upgrade is Phase 2, as `lab models replace`. It will go like
-> this:
+**On the Creation studio, applying is built.** `sudo bromigos lab models upgrades --apply`
+(the same as `bromigos lab studio upgrade --apply`) fetches the new model, checks every file
+against its sha256, points create.toml at it, and keeps the model it replaced for 14 days,
+with `bromigos lab studio rollback` to go back ([lab.md](lab.md#upgrades-and-rollback)).
+
+> **Planned.** Applying an upgrade to a lab's own servers is Phase 2, as `lab models
+> replace`. It will go like this:
 >
 > 1. The change is written to your homelab repository as a pull request. The lab is never
 >    edited by hand.
@@ -477,6 +488,39 @@ gain and the cost in VRAM and licence.
 > 6. Every upgrade sends a notification, with Undo, which reverts it.
 > 7. The voice service's models never change while VECTOR is speaking. The lab's job queue
 >    and the quiet hours are respected.
+
+## Files and node packs
+
+A ComfyUI variant can list its weights as pinned files. The
+[Creation studio](lab.md#the-creation-studio) fetches exactly these, and nothing else:
+
+```toml
+  [[model.variant.file]]
+  dest = "background_removal/lucida_v7.safetensors"   # inside ComfyUI's models folder
+  repo = "egeorcun/lucida"                            # the Hugging Face repository
+  rev = "6cbedc9722652dc9a3df91dd871f0c4f3334e922"    # its commit: the file never changes under us
+  path = "model.safetensors"                          # the file in the repository
+  bytes = 884878856
+  sha256 = "2f1aa6913426537d4b93dd5f7138ae5c6664e99abda98c95f3d5b9101283e7d5"
+```
+
+`bytes` and `sha256` are what Hugging Face publishes for the file:
+
+```bash
+curl -s -X POST https://huggingface.co/api/models/<repo>/paths-info/<rev> \
+  -H 'Content-Type: application/json' -d '{"paths": ["<path>"]}'
+```
+
+A file two variants share, such as a text encoder, is listed under both with the same
+sha256. Every file a shipped workflow's `_meta.requires` names must be pinned by some
+variant, and the tests check it.
+
+A node pack is a top-level `[node_pack.<id>]`: its `name` (the folder in
+`custom_nodes/`), `repo`, the 40-digit `commit`, its `licence`, and the node `classes` it
+provides. The studio installs a pack when a workflow it picked uses one of those classes.
+
+`bromigos lab models check` checks both: plain paths, 64-digit checksums, commits, one
+sha256 for one destination, and a pack's classes and licence.
 
 ## Staying current
 

@@ -1139,6 +1139,42 @@ pub fn apply_create(
             }
         }
     }
+    if !a.apps.is_empty() {
+        let pkgs = match create::creative_packages(&a.apps) {
+            Ok(p) => p,
+            Err(e) => return err("create", format!("{detail}; {e}")),
+        };
+        let missing: Vec<&str> = pkgs
+            .into_iter()
+            .filter(|p| !Command::new("pacman").args(["-Qq", p]).output().is_ok_and(|o| o.status.success()))
+            .collect();
+        if missing.is_empty() {
+            detail.push_str(&format!("; {} already installed", a.apps.join(" and ")));
+        } else {
+            let argv = create::creative_install_argv(&missing, interactive);
+            match Command::new(&argv[0]).args(&argv[1..]).status() {
+                Ok(s) if s.success() => detail.push_str(&format!("; installed {}", missing.join(" and "))),
+                _ => {
+                    return err(
+                        "create",
+                        format!("{detail}; {} weren't installed (later: sudo pacman -S {})", missing.join(" and "), missing.join(" ")),
+                    );
+                }
+            }
+        }
+    }
+    if a.studio {
+        let argv = create::studio_argv();
+        match Command::new(&argv[0]).args(&argv[1..]).status() {
+            Ok(s) if s.success() => detail.push_str("; the Creation studio is set up (bromigos lab studio)"),
+            _ => {
+                return err(
+                    "create",
+                    format!("{detail}; the Creation studio wasn't set up (later: Settings › Lab, or {})", argv.join(" ")),
+                );
+            }
+        }
+    }
     ok("create", detail)
 }
 

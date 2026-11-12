@@ -561,7 +561,7 @@ class ReportAndCommand(unittest.TestCase):
     def test_the_report_reads_top_to_bottom(self):
         text = "\n".join(S.report(doc("desktop-2012")))
         order = ["SALVAGE SCAN", "Read-only", "THIS COMPUTER", "Processor", "Memory", "Disks", "Graphics", "Network", "Firmware",
-                 "Idle power", "COULD NOT READ", "WHAT IT'S GOOD FOR", "Roles", "Apps and services (54 in the catalogue)",
+                 "Idle power", "COULD NOT READ", "WHAT IT'S GOOD FOR", "Roles", "Apps and services (55 in the catalogue)",
                  "Fit comfortably", "Fit with a trade-off", "Don't fit", "Whatever it runs", "WHAT WOULD CHANGE THE ANSWER", "NEXT STEP",
                  "bromigos hw salvage --answers", "bromigos hw salvage --save"]
         at = [text.index(w) for w in order]
@@ -570,7 +570,8 @@ class ReportAndCommand(unittest.TestCase):
         self.assertIn("3.8 GB of memory isn't enough for:", one)
         self.assertIn("Photos (Immich) (5 GB)", one)                          # with the system's 1 GB
         self.assertIn("Memory would be tight, with 3.8 GB here: External Secrets (3.2 GB)", one)
-        self.assertIn("No graphics card is ready for AI: LiteLLM gateway, Model serving (Ollama), Model serving (vLLM) and Models.", one)
+        self.assertIn("No graphics card is ready for AI: LiteLLM gateway, Model serving (Ollama), Model serving (vLLM), Models "
+                      "and Creation studio.", one)
         self.assertIn("Fit comfortably (39): all of Network (2), Storage (4) and BRODEC (1); Lab core except Argo CD and External Secrets;", one)
         self.assertIn("yes, but Home services: without Photos (Immich)", one)
         self.assertIn("Install bromigOS Server as Home services.", one)

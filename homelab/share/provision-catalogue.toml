@@ -22,7 +22,8 @@
 #                      game-server, media, base
 #   default            false: listed under its role but never ticked for you (default true)
 #   lab                ticked for these lab answers only: new, join, none (default: all three)
-#   requires           { cpu, ram_gb, disk_gb, gpu = bool, gpu_vram_gb, gpu_vendor }
+#   requires           { cpu, ram_gb, disk_gb, gpu = bool, gpu_vram_gb, gpu_vendor }: gpu_vendor is
+#                      "nvidia", or a list of the vendors it runs on (["nvidia", "amd"])
 #   size_text          what it downloads, in words
 #   ports              host ports it listens on
 #   web                { name, port, path }: its page, on one of `ports`. With a name, Caddy serves
@@ -35,7 +36,8 @@
 #                      or { step = "<step>" } (localprovision.STEPS)
 #   enable             systemd units started after a pacman install
 #   images             { name = "registry/image:tag@sha256:…" }: a quadlet template's images,
-#                      always pinned by digest
+#                      always pinned by digest. NAME-nvidia and NAME-amd, when listed, take NAME's
+#                      place on a server with that GPU
 #   health             how to ask "does it answer?", one of:
 #                      { http = "/path", port, expect, within_s }: a GET to 127.0.0.1:<port><http>
 #                        with nothing signed in and no redirect followed. `expect` is the status of
@@ -505,6 +507,76 @@ health = { http = "/health", port = 8001 }
 path = "cache"
 kind = "cache"
 what = "The speech models it downloaded."
+
+[[item]]
+id = "comfyui"
+group = "ai"
+name = "Creation studio"
+job = "Images, video and 3D"
+app = "ComfyUI"
+line = "Makes pictures, edits, cutouts, video loops and 3D models on this machine's graphics card."
+hint = "ComfyUI with the open models that fit your card, picked from the lab's model catalog, and bromigOS's own workflows. bromigos art, VECTOR's create tool and your world's art use it, at no cost per picture. Its page is on port 8188 and has no sign-in, so a Server's firewall keeps it to your home network and your lab's network, and a desktop keeps it to itself. Nothing can be installed from the page."
+icon = "applications-graphics-symbolic"
+glyph = "vector"
+holo = "creation"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+default = false
+requires = { cpu = 4, ram_gb = 16, disk_gb = 60, gpu = true, gpu_vram_gb = 8, gpu_vendor = ["nvidia", "amd"] }
+size_text = "about 5.5 GB image (9.6 GB for AMD's ROCm), plus the models that fit the card: 2 GB on an 8 GB card, 75 GB on a 24 GB one"
+ports = [8188]
+web = { port = 8188 }
+internet = true
+install = { quadlet = "comfyui" }
+# yanwk/comfyui-boot (github.com/YanWenKun/ComfyUI-Docker, Mulan Public License v2; ComfyUI is
+# GPL-3.0): the slim build for NVIDIA (ComfyUI and its manager, no bundled node packs) and the
+# ROCm build for AMD, pinned by digest. The same maintainer and layout as the megapak builds,
+# whose dozens of bundled node packs carry licences of their own; the studio installs the one
+# pack a fallback workflow needs, pinned (bromigos lab studio).
+images = { comfyui = "docker.io/yanwk/comfyui-boot:cu130-slim-v2-20261104@sha256:77f999619475803adb053aff6f1d49e61d2e11ec1b950eb548c8f01b4be75328", comfyui-amd = "docker.io/yanwk/comfyui-boot:rocm-20261104@sha256:84262f2ccf72cdd33d0a8e1487ce1668571971e539a6290f346c4da85f19b29d" }
+# ComfyUI's /system_stats: the API its own page polls; it answers once the server is listening
+# (a first start copies ComfyUI out of the image and loads its nodes, so it may take minutes)
+health = { http = "/system_stats", port = 8188, within_s = 300 }
+note = "The models come next: the studio picks the ones that fit this card from the lab's model catalog and checks every file against its published checksum (bromigos lab studio)."
+[item.setup]
+title = "Which models"
+intro = "The studio picks the best models that fit this machine's card. Choose which licences they may have."
+[[item.setup.field]]
+id = "licence"
+label = "Models"
+kind = "choice"
+default = "commercial"
+help = "What the studio makes may end up in something you share or sell. Research-only models are often stronger, and fine for a personal lab."
+choices = [{ id = "commercial", label = "Only models whose licence lets you sell what you make", note = "recommended" }, { id = "any", label = "Also research and non-commercial models", note = "for personal use" }]
+[[item.data]]
+path = "models"
+kind = "cache"
+what = "The model files the studio fetched, each checked against its published checksum."
+[[item.data]]
+path = "custom_nodes"
+kind = "cache"
+what = "Node packs a workflow needs, at pinned versions."
+[[item.data]]
+path = "local"
+kind = "cache"
+what = "The Python packages those node packs need."
+[[item.data]]
+path = "user"
+kind = "config"
+what = "ComfyUI's settings and your saved workflows, bromigOS's own among them."
+[[item.data]]
+path = "input"
+kind = "cache"
+what = "Images and clips sent to it for a job."
+[[item.data]]
+path = "output"
+kind = "library"
+what = "What it made."
+[[item.data]]
+path = "launch.sh"
+kind = "config"
+what = "How the studio starts ComfyUI, without its Manager: written again on every set-up."
 
 # ------------------------------------------------------------------ Network
 [[item]]

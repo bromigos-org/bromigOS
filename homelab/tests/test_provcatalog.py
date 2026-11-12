@@ -200,7 +200,7 @@ class FormatTwoTests(unittest.TestCase):
             units = PC.template_units(it["install"]["quadlet"])
             text = "\n".join(units.values())
             if "http" in h:
-                published = {int(p) for p in re.findall(r"^(?:#[a-z]+:\S+ )?PublishPort=(\d+):", text, re.M)}
+                published = {int(p) for p in re.findall(r"^(?:#[a-z]+:\S+ )?PublishPort=(?:127\.0\.0\.1:)?(\d+):", text, re.M)}
                 on_host = re.search(r"^Network=host$", text, re.M)
                 self.assertTrue(on_host or h["port"] in published, f"{it['id']}: nothing answers on port {h['port']}")
             else:
@@ -347,6 +347,27 @@ class BudgetTests(unittest.TestCase):
         self.assertFalse(PC.budget(["vllm"], dict(NVIDIA_24, gpu="amd"))["fits"])
         b = PC.budget(["ollama"], NVIDIA_12, models=[{"vram_gb": 20}])
         self.assertFalse(b["fits"])
+
+    def test_the_creation_studio_runs_on_an_nvidia_or_amd_card(self):
+        it = PC.by_id()["comfyui"]
+        self.assertEqual((it["name"], it["job"], it["app"], it["holo"]), ("Creation studio", "Images, video and 3D",
+                                                                         "ComfyUI", "creation"))
+        big = dict(NVIDIA_24, disk_gb=900)
+        self.assertTrue(PC.budget(["comfyui"], big)["fits"])
+        self.assertTrue(PC.budget(["comfyui"], dict(big, gpu="amd"))["fits"])
+        intel = PC.budget(["comfyui"], dict(big, gpu="intel"))
+        self.assertFalse(intel["fits"])
+        self.assertIn("needs an NVIDIA or AMD card", " ".join(intel["notes"]))
+        self.assertFalse(PC.budget(["comfyui"], NO_GPU)["fits"])
+        self.assertFalse(PC.budget(["comfyui"], dict(big, gpu_vram_gb=6))["fits"])
+        # never ticked for you: it's a big download, asked for by name
+        self.assertFalse(it["default"])
+        self.assertNotIn("comfyui", PC.recommend(["lab-node"], big, lab="new"))
+        # one build per GPU family, each pinned
+        self.assertEqual(sorted(it["images"]), ["comfyui", "comfyui-amd"])
+        self.assertIn("cu130-slim", it["images"]["comfyui"])
+        self.assertIn(":rocm-", it["images"]["comfyui-amd"])
+        self.assertEqual(it["health"]["http"], "/system_stats")
 
     def test_disk(self):
         self.assertFalse(PC.budget(["vllm"], dict(NVIDIA_24, disk_gb=50))["fits"])

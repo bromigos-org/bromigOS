@@ -21,6 +21,7 @@ const HOLO_ICON: Record<string, string> = {
   "front-door": "i-frontdoor",
   "model-serving": "i-models",
   voice: "i-voice",
+  creation: "i-creation",
   "game-server": "i-game",
   phone: "i-phone",
   cluster: "i-module",

@@ -258,9 +258,33 @@ def downloads_of(it, hw):
         return ["package " + p for p in inst.get(vendor, inst["pacman"]) if vendor in inst] or \
             ["package " + p for p in inst["pacman"]]
     if "quadlet" in inst:
-        return ["image " + ref.split("@")[0] for name, ref in sorted(it["images"].items()) if not name.endswith("-nvidia")
-                or hw.get("gpu") == "nvidia"]
+        return ["image " + image_ref(it, name, hw).split("@")[0] for name in sorted(image_names(it))] + \
+            list(STEP_DOWNLOADS.get(AFTER.get(it["id"], ""), []))
     return list(STEP_DOWNLOADS.get(inst["step"], []))
+
+
+GPU_IMAGES = ("nvidia", "amd")          # NAME-<vendor> takes NAME's place on a server with that GPU
+
+
+def image_ref(it, name, hw):
+    """The item's image NAME on this server: NAME-nvidia or NAME-amd when the server has that GPU
+    and the item lists one, else NAME."""
+    imgs = it["images"]
+    vendor = (hw or {}).get("gpu")
+    if vendor in GPU_IMAGES and f"{name}-{vendor}" in imgs:
+        return imgs[f"{name}-{vendor}"]
+    return imgs[name]
+
+
+def image_names(it):
+    """The item's image NAMEs, without their GPU builds."""
+    return [name for name in it["images"]
+            if not any(name.endswith("-" + v) and name[:-len(v) - 1] in it["images"] for v in GPU_IMAGES)]
+
+
+def image_refs(it, hw):
+    """Every image the item runs on this server, one per NAME, in the catalogue's order."""
+    return [image_ref(it, name, hw) for name in image_names(it)]
 
 
 def print_plan(plan, out=print):
@@ -295,7 +319,7 @@ def print_plan(plan, out=print):
 
 
 # ---------------------------------------------------------------- rendering Quadlet templates
-COND = re.compile(r"^#(if|ifnot|ifset|ifgpu):([a-z0-9_/-]+) (.*)$")
+COND = re.compile(r"^#(if|ifnot|ifset|ifgpu|ifserver):([a-z0-9_/-]+) (.*)$")
 PLACE = re.compile(r"\{\{([a-z]+)(?::([a-z0-9_/-]+))?\}\}")
 
 
@@ -315,7 +339,8 @@ def render(text, it, ctx):
         if m:
             kind, arg, rest = m.groups()
             keep = {"if": lambda: ctx.selected_for(arg), "ifnot": lambda: not ctx.selected_for(arg),
-                    "ifset": lambda: ctx.is_set(it, arg), "ifgpu": lambda: ctx.hw.get("gpu") == arg}[kind]()
+                    "ifset": lambda: ctx.is_set(it, arg), "ifgpu": lambda: ctx.hw.get("gpu") == arg,
+                    "ifserver": lambda: ctx.is_server() == (arg == "yes")}[kind]()
             if not keep:
                 continue
             line = rest
@@ -443,6 +468,10 @@ class Host:
         except OSError:
             return False
 
+    def is_server(self):
+        """A bromigOS Server: its firewall scopes the apps' ports (share/server/nftables.nft)."""
+        return self.path("etc/bromigos/server.toml").exists()
+
     # -- the selection, as templates and steps see it
     def selected_for(self, arg):
         if arg == "gluetun" and "gluetun" in self.selected:
@@ -490,10 +519,7 @@ class Host:
         if kind == "pgid":
             return str(self.media_owner()[1])
         if kind == "image":
-            imgs = it["images"]
-            if self.hw.get("gpu") == "nvidia" and arg + "-nvidia" in imgs:
-                return imgs[arg + "-nvidia"]
-            return imgs[arg]
+            return image_ref(it, arg, self.hw)
         if kind == "secret":
             name = arg if "/" in arg else f"{it['id']}/{arg}"
             return S.podman_name(name)
@@ -556,14 +582,9 @@ def missing_packages(host, pkgs):
 
 
 def images_for(host, it):
-    """The item's image refs for this server: NAME-nvidia in place of NAME on an NVIDIA server."""
-    imgs = it["images"]
-    out = []
-    for name, ref in imgs.items():
-        if name.endswith("-nvidia"):
-            continue
-        out.append(imgs[name + "-nvidia"] if host.hw.get("gpu") == "nvidia" and name + "-nvidia" in imgs else ref)
-    return out
+    """The item's image refs for this server: NAME-nvidia or NAME-amd in place of NAME on a server
+    with that GPU."""
+    return image_refs(it, host.hw)
 
 
 def missing_images(host, it):
@@ -598,8 +619,24 @@ def install_pacman(host, it):
         enable(host, it["enable"])
 
 
+CDI_SPECS = ("etc/cdi/nvidia.yaml", "var/run/cdi/nvidia.yaml", "run/cdi/nvidia.yaml")
+
+
+def nvidia_cdi(host):
+    """A container given the card by CDI (AddDevice=nvidia.com/gpu=all) needs NVIDIA's container
+    toolkit and the spec it writes of this machine's cards. The toolkit's own nvidia-cdi-refresh
+    keeps the spec current after a driver update; a machine that never had it gets both here, so
+    nobody is handed a command to type."""
+    pacman(host, ["nvidia-container-toolkit"])
+    if not any(host.path(p).exists() for p in CDI_SPECS):
+        host.must(["nvidia-ctk", "cdi", "generate", "--output=" + str(host.path(CDI_SPECS[0]))],
+                  "describe this machine's NVIDIA card to Podman (CDI)")
+
+
 def install_quadlet(host, it):
     host.apps_folder()
+    if host.root == "/" and not shutil.which("podman"):
+        pacman(host, ["podman"])                         # a desktop setting up its first app
     files = template_files(it["install"]["quadlet"])
     units = [f.stem + ".service" for f in files if f.suffix == ".container"]
     host.secrets_for(it, units)
@@ -618,12 +655,13 @@ def install_quadlet(host, it):
     if it["id"] in DATABASES:
         database_hook(host, it["id"])                    # its database made safe before every backup
     prepare = PREPARE.get(it["id"])
-    if prepare:
-        prepare(host, it)
+    prepared = bool(prepare(host, it)) if prepare else False      # True: a file it starts with changed
     changed = host.write(QUADLET_DIR + "/bromigos-lab.network",
-                         template_files("_common")[0].read_text())
+                         template_files("_common")[0].read_text()) or prepared
     for f in files:
         text = render(f.read_text(), it, host)
+        if "AddDevice=nvidia.com/gpu" in text:
+            nvidia_cdi(host)
         changed = host.write(QUADLET_DIR + "/" + f.name, text) or changed
         # a container that runs as an account of its own (User=, as Navidrome and slskd do) writes
         # its data as that account: the folder is that account's, or the app can't make its database
@@ -637,6 +675,18 @@ def install_quadlet(host, it):
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     for u in units:
         host.must(["systemctl", "restart" if changed else "start", u], f"start {u}")
+    if it["id"] in AFTER:                                # what an app needs once it runs (the studio's models)
+        host.steps[AFTER[it["id"]]](host, it)
+
+
+def step_studio_models(host, it):
+    """The Creation studio's models, node packs and workflows (studio.py), once ComfyUI runs."""
+    from . import studio
+    studio.provision_step(host, it)
+
+
+# steps run after an app's own units start, by item
+AFTER = {"comfyui": "studio-models"}
 
 
 def install(host, it):
@@ -1233,7 +1283,8 @@ STEPS = {"k3s": step_k3s, "helm-chart": _helm, "openbao": step_openbao, "monitor
          "backups": step_backups, "caddy": step_caddy, "passwords": step_passwords, "file-sync": step_file_sync,
          "adblock": step_adblock, "smb": step_smb, "backup-target": step_backup_target, "wings": step_wings,
          "models": step_models, "lab-network": step_lab_network, "media-library": step_media_library,
-         "youtube-library": step_youtube_library, "den-tv": step_den_tv, "board": step_board}
+         "youtube-library": step_youtube_library, "den-tv": step_den_tv, "board": step_board,
+         "studio-models": step_studio_models}
 STEP_UNITS = {"k3s": ["k3s.service"], "openbao": ["openbao.service", "bromigos-openbao-unseal.service"],
               "monitoring": ["prometheus.service", "grafana.service"], "backups": ["bromigos-lab-backup.timer"],
               "caddy": ["caddy.service"], "passwords": ["vaultwarden.service"], "file-sync": ["syncthing@syncthing.service"],
@@ -1245,7 +1296,8 @@ STEP_DOWNLOADS = {"k3s": ["k3s " + K3S_VERSION + " from get.k3s.io"], "helm-char
                   "passwords": ["package vaultwarden", "package vaultwarden-web"], "file-sync": ["package syncthing"],
                   "adblock": ["package adguardhome"], "smb": ["package samba"],
                   "wings": ["package docker", "Wings " + WINGS[0] + " (pinned checksum)"], "models": ["the chosen models"],
-                  "board": ["package bromigos-board"]}
+                  "board": ["package bromigos-board"],
+                  "studio-models": ["the models that fit this card, each checked against its sha256"]}
 STEP_PACKAGES = {"openbao": ["openbao"], "monitoring": ["prometheus", "grafana"], "backups": ["restic"], "caddy": ["caddy"],
                  "passwords": ["vaultwarden", "vaultwarden-web"], "file-sync": ["syncthing"], "adblock": ["adguardhome"],
                  "smb": ["samba"], "wings": ["docker"], "helm-chart": ["helm"], "board": ["bromigos-board"]}
@@ -1284,6 +1336,58 @@ def prepare_litellm(host, it):
     # YAML is a superset of JSON: the key itself comes from the environment (os.environ/…)
     host.write(APPS + "/litellm/config.yaml", json.dumps({"model_list": rows,
                "general_settings": {"master_key": "os.environ/LITELLM_MASTER_KEY"}}, indent=1) + "\n")
+
+
+# The Creation studio (comfyui). ComfyUI has no sign-in, and the image's own start runs
+# ComfyUI-Manager, whose web API installs node packs (code) from the page, so anyone who reaches
+# port 8188 could run code in a container that holds the GPU and the studio's data. The studio
+# starts ComfyUI itself, without the Manager (STUDIO_LAUNCH, mounted read-only as the container's
+# command), and locks the Manager's settings too, in case a later image starts it anyway. The
+# studio installs node packs itself, pinned (studio.py). docs/lab.md, "Who can reach it".
+STUDIO_LAUNCH_FILE = "launch.sh"
+STUDIO_LAUNCH = """#!/bin/bash
+# bromigos lab provision --local: how the Creation studio starts ComfyUI (docs/lab.md, "The
+# Creation studio"). Written again on every set-up and every `bromigos lab studio apply`.
+# The image's own start also runs ComfyUI-Manager, which installs node packs from ComfyUI's
+# page; ComfyUI has no sign-in, so this starts ComfyUI without it.
+set -e
+if [ ! -f /root/ComfyUI/main.py ]; then
+    mkdir -p /root/ComfyUI
+    cp --archive --update=none /default-comfyui-bundle/ComfyUI/. /root/ComfyUI/
+fi
+# the ROCm build bundles the Manager as a node pack: it never loads
+rm -rf /root/ComfyUI/custom_nodes/ComfyUI-Manager /root/ComfyUI/custom_nodes/comfyui-manager
+export PYTHONPYCACHEPREFIX=/root/.cache/pycache PIP_USER=true PIP_ROOT_USER_ACTION=ignore
+export PATH="$PATH:/root/.local/bin"
+cd /root
+PY=$(command -v python3.13 || command -v python3)
+exec "$PY" ./ComfyUI/main.py --listen 0.0.0.0 --port 8188
+"""
+# where the Manager reads its settings: today's (a folder ComfyUI never serves) and the older one
+STUDIO_MANAGER_CONFIGS = ("user/__manager/config.ini", "user/default/ComfyUI-Manager/config.ini")
+STUDIO_MANAGER_CONFIG = """# bromigos lab provision --local: ComfyUI-Manager locked (docs/lab.md, "The Creation studio").
+# The studio starts ComfyUI without the Manager; should a later image start it anyway, it may
+# install nothing from the page. Written again on every set-up and every studio apply.
+[default]
+security_level = strong
+network_mode = private
+allow_git_url_install = false
+allow_pip_install = false
+"""
+
+
+def studio_lock(host):
+    """The studio's launcher and the Manager's locked settings, written again whatever is there:
+    True when something had changed (ComfyUI must start again to take it)."""
+    base = APPS + "/comfyui/"
+    changed = host.write(base + STUDIO_LAUNCH_FILE, STUDIO_LAUNCH, 0o755)
+    for rel in STUDIO_MANAGER_CONFIGS:
+        changed = host.write(base + rel, STUDIO_MANAGER_CONFIG, 0o644) or changed
+    return changed
+
+
+def prepare_comfyui(host, it):
+    return studio_lock(host)
 
 
 def recyclarr_config(host):
@@ -1408,7 +1512,7 @@ def prepare_gluetun(host, it):
 
 
 PREPARE = {"autoscan": prepare_autoscan, "gluetun": prepare_gluetun, "start-page": prepare_start_page, "litellm": prepare_litellm,
-           "recyclarr": prepare_recyclarr, "qbittorrent": prepare_qbittorrent}
+           "recyclarr": prepare_recyclarr, "qbittorrent": prepare_qbittorrent, "comfyui": prepare_comfyui}
 
 
 # ---------------------------------------------------------------- wiring the media apps together

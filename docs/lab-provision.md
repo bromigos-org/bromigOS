@@ -549,10 +549,36 @@ setup fields. Secret fields are references (`{secret = "local:NAME"}`, `vault:â€
 every app shares. Placeholders: `{{data}}` (`/srv/apps/<item>`: on a bromigOS Server with
 data disks `/srv/apps` is on them, [server.md](server.md#where-the-apps-keep-their-data)), `{{media}}`,
 `{{downloads}}`, `{{tz}}`, `{{host}}`, `{{puid}}`/`{{pgid}}` (the `bromigos-media` account),
-`{{image:NAME}}` (`NAME-nvidia` on an NVIDIA server when listed), `{{secret:NAME}}` (the Podman
+`{{image:NAME}}` (`NAME-nvidia` or `NAME-amd` on a server with that GPU, when listed), `{{secret:NAME}}` (the Podman
 secret's name) and `{{setting:FIELD}}`. A line that starts `#if:ITEM `, `#ifnot:ITEM `,
-`#ifset:FIELD ` or `#ifgpu:VENDOR ` is kept only when that holds. Secrets are mounted as files
+`#ifset:FIELD `, `#ifgpu:VENDOR ` or `#ifserver:yes ` / `#ifserver:no ` (a bromigOS Server or
+not) is kept only when that holds. Secrets are mounted as files
 (`type=mount`) wherever the app reads files.
+
+**The graphics card.** An NVIDIA card goes into a container through CDI
+(`AddDevice=nvidia.com/gpu=all`), which needs NVIDIA's container toolkit and the toolkit's
+description of the machine's cards. When a rendered unit asks for one, the engine installs
+`nvidia-container-toolkit` if it's missing and writes `/etc/cdi/nvidia.yaml` with
+`nvidia-ctk cdi generate` when no spec is there yet (the toolkit's own
+`nvidia-cdi-refresh` keeps it current after driver updates). An AMD card needs no toolkit:
+the unit passes `/dev/kfd` and `/dev/dri`. On a machine without Podman, such as a desktop
+setting up its first app, the engine installs it first.
+
+**The Creation studio's page has no sign-in.** ComfyUI has none, so the `comfyui` item:
+
+- publishes 8188 on a Server, where the firewall's forward chain lets it in from the local
+  network and the lab's network only ([server.md](server.md#the-firewall)); on a machine that
+  isn't a Server, which has no such firewall, it publishes on `127.0.0.1` alone;
+- starts ComfyUI with its own launcher, `/srv/apps/comfyui/launch.sh` (mounted read-only as the
+  container's command), without ComfyUI-Manager, whose web API installs node packs. The image's
+  own start would run the Manager;
+- writes the Manager's settings locked (`security_level = strong`, `network_mode = private`, no
+  git-URL or pip installs) in `user/__manager/config.ini` and the older
+  `user/default/ComfyUI-Manager/config.ini`, in case a later image starts it anyway.
+
+The launcher and the settings are written again at every apply (`localprovision.studio_lock`),
+and ComfyUI starts again when either changed. The catalogue's `ports` say what an app listens on;
+they open nothing in the firewall by themselves.
 
 ### Where the data goes
 

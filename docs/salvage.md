@@ -81,7 +81,7 @@ WHAT IT'S GOOD FOR
     no        Media: Together these need about 7.2 GB of memory, and this server has 3.8 GB.
     yes       Just a server
 
-  Apps and services (54 in the catalogue)
+  Apps and services (55 in the catalogue)
     Fit comfortably (39): all of Network (2), Storage (4) and BRODEC (1); Lab core except
     Argo CD and External Secrets; in AI, VECTOR's lab bridge; Home apps except Photos
     (Immich); Media except Requests (Seerr), Autoscan, Tautulli and YouTube library.
@@ -89,13 +89,13 @@ WHAT IT'S GOOD FOR
       - Memory would be tight, with 3.8 GB here: External Secrets (3.2 GB), Requests (Seerr)
         (3.5 GB), Tautulli (3.2 GB) and YouTube library (3.5 GB). Each figure counts the 1
         GB the system uses and the apps it needs beside it.
-    Don't fit (11):
+    Don't fit (12):
       - 3.8 GB of memory isn't enough for: Argo CD (4 GB), Voice (speech in and out) (5 GB),
         Pelican panel (6 GB), Wings game node (5 GB), Minecraft server (5 GB), Photos
         (Immich) (5 GB) and Autoscan (4 GB). Each figure counts the 1 GB the system uses and
         the apps it needs beside it.
       - No graphics card is ready for AI: LiteLLM gateway, Model serving (Ollama), Model
-        serving (vLLM) and Models.
+        serving (vLLM), Models and Creation studio.
 
   Whatever it runs
     - The system would run from a spinning disk: everything works, but apps start slowly and

@@ -1,0 +1,30 @@
+[Unit]
+Description=Creation studio (ComfyUI)
+
+[Container]
+Image={{image:comfyui}}
+ContainerName=comfyui
+Network=bromigos-lab.network
+# no sign-in: a Server's firewall keeps 8188 to the home and lab networks (its forward chain);
+# a desktop has no such firewall, so there the page is this machine's alone
+#ifserver:yes PublishPort=8188:8188
+#ifserver:no PublishPort=127.0.0.1:8188:8188
+#ifgpu:nvidia AddDevice=nvidia.com/gpu=all
+#ifgpu:amd AddDevice=/dev/kfd
+#ifgpu:amd AddDevice=/dev/dri
+Volume={{data}}/models:/root/ComfyUI/models:Z
+Volume={{data}}/custom_nodes:/root/ComfyUI/custom_nodes:Z
+Volume={{data}}/local:/root/.local:Z
+Volume={{data}}/user:/root/ComfyUI/user:Z
+Volume={{data}}/input:/root/ComfyUI/input:Z
+Volume={{data}}/output:/root/ComfyUI/output:Z
+Volume={{data}}/launch.sh:/bromigos/launch.sh:ro,Z
+Exec=bash /bromigos/launch.sh
+ShmSize=8g
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
