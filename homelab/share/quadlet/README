@@ -16,3 +16,4 @@ Lines that start with a condition are kept only when it holds, and the condition
   #if:ITEM / #ifnot:ITEM      that item is (isn't) being installed
   #ifset:FIELD                the setup field is set
   #ifgpu:VENDOR               the server has that GPU (nvidia, amd)
+  #ifserver:yes / :no         it is (isn't) a bromigOS Server (whose firewall scopes the apps' ports)

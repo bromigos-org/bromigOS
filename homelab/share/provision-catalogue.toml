@@ -515,7 +515,7 @@ name = "Creation studio"
 job = "Images, video and 3D"
 app = "ComfyUI"
 line = "Makes pictures, edits, cutouts, video loops and 3D models on this machine's graphics card."
-hint = "ComfyUI with the open models that fit your card, picked from the lab's model catalog, and bromigOS's own workflows. bromigos art, VECTOR's create tool and your world's art use it, at no cost per picture. Its page is on port 8188, for your home network only: it has no sign-in of its own."
+hint = "ComfyUI with the open models that fit your card, picked from the lab's model catalog, and bromigOS's own workflows. bromigos art, VECTOR's create tool and your world's art use it, at no cost per picture. Its page is on port 8188 and has no sign-in, so a Server's firewall keeps it to your home network and your lab's network, and a desktop keeps it to itself. Nothing can be installed from the page."
 icon = "applications-graphics-symbolic"
 glyph = "vector"
 holo = "creation"
@@ -573,6 +573,10 @@ what = "Images and clips sent to it for a job."
 path = "output"
 kind = "library"
 what = "What it made."
+[[item.data]]
+path = "launch.sh"
+kind = "config"
+what = "How the studio starts ComfyUI, without its Manager: written again on every set-up."
 
 # ------------------------------------------------------------------ Network
 [[item]]

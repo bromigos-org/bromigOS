@@ -318,7 +318,7 @@ def print_plan(plan, out=print):
 
 
 # ---------------------------------------------------------------- rendering Quadlet templates
-COND = re.compile(r"^#(if|ifnot|ifset|ifgpu):([a-z0-9_/-]+) (.*)$")
+COND = re.compile(r"^#(if|ifnot|ifset|ifgpu|ifserver):([a-z0-9_/-]+) (.*)$")
 PLACE = re.compile(r"\{\{([a-z]+)(?::([a-z0-9_/-]+))?\}\}")
 
 
@@ -338,7 +338,8 @@ def render(text, it, ctx):
         if m:
             kind, arg, rest = m.groups()
             keep = {"if": lambda: ctx.selected_for(arg), "ifnot": lambda: not ctx.selected_for(arg),
-                    "ifset": lambda: ctx.is_set(it, arg), "ifgpu": lambda: ctx.hw.get("gpu") == arg}[kind]()
+                    "ifset": lambda: ctx.is_set(it, arg), "ifgpu": lambda: ctx.hw.get("gpu") == arg,
+                    "ifserver": lambda: ctx.is_server() == (arg == "yes")}[kind]()
             if not keep:
                 continue
             line = rest
@@ -465,6 +466,10 @@ class Host:
                 return True
         except OSError:
             return False
+
+    def is_server(self):
+        """A bromigOS Server: its firewall scopes the apps' ports (share/server/nftables.nft)."""
+        return self.path("etc/bromigos/server.toml").exists()
 
     # -- the selection, as templates and steps see it
     def selected_for(self, arg):
@@ -649,10 +654,9 @@ def install_quadlet(host, it):
     if it["id"] in DATABASES:
         database_hook(host, it["id"])                    # its database made safe before every backup
     prepare = PREPARE.get(it["id"])
-    if prepare:
-        prepare(host, it)
+    prepared = bool(prepare(host, it)) if prepare else False      # True: a file it starts with changed
     changed = host.write(QUADLET_DIR + "/bromigos-lab.network",
-                         template_files("_common")[0].read_text())
+                         template_files("_common")[0].read_text()) or prepared
     for f in files:
         text = render(f.read_text(), it, host)
         if "AddDevice=nvidia.com/gpu" in text:
@@ -1319,6 +1323,58 @@ def prepare_litellm(host, it):
                "general_settings": {"master_key": "os.environ/LITELLM_MASTER_KEY"}}, indent=1) + "\n")
 
 
+# The Creation studio (comfyui). ComfyUI has no sign-in, and the image's own start runs
+# ComfyUI-Manager, whose web API installs node packs (code) from the page, so anyone who reaches
+# port 8188 could run code in a container that holds the GPU and the studio's data. The studio
+# starts ComfyUI itself, without the Manager (STUDIO_LAUNCH, mounted read-only as the container's
+# command), and locks the Manager's settings too, in case a later image starts it anyway. The
+# studio installs node packs itself, pinned (studio.py). docs/lab.md, "Who can reach it".
+STUDIO_LAUNCH_FILE = "launch.sh"
+STUDIO_LAUNCH = """#!/bin/bash
+# bromigos lab provision --local: how the Creation studio starts ComfyUI (docs/lab.md, "The
+# Creation studio"). Written again on every set-up and every `bromigos lab studio apply`.
+# The image's own start also runs ComfyUI-Manager, which installs node packs from ComfyUI's
+# page; ComfyUI has no sign-in, so this starts ComfyUI without it.
+set -e
+if [ ! -f /root/ComfyUI/main.py ]; then
+    mkdir -p /root/ComfyUI
+    cp --archive --update=none /default-comfyui-bundle/ComfyUI/. /root/ComfyUI/
+fi
+# the ROCm build bundles the Manager as a node pack: it never loads
+rm -rf /root/ComfyUI/custom_nodes/ComfyUI-Manager /root/ComfyUI/custom_nodes/comfyui-manager
+export PYTHONPYCACHEPREFIX=/root/.cache/pycache PIP_USER=true PIP_ROOT_USER_ACTION=ignore
+export PATH="$PATH:/root/.local/bin"
+cd /root
+PY=$(command -v python3.13 || command -v python3)
+exec "$PY" ./ComfyUI/main.py --listen 0.0.0.0 --port 8188
+"""
+# where the Manager reads its settings: today's (a folder ComfyUI never serves) and the older one
+STUDIO_MANAGER_CONFIGS = ("user/__manager/config.ini", "user/default/ComfyUI-Manager/config.ini")
+STUDIO_MANAGER_CONFIG = """# bromigos lab provision --local: ComfyUI-Manager locked (docs/lab.md, "The Creation studio").
+# The studio starts ComfyUI without the Manager; should a later image start it anyway, it may
+# install nothing from the page. Written again on every set-up and every studio apply.
+[default]
+security_level = strong
+network_mode = private
+allow_git_url_install = false
+allow_pip_install = false
+"""
+
+
+def studio_lock(host):
+    """The studio's launcher and the Manager's locked settings, written again whatever is there:
+    True when something had changed (ComfyUI must start again to take it)."""
+    base = APPS + "/comfyui/"
+    changed = host.write(base + STUDIO_LAUNCH_FILE, STUDIO_LAUNCH, 0o755)
+    for rel in STUDIO_MANAGER_CONFIGS:
+        changed = host.write(base + rel, STUDIO_MANAGER_CONFIG, 0o644) or changed
+    return changed
+
+
+def prepare_comfyui(host, it):
+    return studio_lock(host)
+
+
 def recyclarr_config(host):
     lang = host.setting("media-library", "language") if "media-library" in host.selected else "English"
     dual = bool(host.setting("media-library", "dual_audio")) if "media-library" in host.selected else True
@@ -1441,7 +1497,7 @@ def prepare_gluetun(host, it):
 
 
 PREPARE = {"autoscan": prepare_autoscan, "gluetun": prepare_gluetun, "start-page": prepare_start_page, "litellm": prepare_litellm,
-           "recyclarr": prepare_recyclarr, "qbittorrent": prepare_qbittorrent}
+           "recyclarr": prepare_recyclarr, "qbittorrent": prepare_qbittorrent, "comfyui": prepare_comfyui}
 
 
 # ---------------------------------------------------------------- wiring the media apps together

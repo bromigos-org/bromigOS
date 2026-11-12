@@ -866,7 +866,8 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertIn("AddDevice=/dev/kfd\nAddDevice=/dev/dri\n", amd)
         self.assertNotIn("nvidia.com", amd)
         self.assertIn("Image=docker.io/yanwk/comfyui-boot:rocm-", amd)
-        self.assertIn("PublishPort=8188:8188", amd)
+        self.assertIn("PublishPort=127.0.0.1:8188:8188", amd, "a desktop has no firewall: the page is its own")
+        self.assertIn("Exec=bash /bromigos/launch.sh", amd)
         self.assertNotIn("{{", amd)
         self.assertEqual(L.downloads_of(it, {"gpu": "amd"}), ["image docker.io/yanwk/comfyui-boot:rocm-20261104"])
         self.assertEqual(L.downloads_of(it, {"gpu": "nvidia"}), ["image docker.io/yanwk/comfyui-boot:cu130-slim-v2-20261104"])
@@ -887,6 +888,34 @@ class CatalogueFormatTwo(unittest.TestCase):
         Path(self.root, "etc/cdi/nvidia.yaml").write_text("cdiVersion: 0.8.0\n")
         L.nvidia_cdi(host)
         self.assertFalse(self.m.ran("nvidia-ctk"))
+
+    def test_the_studio_page_installs_nothing_and_answers_only_where_the_firewall_allows(self):
+        hw = dict(HW, gpu="nvidia", gpu_vram_gb=24, disk_gb=900, ram_gb=64)
+        Path(self.root, "etc/bromigos").mkdir(parents=True)
+        Path(self.root, "etc/bromigos/server.toml").write_text("")
+        host = self.host(["comfyui"], hw=hw)
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        unit = Path(self.root, L.QUADLET_DIR, "comfyui.container").read_text()
+        # a Server: on its network; its firewall's forward chain keeps 8188 to the home and lab networks
+        self.assertIn("PublishPort=8188:8188\n", unit)
+        self.assertIn("Volume=/srv/apps/comfyui/launch.sh:/bromigos/launch.sh:ro,Z", unit)
+        self.assertIn("Exec=bash /bromigos/launch.sh", unit)
+        launch = Path(self.root, "srv/apps/comfyui/launch.sh")
+        text = launch.read_text()
+        self.assertIn("main.py --listen 0.0.0.0 --port 8188\n", text)
+        self.assertNotIn("--enable-manager", text)
+        self.assertIn("rm -rf /root/ComfyUI/custom_nodes/ComfyUI-Manager", text)
+        self.assertEqual(launch.stat().st_mode & 0o777, 0o755)
+        for rel in ("user/__manager/config.ini", "user/default/ComfyUI-Manager/config.ini"):
+            cfg = Path(self.root, "srv/apps/comfyui", rel).read_text()
+            for line in ("security_level = strong", "network_mode = private", "allow_git_url_install = false",
+                         "allow_pip_install = false"):
+                self.assertIn(line + "\n", cfg, rel)
+        # put back on the next apply, and ComfyUI starts again to take it
+        Path(self.root, "srv/apps/comfyui/user/__manager/config.ini").write_text("[default]\nsecurity_level = weak\n")
+        self.assertTrue(L.studio_lock(host))
+        self.assertIn("security_level = strong", Path(self.root, "srv/apps/comfyui/user/__manager/config.ini").read_text())
+        self.assertFalse(L.studio_lock(host), "nothing to change the second time")
 
     def test_an_amd_card_needs_no_toolkit(self):
         host = self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24, disk_gb=900, ram_gb=64))

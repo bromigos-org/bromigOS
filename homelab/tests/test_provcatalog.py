@@ -200,7 +200,7 @@ class FormatTwoTests(unittest.TestCase):
             units = PC.template_units(it["install"]["quadlet"])
             text = "\n".join(units.values())
             if "http" in h:
-                published = {int(p) for p in re.findall(r"^(?:#[a-z]+:\S+ )?PublishPort=(\d+):", text, re.M)}
+                published = {int(p) for p in re.findall(r"^(?:#[a-z]+:\S+ )?PublishPort=(?:127\.0\.0\.1:)?(\d+):", text, re.M)}
                 on_host = re.search(r"^Network=host$", text, re.M)
                 self.assertTrue(on_host or h["port"] in published, f"{it['id']}: nothing answers on port {h['port']}")
             else:

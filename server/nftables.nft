@@ -6,7 +6,7 @@
 #
 # In: what this server started (replies), the loopback, ping, DHCP, SSH, and from the local
 # network only, the lab's monitoring and mDNS. Everything else coming in is dropped. Out and through
-# (containers, the cluster) are left alone.
+# (containers, the cluster) are left alone, but for the app ports in the forward chain below.
 table inet bromigos-server
 delete table inet bromigos-server
 table inet bromigos-server {
@@ -42,5 +42,16 @@ table inet bromigos-server {
         ip6 saddr @lan6 tcp dport 9100 accept comment "the lab's monitoring (node exporter)"
         ip saddr @lan udp dport 5353 accept comment "mDNS: Find my lab and .local names"
         ip6 saddr @lan6 udp dport 5353 accept comment "mDNS: Find my lab and .local names"
+    }
+
+    # A container's published port (Podman's PublishPort) is forwarded to the container and never
+    # passes the input chain above. These apps have no sign-in of their own, so their ports answer
+    # the local network and the lab's network only, whatever the router forwards:
+    #   8188  the Creation studio (ComfyUI; the provisioning catalogue's `comfyui`)
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+        ip saddr @lan ct status dnat tcp dport 8188 accept comment "the Creation studio (local network)"
+        ip6 saddr @lan6 ct status dnat tcp dport 8188 accept comment "the Creation studio (local network)"
+        ct status dnat tcp dport 8188 drop comment "the Creation studio: not from the internet (no sign-in)"
     }
 }
