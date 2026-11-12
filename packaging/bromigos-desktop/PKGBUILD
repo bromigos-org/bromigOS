@@ -190,7 +190,8 @@ package() {
   install -Dm0644 -t "$pkgdir/usr/share/bromigos/startpage/" startpage/index.html startpage/app.js \
     startpage/style.css startpage/emblem.svg startpage/icon-48.png startpage/icon-128.png startpage/manifest.json
   install -Dm0755 startpage/snapshot.py "$lib/desktop/startpage/snapshot.py"
-  install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" systemd/bromigos-startpage.service systemd/bromigos-startpage.timer
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" systemd/bromigos-startpage.service systemd/bromigos-startpage.timer \
+    systemd/bromigos-labjobs.service
   # the keyring's daemon in every user session, as oo7 asks of a session: its login helper
   # holds the password typed at login until the daemon takes it, so the daemon starts with
   # the session, not on first use (shipped default.target.wants link, as bromigos-core's

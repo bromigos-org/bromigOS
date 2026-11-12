@@ -102,10 +102,31 @@ h2 a:hover { text-decoration: underline; }
 .notes li:last-child { border-bottom: 0; }
 .empty { color: var(--static); }
 
+/* lab jobs: the picture being made (on glass: scanlines and lit corners), its bar, what it made */
+.lj { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+.lj-run { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; margin-bottom: 10px; }
+.lj-run b { display: block; color: var(--soft); font-size: 13px; overflow-wrap: anywhere; }
+.lj-run small { display: block; color: var(--static); font-size: 11px; }
+.lj-run code { display: block; margin-top: 6px; color: var(--static); font-size: 11px; overflow-wrap: anywhere; }
+.lj-stage { display: block; color: var(--phosphor); font-size: 13px; font-weight: 600; margin-top: 4px; }
+.lj-pic { position: relative; margin: 0; aspect-ratio: 1; border: 1px solid var(--dim); background: var(--void); display: grid; place-items: center; overflow: hidden; }
+.lj-pic img, .lj-made img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lj-pic::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 3px); box-shadow: inset 0 0 0 1px var(--glow); }
+.lj-none { color: var(--dim); font-size: 12px; letter-spacing: 0.16em; }
+.lj-bar { height: 4px; background: var(--guard); margin: 6px 0 4px; }
+.lj-bar i { display: block; height: 100%; background: var(--phosphor); box-shadow: 0 0 6px var(--glow); }
+.lj-queue { margin: 4px 0 0; color: var(--static); font-size: 12px; overflow-wrap: anywhere; }
+.lj-made { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; }
+.lj-made li { display: grid; gap: 4px; min-width: 0; }
+.lj-made li > img, .lj-made li > .lj-none { aspect-ratio: 1; border: 1px solid var(--guard); display: grid; place-items: center; background: var(--void); }
+.lj-made small { color: var(--static); font-size: 10px; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 footer { margin-top: 18px; color: var(--static); font-size: 12px; }
 
 @media (max-width: 760px) {
   main { padding-top: 24px; }
   .grid { grid-template-columns: 1fr; }
+  .lj { grid-template-columns: 1fr; }
   #time { font-size: 40px; }
 }
