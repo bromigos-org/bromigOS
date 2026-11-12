@@ -1,4 +1,4 @@
 # The Lab board's API (docs/board.md): its own user, no shell, no home of its own
 u bromigos-board - "bromigOS Lab board" /var/lib/bromigos-board /usr/bin/nologin
 # The lab follower (bromigos-board-lab.service): its own user, which reads the lab's ComfyUIs
-u bromigos-labjobs - "bromigOS Lab board: the lab's jobs" /run/bromigos-labjobs /usr/bin/nologin
+u bromigos-labjobs - "bromigOS Lab board, the lab's jobs" /run/bromigos-labjobs /usr/bin/nologin
