@@ -2,3 +2,5 @@
 # ports go in /etc/bromigos/server.toml's [firewall] public_tcp and public_udp
 add rule inet bromigos-server input tcp dport 25565 accept comment "games (Minecraft)"
 add rule inet bromigos-server input udp dport 25565 accept comment "games (Minecraft)"
+add rule inet bromigos-server forward ct status dnat meta l4proto tcp ct original proto-dst 25565 accept comment "games (Minecraft)"
+add rule inet bromigos-server forward ct status dnat meta l4proto udp ct original proto-dst 25565 accept comment "games (Minecraft)"

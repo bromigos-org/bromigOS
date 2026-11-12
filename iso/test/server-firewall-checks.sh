@@ -47,6 +47,39 @@ else
     check "as installed: nothing is open on 80 or 443" bash -c "! sudo nft list table inet bromigos-server | grep -E 'dport (\{[^}]*\b(80|443)\b[^}]*\}|(80|443)\b)' | grep -w accept"
 fi
 check "status says nothing about the web ports on a server installed right" bash -c "! bromigos server status | grep -q '80 and 443'"
+# an app's published port skips the input chain (DNAT): the forward chain lets it in from the local
+# and lab networks, from the internet only on the ports made public, and drops the rest last
+fwd() { sudo nft list chain inet bromigos-server forward; }
+check "an app's port: the forward chain lets the local and lab networks in, and drops everyone else last" bash -c "
+    f=\$(sudo nft list chain inet bromigos-server forward); echo \"\$f\"
+    grep -q 'ip saddr @lan ct status dnat accept' <<<\"\$f\" && grep -q 'ip6 saddr @lan6 ct status dnat accept' <<<\"\$f\" &&
+    grep -q 'iifname \"tailscale0\" ip saddr @lab ct status dnat accept' <<<\"\$f\" &&
+    [[ \$(grep -E 'ct status dnat' <<<\"\$f\" | tail -1) == *'ct status dnat drop'* ]]"
+# public_tcp = [27015] in [firewall], whether or not the file had the key
+public_27015() {
+    sudo python3 - "$toml" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p).read()
+head, sep, rest = t.partition("[firewall]\n")
+if not sep:
+    t = t.rstrip("\n") + "\n\n[firewall]\npublic_tcp = [27015]\n"
+else:
+    body, nxt, tail = rest.partition("\n[")
+    body = re.sub(r"^public_tcp\s*=.*\n?", "", body, flags=re.M)
+    t = head + sep + "public_tcp = [27015]\n" + body + nxt + tail
+open(p, "w").write(t)
+PY
+}
+public_first() {
+    sudo cp "$toml" /root/server.toml.beforepublic
+    public_27015 && sudo bromigos server firewall apply >/dev/null
+    local f; f=$(fwd); echo "$f"
+    sudo cp /root/server.toml.beforepublic "$toml"; sudo bromigos server firewall apply >/dev/null
+    # among the forward chain's DNAT rules, 27015's comes before the drop
+    grep -E 'ct status dnat' <<<"$f" | grep -E '27015|dnat drop' | head -1 | grep -q 27015
+}
+check "a port made public reaches the forward chain, before the drop" public_first
 
 if [[ ${want[web]} != lan ]]; then
     echo "==> the server's firewall: $fails failed"

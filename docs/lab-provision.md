@@ -566,8 +566,8 @@ setting up its first app, the engine installs it first.
 
 **The Creation studio's page has no sign-in.** ComfyUI has none, so the `comfyui` item:
 
-- publishes 8188 on a Server, where the firewall's forward chain lets it in from the local
-  network and the lab's network only ([server.md](server.md#the-firewall)); on a machine that
+- publishes 8188 on a Server, where the firewall's forward chain lets every app's port in
+  from the local network and the lab's network only ([server.md](server.md#who-can-reach-an-app)); on a machine that
   isn't a Server, which has no such firewall, it publishes on `127.0.0.1` alone;
 - starts ComfyUI with its own launcher, `/srv/apps/comfyui/launch.sh` (mounted read-only as the
   container's command), without ComfyUI-Manager, whose web API installs node packs. The image's

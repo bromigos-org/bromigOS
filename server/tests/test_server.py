@@ -521,23 +521,54 @@ class Files(unittest.TestCase):
         for line in ("PasswordAuthentication no", "KbdInteractiveAuthentication no", "PermitRootLogin no"):
             self.assertIn(line, text)
 
-    def test_the_creation_studios_port_answers_the_home_and_lab_networks_only(self):
-        # a published container port skips the input chain: the forward chain is what scopes it
+    @staticmethod
+    def rules(toml, extra=None):
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "etc/bromigos").mkdir(parents=True)
-            (Path(d) / "etc/bromigos/server.toml").write_text('[firewall]\nallow = ["web-lan"]\n')
+            (Path(d) / "etc/bromigos/server/nftables.d").mkdir(parents=True)
+            (Path(d) / "etc/bromigos/server.toml").write_text(toml)
+            if extra:
+                (Path(d) / "etc/bromigos/server/nftables.d/mine.nft").write_text(extra)
             env = dict(os.environ, BROMIGOS_SERVER_ROOT=d, BROMIGOS_SERVER_SHARE=str(HERE))
-            rules = subprocess.run([sys.executable, "-I", str(SCRIPT), "firewall", "apply", "--print"],
-                                   env=env, capture_output=True, text=True, check=True).stdout
-        fwd = rules[rules.index("chain forward {"):]
-        fwd = fwd[:fwd.index("}")]
-        lines = [l.strip() for l in fwd.splitlines() if "8188" in l]
-        self.assertEqual([l.split(" comment")[0] for l in lines], [
-            "ip saddr @lan ct status dnat tcp dport 8188 accept",
-            'iifname "tailscale0" ip saddr @lab ct status dnat tcp dport 8188 accept',
-            "ip6 saddr @lan6 ct status dnat tcp dport 8188 accept",
-            "ct status dnat tcp dport 8188 drop"])
-        self.assertIn("policy accept", fwd, "everything else passing through is left alone")
+            return subprocess.run([sys.executable, "-I", str(SCRIPT), "firewall", "apply", "--print"],
+                                  env=env, capture_output=True, text=True, check=True).stdout
+
+    @staticmethod
+    def forward(rules):
+        """Every rule of the forward chain, in order: the base chain's, then the appended ones."""
+        chain = rules[rules.index("chain forward {"):]
+        out = [l.strip() for l in chain[:chain.index("}")].splitlines()[1:] if l.strip()]
+        out += [l.split("forward ", 1)[1] for l in rules.splitlines() if l.startswith("add rule inet bromigos-server forward ")]
+        return [l.split(" comment")[0] for l in out]
+
+    def test_an_apps_published_port_answers_the_home_and_lab_networks_and_nobody_else(self):
+        # a published container port skips the input chain (DNAT): the forward chain scopes every one
+        fwd = self.forward(self.rules('[firewall]\nallow = ["web-lan"]\n'))
+        self.assertEqual(fwd, [
+            "type filter hook forward priority filter; policy accept;",
+            "ct state established,related accept",
+            "ip saddr @lan ct status dnat accept",
+            'iifname "tailscale0" ip saddr @lab ct status dnat accept',
+            "ip6 saddr @lan6 ct status dnat accept",
+            "ct status dnat drop"])
+        self.assertNotIn("8188", " ".join(fwd), "no app has a rule of its own")
+
+    def test_the_ports_made_public_reach_the_forward_chain_before_the_drop(self):
+        fwd = self.forward(self.rules('[firewall]\nallow = ["games"]\npublic_tcp = [27015]\npublic_udp = [27015, 34197]\n',
+                                      extra="add rule inet bromigos-server forward ct status dnat meta l4proto tcp "
+                                            "ct original proto-dst 7777 accept\n"))
+        want = ["ct status dnat meta l4proto tcp ct original proto-dst 25565 accept",          # Minecraft (games)
+                "ct status dnat meta l4proto udp ct original proto-dst 25565 accept",
+                "ct status dnat meta l4proto tcp ct original proto-dst { 27015 } accept",      # public_tcp
+                "ct status dnat meta l4proto udp ct original proto-dst { 27015, 34197 } accept",
+                "ct status dnat meta l4proto tcp ct original proto-dst 7777 accept"]           # yours, in nftables.d
+        for w in want:
+            self.assertIn(w, fwd)
+        self.assertEqual(fwd[-1], "ct status dnat drop", "the drop comes after everything that lets people in")
+        self.assertEqual(fwd.count("ct status dnat drop"), 1)
+
+    def test_without_public_ports_only_the_networks_get_in(self):
+        fwd = self.forward(self.rules("[firewall]\n"))
+        self.assertFalse([l for l in fwd if "proto-dst" in l])
 
     def test_ruleset_loads_where_nft_can_check_it(self):
         import shutil
@@ -549,7 +580,8 @@ class Files(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             cfg = Path(d) / "etc/bromigos"
             cfg.mkdir(parents=True)
-            (cfg / "server.toml").write_text('[firewall]\nallow = ["lab-cluster", "web"]\ntcp = [8080]\n')
+            (cfg / "server.toml").write_text('[firewall]\nallow = ["lab-cluster", "web", "games"]\ntcp = [8080]\n'
+                                             'public_tcp = [27015]\npublic_udp = [27015, 34197]\n')
             env = dict(os.environ, BROMIGOS_SERVER_ROOT=d, BROMIGOS_SERVER_SHARE=str(HERE))
             rules = subprocess.run([sys.executable, "-I", str(SCRIPT), "firewall", "apply", "--print"],
                                    env=env, capture_output=True, text=True, check=True).stdout

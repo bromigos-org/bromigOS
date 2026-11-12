@@ -9,6 +9,20 @@ This repository's history starts at 0.1.2. The commits before it, which the link
 0.1.2 section and below name, are in the archives, `bromigos-org/bromigOS-archive` (and
 VECTOR's, `bromigos-org/vector-archive`).
 
+## Unreleased: security
+
+Written by hand, ahead of the next release's generated log; fold it into that release's section
+when it's cut.
+
+- **Fixed: an app's port on bromigOS Server answered the internet.** A container's published
+  port (Photos, Jellyfin, LiteLLM, qBittorrent's page, the media apps, Uptime Kuma and the
+  rest) skipped the firewall, so on a server reachable from the internet (a rented server, a
+  public IPv6 address, a router forwarding the port) anyone could reach it, whatever the
+  firewall said. Now an app's port answers the home network and the lab's private network,
+  and from the internet only the ports you made public (`public_tcp`, `public_udp`, the Game
+  server's Minecraft port). Every server gets the fix with its next update. A game hosted
+  through Pelican's Wings now needs its port in `public_tcp`/`public_udp`, as the docs said.
+
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
 ## [0.1.5] - 2026-11-08
