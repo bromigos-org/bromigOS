@@ -36,6 +36,13 @@ Run `bromigos update` to get them. The next release notes will include these hig
 
 ### Fixed
 
+- **Security: your server's apps no longer answer the internet by accident.** On bromigOS
+  Server, an app's own port (Photos, Jellyfin, the media apps and the rest) could be reached
+  from the internet when the server had a public address or the router passed the port on,
+  even though the firewall said otherwise. Now each app answers your home network and your
+  lab's private network only, and the internet only on the ports you opened to everyone, such
+  as a game's. The fix comes with the next update. If you host a game through Pelican's Wings,
+  list its port under `public_tcp` (and `public_udp`) in `/etc/bromigos/server.toml`.
 - On a computer whose network runs on iwd or systemd-networkd, NetworkManager no longer
   starts as well. It changed the Wi-Fi card's address every few minutes, so routers warned
   that several devices were using the same IP address. The fix takes effect at the next start.

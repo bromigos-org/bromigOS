@@ -620,15 +620,27 @@ def ruleset(c):
                          + ", ".join(map(str, lan)) + " } accept\n")
         public = ports(c["firewall"][f"public_{proto}"])
         if public:
-            extra.append(f"add rule inet bromigos-server input {proto} dport {{ " + ", ".join(map(str, public))
-                         + f" }} accept comment \"open to everyone ([firewall] public_{proto})\"\n")
+            listed = ", ".join(map(str, public))
+            extra.append(f"add rule inet bromigos-server input {proto} dport {{ {listed} }} accept comment "
+                         f"\"open to everyone ([firewall] public_{proto})\"\n"
+                         # an app's published port with that number: the port people connect to, before
+                         # it is forwarded to the container (which may listen on another)
+                         f"add rule inet bromigos-server forward ct status dnat meta l4proto {proto} ct original "
+                         f"proto-dst {{ {listed} }} accept comment \"open to everyone ([firewall] public_{proto})\"\n")
     d = at(NFT_EXTRA)
     if os.path.isdir(d):
         for n in sorted(os.listdir(d)):
             if n.endswith(".nft"):
                 with open(os.path.join(d, n)) as f:
                     extra.append(f.read())
+    # last: a connection to an app's published port that nothing above let in
+    extra.append(FORWARD_DROP)
     return lab_twins(text + "\n".join(extra)) + "\n# the rest, dropped (the base chain's policy)\n"
+
+
+FORWARD_DROP = ("# an app's published port, from anyone the rules above didn't let in (the internet): dropped\n"
+                "add rule inet bromigos-server forward ct status dnat drop comment \"an app's port: not from "
+                "outside the local and lab networks\"\n")
 
 
 def firewall_state():

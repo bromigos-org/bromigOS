@@ -5,7 +5,7 @@ Description=Creation studio (ComfyUI)
 Image={{image:comfyui}}
 ContainerName=comfyui
 Network=bromigos-lab.network
-# no sign-in: a Server's firewall keeps 8188 to the home and lab networks (its forward chain);
+# no sign-in: a Server's firewall keeps every app's port to the home and lab networks (its forward chain);
 # a desktop has no such firewall, so there the page is this machine's alone
 #ifserver:yes PublishPort=8188:8188
 #ifserver:no PublishPort=127.0.0.1:8188:8188

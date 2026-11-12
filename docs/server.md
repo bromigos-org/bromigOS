@@ -360,19 +360,8 @@ What it lets in:
 - mDNS, on port 5353/udp, from the local network only, so Find my lab and `.local` names
   work.
 
-Everything else coming in is dropped. Traffic going out, and traffic passing through to
-containers and the cluster, is left alone, with one exception below.
-
-**Apps without a sign-in.** A container's published port (Podman's `PublishPort`) is passed
-straight to the container: it never reaches the rules above. So for the apps whose page has no
-sign-in of their own, the firewall's forward chain lets their port in from the local network
-and the lab's network only, and drops it from anywhere else, even when the router forwards it:
-
-| Port | App |
-|---|---|
-| 8188 | the Creation studio (ComfyUI, [lab.md](lab.md#the-creation-studio)) |
-
-Nothing else passing through is touched.
+Everything else coming in is dropped. Traffic going out is left alone. Connections to an
+app's own port answer the same people ([below](#who-can-reach-an-app)).
 
 "The local network" means private addresses: `10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, and IPv6's `fc00::/7` and `fe80::/10`.
@@ -406,8 +395,8 @@ The other ways:
 |---|---|
 | `bromigos server firewall allow NAME` | a rule set above, on its own |
 | `tcp = [8080]`, `udp = [...]` in `server.toml` | those ports, from the local network |
-| `public_tcp = [27015]`, `public_udp = [...]` | those ports, from anywhere (a game's port) |
-| A file in `/etc/bromigos/server/nftables.d/*.nft` | your own `add rule inet bromigos-server input …` lines |
+| `public_tcp = [27015]`, `public_udp = [...]` | those ports, from anywhere (a game's port), on the server and on an app's published port |
+| A file in `/etc/bromigos/server/nftables.d/*.nft` | your own `add rule inet bromigos-server input …` (or `forward …`) lines |
 
 A rule set is a file, `/usr/share/bromigos/server/allow-NAME.nft`. Its first line says what
 it opens; `bromigos server firewall allow` lists them.
@@ -415,6 +404,40 @@ it opens; `bromigos server firewall allow` lists them.
 `bromigos server firewall apply` checks the rules with `nft -c` before it loads them. If
 they don't load, the old ones stay. `bromigos server firewall` shows what's loaded, and
 `--print` shows what it would load.
+
+### Who can reach an app
+
+An app such as Photos, Jellyfin or the Creation studio runs in a container and has a port of
+its own (Photos is on 2283). That port answers the same people as the server itself:
+
+- every device on your home network;
+- your lab's other machines, over its private network;
+- anyone on the internet **only** for the ports you opened to everyone (`public_tcp`,
+  `public_udp`, or the Game server's Minecraft port), and only if your router passes them on.
+
+So an app is never on the internet by accident, even on a server with a public address (a
+rented server, or an internet provider that gives every device its own IPv6 address).
+
+For power users: a container's published port (Podman's `PublishPort`, Docker's `-p`, a
+cluster's NodePort or hostPort) is forwarded to the container (DNAT) and never reaches the
+input chain. The table's `forward` chain takes those connections instead:
+
+```text
+ct state established,related accept                         answers, and what's already let in
+ip saddr @lan ct status dnat accept                         an app's port, from the local network
+iifname "tailscale0" ip saddr @lab ct status dnat accept    the same, from the lab network
+ip6 saddr @lan6 ct status dnat accept
+ct status dnat meta l4proto tcp ct original proto-dst { … } accept    public_tcp, games, yours
+ct status dnat drop                                         every other connection to an app's port
+```
+
+The public ports match the port people connect to (`ct original proto-dst`), before it is
+forwarded, so `PublishPort=8085:8080` is opened as 8085. The drop is the ruleset's last line,
+after the rule sets and your `nftables.d` files, so a file there can let more in with an
+`add rule inet bromigos-server forward …` line. Anything that isn't a forwarded port is left
+alone (the chain's policy is accept): containers reaching the internet, Podman's networks
+between containers, a VPN container's routing, and a cluster's pods talking to each other.
+Every package update runs `bromigos-server setup`, which loads the ruleset again.
 
 ### What each role opens
 

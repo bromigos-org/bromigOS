@@ -10,7 +10,8 @@ console, the terminal apps, and [Field Kit](fieldkit.md)'s repairs. It adds:
 - **SSH with keys only**, if you turn it on during the install. Someone who keeps guessing
   is blocked for a while.
 - **A firewall** that lets in SSH, your lab's monitoring and `.local` names, and nothing
-  else.
+  else. Your apps answer your home network and your lab's private network, and the internet
+  only on ports you open to everyone yourself.
 - **Automatic updates that undo themselves.** Each one takes a snapshot first. If the
   server doesn't come back healthy, the update is rolled back by itself.
 - **A watch on its disks.** A disk that's failing or too hot shows in `bromigos server`.

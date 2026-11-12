@@ -1185,12 +1185,10 @@ installs the workflows. The code is `homelab/lib/bromigos_homelab/studio.py`.
 ComfyUI's page has no sign-in. Anyone who can reach it can make things on your card, so it's
 for your own network only. bromigOS keeps it there in three ways:
 
-- **On a Server, the firewall.** The page is on port 8188. A container's port goes straight
-  to the container and skips the firewall's usual rules, so the firewall's forward chain has
-  a rule for 8188 of its own: in from the local network and your lab's private network,
-  dropped from anywhere else, even if your router forwards the port
-  ([server.md](server.md#the-firewall); `server/nftables.nft`). The catalogue's `ports` open
-  nothing by themselves.
+- **On a Server, the firewall.** The page is on port 8188. Like every app's port, it answers
+  the local network and your lab's private network, and is dropped from anywhere else, even
+  if your router forwards it ([server.md](server.md#who-can-reach-an-app)), unless you list
+  8188 in `public_tcp` yourself. The catalogue's `ports` open nothing by themselves.
 - **On a desktop, this machine only.** A machine that isn't a Server has no such firewall, so
   there the page listens on `127.0.0.1:8188` alone.
 - **Nothing can be installed from the page.** The image's own start runs ComfyUI-Manager,

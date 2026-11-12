@@ -6,7 +6,8 @@
 #
 # In: what this server started (replies), the loopback, ping, DHCP, SSH, and from the local
 # network only, the lab's monitoring and mDNS. Everything else coming in is dropped. Out and through
-# (containers, the cluster) are left alone, but for the app ports in the forward chain below.
+# (containers, the cluster) are left alone, except connections to an app's published port: the
+# forward chain below lets those in from the same people as the input chain.
 table inet bromigos-server
 delete table inet bromigos-server
 table inet bromigos-server {
@@ -44,14 +45,19 @@ table inet bromigos-server {
         ip6 saddr @lan6 udp dport 5353 accept comment "mDNS: Find my lab and .local names"
     }
 
-    # A container's published port (Podman's PublishPort) is forwarded to the container and never
-    # passes the input chain above. These apps have no sign-in of their own, so their ports answer
-    # the local network and the lab's network only, whatever the router forwards:
-    #   8188  the Creation studio (ComfyUI; the provisioning catalogue's `comfyui`)
+    # An app's published port (Podman's PublishPort, Docker's -p, a cluster's NodePort or
+    # hostPort) is forwarded (DNAT) straight to its container: it never passes the input chain
+    # above. So the forward chain lets such connections in from the same people: the local
+    # network here, the lab's network (each rule's twin, added by `bromigos-server firewall
+    # apply`), and, appended by the same command, the ports made public ([firewall] public_tcp
+    # and public_udp, and the rule sets that open ports to everyone). Every other connection to
+    # a published port is dropped at the end of the ruleset. What isn't a published port, such
+    # as containers reaching the internet, a cluster's pods talking to each other and the
+    # answers to all of it, is left alone (the policy).
     chain forward {
         type filter hook forward priority filter; policy accept;
-        ip saddr @lan ct status dnat tcp dport 8188 accept comment "the Creation studio (local network)"
-        ip6 saddr @lan6 ct status dnat tcp dport 8188 accept comment "the Creation studio (local network)"
-        ct status dnat tcp dport 8188 drop comment "the Creation studio: not from the internet (no sign-in)"
+        ct state established,related accept
+        ip saddr @lan ct status dnat accept comment "an app's port, from the local network"
+        ip6 saddr @lan6 ct status dnat accept comment "an app's port, from the local network"
     }
 }
