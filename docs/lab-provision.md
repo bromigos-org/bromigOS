@@ -549,10 +549,19 @@ setup fields. Secret fields are references (`{secret = "local:NAME"}`, `vault:â€
 every app shares. Placeholders: `{{data}}` (`/srv/apps/<item>`: on a bromigOS Server with
 data disks `/srv/apps` is on them, [server.md](server.md#where-the-apps-keep-their-data)), `{{media}}`,
 `{{downloads}}`, `{{tz}}`, `{{host}}`, `{{puid}}`/`{{pgid}}` (the `bromigos-media` account),
-`{{image:NAME}}` (`NAME-nvidia` on an NVIDIA server when listed), `{{secret:NAME}}` (the Podman
+`{{image:NAME}}` (`NAME-nvidia` or `NAME-amd` on a server with that GPU, when listed), `{{secret:NAME}}` (the Podman
 secret's name) and `{{setting:FIELD}}`. A line that starts `#if:ITEM `, `#ifnot:ITEM `,
 `#ifset:FIELD ` or `#ifgpu:VENDOR ` is kept only when that holds. Secrets are mounted as files
 (`type=mount`) wherever the app reads files.
+
+**The graphics card.** An NVIDIA card goes into a container through CDI
+(`AddDevice=nvidia.com/gpu=all`), which needs NVIDIA's container toolkit and the toolkit's
+description of the machine's cards. When a rendered unit asks for one, the engine installs
+`nvidia-container-toolkit` if it's missing and writes `/etc/cdi/nvidia.yaml` with
+`nvidia-ctk cdi generate` when no spec is there yet (the toolkit's own
+`nvidia-cdi-refresh` keeps it current after driver updates). An AMD card needs no toolkit:
+the unit passes `/dev/kfd` and `/dev/dri`. On a machine without Podman, such as a desktop
+setting up its first app, the engine installs it first.
 
 ### Where the data goes
 

@@ -246,6 +246,12 @@ which ComfyUI's native nodes don't use.
 A licence whose terms are too unclear to call carries a `decision`, the question the owner
 has to answer. Hunyuan3D v3 through nolgia has one.
 
+A licence can also carry a `notice`: what anyone who passes the weights on must do. DINOv3's
+allows commercial use, and its notice says that a copy of the DINOv3 License and Meta's
+copyright notice go with the weights, or with a model built on them such as TRELLIS.2 or
+Pixal3D, and that its use restrictions bind whoever receives them. The notices of a whole
+chain come out as `notices` in `--json`, and after "passing it on:" in the plain output.
+
 Some licences changed in 2026, so older notes about them are wrong. DEIMv2 and TimesFM-3
 became non-commercial (TimesFM 2.5 is still Apache-2.0), and Mistral's Timestral has a
 revenue cap.

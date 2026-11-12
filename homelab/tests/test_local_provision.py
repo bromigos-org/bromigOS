@@ -855,6 +855,46 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertEqual(photos, {"/srv/apps/photos/library": "library", "/srv/apps/photos/postgres": "database",
                                   "/srv/apps/photos/model-cache": "cache"})
 
+    def test_the_creation_studio_gets_the_card_its_vendor_needs(self):
+        it = PC.by_id()["comfyui"]
+        unit = L.template_files("comfyui")[0].read_text()
+        nvidia = L.render(unit, it, self.host(["comfyui"], hw=dict(HW, gpu="nvidia", gpu_vram_gb=24)))
+        self.assertIn("AddDevice=nvidia.com/gpu=all\n", nvidia)
+        self.assertNotIn("/dev/kfd", nvidia)
+        self.assertIn("Image=docker.io/yanwk/comfyui-boot:cu130-slim-v2-", nvidia)
+        amd = L.render(unit, it, self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24)))
+        self.assertIn("AddDevice=/dev/kfd\nAddDevice=/dev/dri\n", amd)
+        self.assertNotIn("nvidia.com", amd)
+        self.assertIn("Image=docker.io/yanwk/comfyui-boot:rocm-", amd)
+        self.assertIn("PublishPort=8188:8188", amd)
+        self.assertNotIn("{{", amd)
+        self.assertEqual(L.downloads_of(it, {"gpu": "amd"}), ["image docker.io/yanwk/comfyui-boot:rocm-20261104"])
+        self.assertEqual(L.downloads_of(it, {"gpu": "nvidia"}), ["image docker.io/yanwk/comfyui-boot:cu130-slim-v2-20261104"])
+
+    def test_an_nvidia_card_is_described_to_podman_before_the_app_starts(self):
+        hw = dict(HW, gpu="nvidia", gpu_vram_gb=24, disk_gb=900, ram_gb=64)
+        host = self.host(["comfyui"], hw=hw)
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        calls = [" ".join(c) for c in self.m.calls]
+        self.assertIn("pacman -S --needed --noconfirm nvidia-container-toolkit", calls)
+        cdi = next(c for c in calls if c.startswith("nvidia-ctk cdi generate"))
+        self.assertTrue(cdi.endswith("/etc/cdi/nvidia.yaml"))
+        self.assertLess(calls.index(cdi), calls.index("systemctl daemon-reload"))
+        self.assertTrue(Path(self.root, L.QUADLET_DIR, "comfyui.container").exists())
+        # a spec already there (the toolkit's own refresh made it) is left alone
+        self.m.calls.clear()
+        Path(self.root, "etc/cdi").mkdir(parents=True, exist_ok=True)
+        Path(self.root, "etc/cdi/nvidia.yaml").write_text("cdiVersion: 0.8.0\n")
+        L.nvidia_cdi(host)
+        self.assertFalse(self.m.ran("nvidia-ctk"))
+
+    def test_an_amd_card_needs_no_toolkit(self):
+        host = self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24, disk_gb=900, ram_gb=64))
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        self.assertFalse(self.m.ran("nvidia-ctk"))
+        self.assertFalse(self.m.ran("pacman -S --needed --noconfirm nvidia-container-toolkit"))
+        self.assertTrue(self.m.ran("podman pull docker.io/yanwk/comfyui-boot:rocm-20261104@sha256:"))
+
     def test_an_older_catalogue_is_refused_not_half_read(self):
         # format 1 has no web names: the front door would be written with no apps, and say nothing
         old = Path(self.root, "provision-catalogue.toml")

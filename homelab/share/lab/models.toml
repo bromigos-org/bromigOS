@@ -9,7 +9,7 @@
 # and MTEB leaderboards, OmniDocBench and olmOCR-bench, vendor and community benchmarks (each
 # model's `cite`). Figures marked est. in vram_note are computed, not measured.
 format = 1
-version = 7
+version = 8
 researched = "2026-10-09"
 refreshed = "2026-11-09"
 
@@ -94,6 +94,7 @@ commercial = "yes"
 conditions = "redistributed copies and derivatives carry the licence; no military, weapons, nuclear, espionage or ITAR uses; trade controls; no reverse engineering; Meta may change it"
 tier = "conditional"
 tier_reason = "use restrictions that pass to derivatives (no military, ITAR, weapons, espionage or nuclear uses; trade controls), Meta may change the terms (s. 8), and it says nothing about outputs; a copy travels with redistributed weights"
+notice = "whoever passes on the weights, or a model built on them (TRELLIS.2, Pixal3D), gives a copy of the DINOv3 License with them and keeps Meta's copyright notice; the use restrictions bind the people they pass them to as well"
 
 [licence.nvidia-sc-nc]
 hub = ["other"]
@@ -10291,6 +10292,39 @@ cite = ["https://huggingface.co/depth-anything/Depth-Anything-V2-Small", "https:
   vendors = ["nvidia", "amd"]
   stack = "ready"
   notes = "ComfyUI: comfyui_controlnet_aux or ComfyUI-DepthAnythingV2"
+
+[[model]]
+id = "marigold-v2"
+name = "Marigold V2"
+capabilities = ["depth"]
+family = "marigold"
+repo = "huawei-bayerlab/marigold-v2-0"
+url = "https://github.com/huawei-bayerlab/marigold-v2"
+released = "2026-09"
+licence = "apache-2"
+quality = { depth = 88 }
+quality_note = "depth: affine-invariant depth, normals and albedo from LoRAs on Qwen-Image-Edit-2509 (SIGGRAPH Asia 2026); its card reports NYUv2 AbsRel 3.6 (self-reported). Scored below MoGe-2, which gives metric point maps and is what Pixal3D uses; its albedo output is the reason to keep it for PBR textures."
+params_b = 20.0
+cite = ["https://huggingface.co/huawei-bayerlab/marigold-v2-0", "https://github.com/huawei-bayerlab/marigold-v2", "https://arxiv.org/abs/2609.08084"]
+  [[model.built_on]]
+  name = "Qwen-Image-Edit-2509"
+  part = "base model (LoRA base)"
+  licence = "apache-2"
+  cite = "https://huggingface.co/Qwen/Qwen-Image-Edit-2509"
+  [[model.variant]]
+  id = "official-bf16"
+  runtime = "dedicated"
+  quant = "BF16"
+  weights = "huawei-bayerlab/marigold-v2-0: depth, normals and albedo LoRAs, with Qwen/Qwen-Image-Edit-2509 as the base"
+  vram_gib = 17.0
+  vram_note = "its card: about 17 GB at 1024 px, 29 GB at 2048 px"
+  ram_gib = 32.0
+  speed = 20
+  speed_ref = "RTX 4090"
+  speed_note = "est."
+  vendors = ["nvidia"]
+  stack = "needs support: dedicated (huawei-bayerlab/marigold-v2's own code); no ComfyUI node yet"
+  notes = "Outputs are affine-invariant: depth up to an unknown scale and shift per image"
 
 # ---------------------------------------------------------------- frame interpolation
 [[model]]

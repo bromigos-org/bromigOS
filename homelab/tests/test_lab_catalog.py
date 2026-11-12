@@ -1010,6 +1010,23 @@ class RealLineageTest(unittest.TestCase):
         self.assertEqual(self.c.models["pixal3d"].licence.id, "mit")         # its own licence is MIT
         self.assertEqual(self.c.effective(self.c.models["trellis-2"])["tier"], "conditional")
 
+    def test_dinov3s_notice_duties_travel_with_the_models_built_on_it(self):
+        for mid in ("pixal3d", "trellis-2"):
+            notices = self.c.effective(self.c.models[mid])["notices"]
+            self.assertEqual(len(notices), 1, mid)
+            self.assertIn("copy of the DINOv3 License", notices[0])
+        self.assertEqual(self.c.effective(self.c.models["qwen-image-2512"])["notices"], [])
+        doc = C.pick("3d", 24, cat=self.c, licence="commercial", region="US")
+        self.assertTrue(any("DINOv3" in n for n in doc["best"]["notices"]), doc["best"])
+
+    def test_the_image_and_3d_models_our_lab_adopted_are_in_the_catalog(self):
+        for mid, lic in (("pixal3d", "mit"), ("trellis-2", "mit"), ("qwen-image-2512", "apache-2"),
+                         ("qwen-image-edit-2511", "apache-2"), ("wan2.2-i2v-a14b", "apache-2"),
+                         ("wan2.2-ti2v-5b", "apache-2"), ("lucida", "mit"), ("seedvr2-7b", "apache-2"),
+                         ("marigold-v2", "apache-2")):
+            self.assertEqual(self.c.models[mid].licence.id, lic, mid)
+        self.assertTrue(self.c.licences["dinov3"].commercial == "yes" and self.c.licences["dinov3"].notice)
+
     def test_the_models_in_use(self):
         want = {"qwen-image-2512": "clean", "qwen-image-edit-2511": "clean", "wan2.2-i2v-a14b": "clean",
                 "wan2.2-ti2v-5b": "clean", "seedvr2-7b": "clean", "rife-4.9": "clean", "lucida": "clean",

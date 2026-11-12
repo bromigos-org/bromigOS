@@ -258,9 +258,32 @@ def downloads_of(it, hw):
         return ["package " + p for p in inst.get(vendor, inst["pacman"]) if vendor in inst] or \
             ["package " + p for p in inst["pacman"]]
     if "quadlet" in inst:
-        return ["image " + ref.split("@")[0] for name, ref in sorted(it["images"].items()) if not name.endswith("-nvidia")
-                or hw.get("gpu") == "nvidia"]
+        return ["image " + image_ref(it, name, hw).split("@")[0] for name in sorted(image_names(it))]
     return list(STEP_DOWNLOADS.get(inst["step"], []))
+
+
+GPU_IMAGES = ("nvidia", "amd")          # NAME-<vendor> takes NAME's place on a server with that GPU
+
+
+def image_ref(it, name, hw):
+    """The item's image NAME on this server: NAME-nvidia or NAME-amd when the server has that GPU
+    and the item lists one, else NAME."""
+    imgs = it["images"]
+    vendor = (hw or {}).get("gpu")
+    if vendor in GPU_IMAGES and f"{name}-{vendor}" in imgs:
+        return imgs[f"{name}-{vendor}"]
+    return imgs[name]
+
+
+def image_names(it):
+    """The item's image NAMEs, without their GPU builds."""
+    return [name for name in it["images"]
+            if not any(name.endswith("-" + v) and name[:-len(v) - 1] in it["images"] for v in GPU_IMAGES)]
+
+
+def image_refs(it, hw):
+    """Every image the item runs on this server, one per NAME, in the catalogue's order."""
+    return [image_ref(it, name, hw) for name in image_names(it)]
 
 
 def print_plan(plan, out=print):
@@ -490,10 +513,7 @@ class Host:
         if kind == "pgid":
             return str(self.media_owner()[1])
         if kind == "image":
-            imgs = it["images"]
-            if self.hw.get("gpu") == "nvidia" and arg + "-nvidia" in imgs:
-                return imgs[arg + "-nvidia"]
-            return imgs[arg]
+            return image_ref(it, arg, self.hw)
         if kind == "secret":
             name = arg if "/" in arg else f"{it['id']}/{arg}"
             return S.podman_name(name)
@@ -556,14 +576,9 @@ def missing_packages(host, pkgs):
 
 
 def images_for(host, it):
-    """The item's image refs for this server: NAME-nvidia in place of NAME on an NVIDIA server."""
-    imgs = it["images"]
-    out = []
-    for name, ref in imgs.items():
-        if name.endswith("-nvidia"):
-            continue
-        out.append(imgs[name + "-nvidia"] if host.hw.get("gpu") == "nvidia" and name + "-nvidia" in imgs else ref)
-    return out
+    """The item's image refs for this server: NAME-nvidia or NAME-amd in place of NAME on a server
+    with that GPU."""
+    return image_refs(it, host.hw)
 
 
 def missing_images(host, it):
@@ -598,8 +613,24 @@ def install_pacman(host, it):
         enable(host, it["enable"])
 
 
+CDI_SPECS = ("etc/cdi/nvidia.yaml", "var/run/cdi/nvidia.yaml", "run/cdi/nvidia.yaml")
+
+
+def nvidia_cdi(host):
+    """A container given the card by CDI (AddDevice=nvidia.com/gpu=all) needs NVIDIA's container
+    toolkit and the spec it writes of this machine's cards. The toolkit's own nvidia-cdi-refresh
+    keeps the spec current after a driver update; a machine that never had it gets both here, so
+    nobody is handed a command to type."""
+    pacman(host, ["nvidia-container-toolkit"])
+    if not any(host.path(p).exists() for p in CDI_SPECS):
+        host.must(["nvidia-ctk", "cdi", "generate", "--output=" + str(host.path(CDI_SPECS[0]))],
+                  "describe this machine's NVIDIA card to Podman (CDI)")
+
+
 def install_quadlet(host, it):
     host.apps_folder()
+    if host.root == "/" and not shutil.which("podman"):
+        pacman(host, ["podman"])                         # a desktop setting up its first app
     files = template_files(it["install"]["quadlet"])
     units = [f.stem + ".service" for f in files if f.suffix == ".container"]
     host.secrets_for(it, units)
@@ -624,6 +655,8 @@ def install_quadlet(host, it):
                          template_files("_common")[0].read_text())
     for f in files:
         text = render(f.read_text(), it, host)
+        if "AddDevice=nvidia.com/gpu" in text:
+            nvidia_cdi(host)
         changed = host.write(QUADLET_DIR + "/" + f.name, text) or changed
         # a container that runs as an account of its own (User=, as Navidrome and slskd do) writes
         # its data as that account: the folder is that account's, or the app can't make its database

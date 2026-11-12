@@ -808,7 +808,7 @@ The items come in groups:
 | Group | What's in it |
 |---|---|
 | Lab core | Kubernetes (k3s), Argo CD, Vault (OpenBao), External Secrets, monitoring (Prometheus and Grafana), backups, Caddy, the Lab board (this server's own page) |
-| AI | VECTOR's lab bridge, the LiteLLM gateway, model serving (Ollama or vLLM) with the models for your graphics card, voice |
+| AI | VECTOR's lab bridge, the LiteLLM gateway, model serving (Ollama or vLLM) with the models for your graphics card, voice, the Creation studio (ComfyUI: images, video loops and 3D models) |
 | Network | Your lab's private network, ad blocking (AdGuard Home) |
 | Storage | Windows and Mac shares, Linux shares, an S3 bucket server, a backup place for other machines |
 | Games | Pelican's panel, a Wings game node, a Minecraft server |

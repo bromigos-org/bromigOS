@@ -100,6 +100,7 @@ class Licence:
     tier_set: str = ""               # models.toml's `tier`, when the derived one isn't right
     tier_reason: str = ""            # why, in plain words ("use restrictions: no military uses, …")
     decision: str = ""               # terms too unclear to call: what the owner has to decide
+    notice: str = ""                 # what anyone passing it on must do (a copy of the licence, a credit line)
 
     def allows(self, filt="any", region=None):
         """(ok, why). filt: any | commercial | permissive. region: the user's ("EU", "UK", …)."""
@@ -313,7 +314,7 @@ class Catalog:
             self.licences[lid] = Licence(lid, t.get("name", lid), t.get("url", ""), t.get("commercial", "no"),
                                          t.get("conditions", ""), tuple(t.get("territory", ())), t.get("outputs", ""),
                                          bool(t.get("permissive", False)), tuple(t.get("hub", ())), tier,
-                                         t.get("tier_reason", ""), t.get("decision", ""))
+                                         t.get("tier_reason", ""), t.get("decision", ""), t.get("notice", ""))
         self.apis = {}
         for aid, t in (doc.get("api") or {}).items():
             lic = self.licences.get(t.get("licence"))
@@ -414,7 +415,7 @@ class Catalog:
         seen = _seen if _seen is not None else set()
         model = what.model if isinstance(what, Variant) else what
         extra = what.built_on if isinstance(what, Variant) else ()
-        chain, reasons, decide = [], [], []
+        chain, reasons, decide, notices = [], [], [], []
         worst = "clean"
 
         def add(name, part, lic, via=""):
@@ -428,6 +429,8 @@ class Catalog:
                 reasons.append(f"{what_}: {lic.why}" if part else f"{lic.name}: {lic.why}")
             if lic.decision:
                 decide.append(f"{name}: {lic.decision}")
+            if lic.notice:
+                notices.append(f"{lic.name}: {lic.notice}")
 
         add(model.name, "", model.licence)
         seen.add(model.id)
@@ -442,9 +445,11 @@ class Catalog:
                     worst = sub["tier"]
                 reasons += [r if r.startswith("built on") else f"built on {r}" for r in sub["reasons"]]
                 decide += sub["decision"]
+                notices += sub["notices"]
         reasons = list(dict.fromkeys(reasons))
         return {"tier": worst, "reason": "; ".join(reasons) if reasons else "every part is Apache, MIT, BSD or CC-BY",
-                "reasons": reasons, "chain": chain, "decision": list(dict.fromkeys(decide))}
+                "reasons": reasons, "chain": chain, "decision": list(dict.fromkeys(decide)),
+                "notices": list(dict.fromkeys(notices))}
 
     def allows(self, what, filt="any", region=None):
         """Licence.allows over the whole chain: (ok, why)."""
@@ -1093,7 +1098,8 @@ def _odoc(cat, o, hw=None):
 def _eff(cat, what):
     """effective_tier, effective_reason and effective_decision for a pick's document."""
     e = cat.effective(what)
-    return {"effective_tier": e["tier"], "effective_reason": e["reason"], "effective_decision": e["decision"]}
+    return {"effective_tier": e["tier"], "effective_reason": e["reason"], "effective_decision": e["decision"],
+            "notices": e["notices"]}
 
 
 def _tier_words(d):
@@ -1103,6 +1109,8 @@ def _tier_words(d):
     s = f"effective tier {d['effective_tier']} ({d['effective_reason']})"
     if d.get("effective_decision"):
         s += "; needs a decision: " + "; ".join(d["effective_decision"])
+    if d.get("notices"):
+        s += "; passing it on: " + "; ".join(d["notices"])
     return s
 
 

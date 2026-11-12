@@ -2,7 +2,7 @@
   "_comment": "Wan 2.2 I2V-A14B on the user's ComfyUI (API format): a video from a start frame and, natively, an end frame (WanFirstLastFrameToVideo), for video.loop. Two 14B experts: the high-noise one samples the first half of the steps, the low-noise one the rest. Wiring and values are Comfy-Org's video_wan2_2_14B_flf2v template (20 steps, cfg 3.5, euler/simple, shift 8, the switch at step 10, 16 fps). bromigos-art fills it through _meta.video and _meta.bind like wan2.2-ti2v-5b. NOT on the lab yet and not measured: its two fp8 experts are 28.6 GB, more than the 5090 node's disk has free (docs/art.md, \"Video loops\"); `bromigos target probe video.loop` says what's missing.",
   "_meta": {
     "capabilities": ["video.loop"],
-    "catalog": "wan2.2-i2v-a14b/fp8",
+    "catalog": "wan2.2-i2v-a14b/fp8-scaled",
     "features": ["i2v", "flf2v"],
     "output": "mp4",
     "license": "Apache-2.0 (Wan 2.2)",
