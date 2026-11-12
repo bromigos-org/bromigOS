@@ -74,7 +74,9 @@ class FakeMachine:
         self.environ = {k: v for k, v in os.environ.items() if k not in ("WAYLAND_DISPLAY", "DISPLAY")
                         and not k.startswith(("BROMIGOS_", "XDG_"))}
         self.environ.update(HOME=str(self.home), BROMIGOS_ROOT=str(self.root), FAKE=str(self.fake),
-                            PATH=f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", PYTHONDONTWRITEBYTECODE="1")
+                            PATH=f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", PYTHONDONTWRITEBYTECODE="1",
+                            # no ComfyUI is looked for on this machine's own port (docs/activity.md, "Lab jobs")
+                            BROMIGOS_LABJOBS_NO_LOCAL="1", XDG_RUNTIME_DIR=str(self.tmp / "run"))
 
     def close(self):
         for p in self.fake.glob("*.pid"):             # no stand-in unit outlives its test

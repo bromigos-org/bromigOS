@@ -10,12 +10,15 @@
 //     "signin": { "code": "…", "session": <the session after it> } | absent,
 //     "activity": [<job record>…],                  the stream's first snapshot
 //     "stream": [ { "after_ms": 600, "event": "job" | "gone", "data": … } ],  replayed after it
-//     "vitals": { "myserver/24h": <GET /api/vitals> } }
+//     "vitals": { "myserver/24h": <GET /api/vitals> },
+//     "lab": <GET /api/lab> }                           the lab follower's word (absent: not following)
+// The lab's media come from fixtures/lab/NAME (scripts/make-fixtures.mjs copies the repository's
+// own art there under the follower's names).
 // Any document may be {"$status": N, "$error": {"code", "words"}} to stand for an error answer.
 
 import type { Api } from "./client";
 import { ApiError, cleanCode } from "./errors";
-import { readAction, readBoard, readDoor, readEvent, readSession, readVitals } from "./read";
+import { readAction, readBoard, readDoor, readEvent, readLabStatus, readSession, readVitals } from "./read";
 import type { Session } from "./types";
 
 type Err = { $status: number; $error?: { code: string; words: string } };
@@ -28,6 +31,7 @@ interface Fixture {
   activity: unknown[];
   stream?: { after_ms: number; event: string; data: unknown }[];
   vitals?: Record<string, unknown>;
+  lab?: unknown;
 }
 
 export function fixtureName(): string | null {
@@ -106,6 +110,11 @@ export function fixtureApi(name: string): Api {
       };
     },
     jobAct: async (verb, job) => readAction({ ok: true, job: verb === "retry" ? null : job, words: `${verb}: a fixture changes no job.` }),
+    async lab() {
+      owner();
+      return readLabStatus(answer((await load()).lab ?? { following: false, instances: [] }));
+    },
+    mediaUrl: (n) => `/fixtures/lab/${encodeURIComponent(n)}`,
     act: async (verb, app, more) => readAction({ ok: true, job: null, words: `${verb} ${app}${more?.delete_data ? " and delete its data" : ""}: a fixture starts nothing.` }),
   };
 }

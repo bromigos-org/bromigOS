@@ -374,6 +374,56 @@ export interface JobRecord {
   command: string[];
   unit: string | null;
   log: string | null;
+  /** A lab job's own facts (a ComfyUI generation, a job feed's run); null for this server's jobs. */
+  lab: LabInfo | null;
+}
+
+// ---------------------------------------------------------------- the lab's jobs (docs/activity.md, "Lab jobs")
+
+/** A picture, clip or 3D model the lab follower keeps: `media` is the file's name in GET
+ *  /api/lab/media/NAME, `thumb` a small picture of it; both null when it wasn't kept. */
+export interface LabMedia {
+  kind: "image" | "video" | "model3d" | "file";
+  name: string;
+  media: string | null;
+  thumb: string | null;
+  width: number | null;
+  height: number | null;
+  step: string | null;
+}
+
+export interface LabInfo {
+  source: "comfyui" | "feed";
+  /** The ComfyUI it runs on (its name in labjobs.toml), or null for a feed. */
+  instance: string | null;
+  workflow: string | null;
+  /** What it makes, in a word: Image, Edit, Cut-out, Upscale, Video, 3D, Pipeline. */
+  label: string;
+  prompt: string | null;
+  /** Who queued it (a tool's name), when it said. */
+  client: string | null;
+  position: number | null;
+  ahead: number | null;
+  elapsed_ms: number | null;
+  estimate_ms: number | null;
+  /** The progress is an estimate from earlier runs: ComfyUI doesn't send this one's. */
+  estimated: boolean;
+  /** The websocket said something of it: its stage and progress are ComfyUI's own. */
+  live: boolean;
+  /** The picture being made now (a running generation), or a feed step's thumbnail. */
+  preview: LabMedia | null;
+  /** What it made (with the result's own outputs, for a generation that ended). */
+  outputs: LabMedia[];
+  /** Stopping it means interrupting it (it runs now), not taking it out of the queue. */
+  interrupt: boolean;
+}
+
+/** GET /api/lab: the lab follower's word on each ComfyUI it follows. */
+export interface LabStatus {
+  /** The follower has written in the last 15 seconds. */
+  following: boolean;
+  at: number | null;
+  instances: { name: string; state: "ok" | "down"; words: string; live: boolean; relay: boolean }[];
 }
 
 export const FINAL_STATES: JobState[] = ["succeeded", "failed", "rolled-back", "cancelled", "interrupted"];

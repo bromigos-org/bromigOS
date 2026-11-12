@@ -1078,7 +1078,13 @@ pub async fn make(
     }
     let r: Value = http_client
         .post(format!("{url}/prompt"))
-        .json(&json!({"prompt": g, "client_id": "bromigos-art"}))
+        // previews while it samples, for whoever watches (`bromigos activity watch`, the Lab
+        // board): ComfyUI makes none unless the prompt or its command line asks
+        .json(&json!({
+            "prompt": g,
+            "client_id": "bromigos-art",
+            "extra_data": {"preview_method": "auto"}
+        }))
         .send()
         .await
         .map_err(http)?

@@ -1,0 +1,167 @@
+{
+ "_about": "The websocket as ComfyUI 0.45 sends it (server.py send_json, send_image_with_metadata; execution.py, main.py's progress hook) to the client that queued the prompt, or through the relay node to bromigos-watch-* clients: the running prompt of queue.json, up to its sampler at 37 of 50. Shapes from the source; a live socket of another client's prompt carries only `status` (recorded: status.json).",
+ "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+ "frames": [
+  {
+   "text": {
+    "type": "status",
+    "data": {
+     "status": {
+      "exec_info": {
+       "queue_remaining": 2
+      }
+     }
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "execution_start",
+    "data": {
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+     "timestamp": 1794512680706
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "execution_cached",
+    "data": {
+     "nodes": [],
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+     "timestamp": 1794512680708
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "1",
+     "display_node": "1",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "2",
+     "display_node": "2",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "3",
+     "display_node": "3",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "4",
+     "display_node": "4",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "5",
+     "display_node": "5",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "6",
+     "display_node": "6",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "7",
+     "display_node": "7",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "executing",
+    "data": {
+     "node": "8",
+     "display_node": "8",
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "progress",
+    "data": {
+     "value": 12,
+     "max": 50,
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+     "node": "8"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "progress_state",
+    "data": {
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+     "nodes": {
+      "8": {
+       "value": 12,
+       "max": 50,
+       "state": "running",
+       "node_id": "8",
+       "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+       "display_node_id": "8",
+       "parent_node_id": null,
+       "real_node_id": "8"
+      }
+     }
+    }
+   }
+  },
+  {
+   "binary": "AAAABAAAAKV7Im5vZGVfaWQiOiAiOCIsICJwcm9tcHRfaWQiOiAiYTkyZjlkZjMtNzY0Mi00NmJmLWI2NTQtNTMwOGZlMGFjZTdlIiwgImRpc3BsYXlfbm9kZV9pZCI6ICI4IiwgInBhcmVudF9ub2RlX2lkIjogbnVsbCwgInJlYWxfbm9kZV9pZCI6ICI4IiwgImltYWdlX3R5cGUiOiAiaW1hZ2UvcG5nIn2JUE5HDQoaCgAAAA1JSERSAAAACAAAAAgIAgAAAEttKdwAAAAUSURBVHicY9Q4sYUBG2DCKjpoJQBLYwG0G5+CSQAAAABJRU5ErkJggg==",
+   "about": "PREVIEW_IMAGE_WITH_METADATA (4): metadata length, metadata JSON, a PNG"
+  },
+  {
+   "binary": "AAAAAQAAAAH/2P/gABBKRklGAAEBAAABAAEAAP/bAEMACAYGBwYFCAcHBwkJCAoMFA0MCwsMGRITDxQdGh8eHRocHCAkLicgIiwjHBwoNyksMDE0NDQfJzk9ODI8LjM0Mv/bAEMBCQkJDAsMGA0NGDIhHCEyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMv/AABEIAAgACAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/AJ6KKK+QPqj/2Q==",
+   "about": "PREVIEW_IMAGE (1): image type 1 (JPEG), the JPEG; no prompt id: it belongs to the prompt that runs"
+  },
+  {
+   "text": {
+    "type": "progress",
+    "data": {
+     "value": 37,
+     "max": 50,
+     "prompt_id": "a92f9df3-7642-46bf-b654-5308fe0ace7e",
+     "node": "8"
+    }
+   }
+  }
+ ]
+}

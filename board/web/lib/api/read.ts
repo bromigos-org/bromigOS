@@ -9,7 +9,7 @@ import type {
   ActionAnswer, ActivityEvent, BackupsStatus, Board, Browser, CarriedDrive, Door, DoorTile, Drive, DriveHealth, DriveVerdict, Fixed,
   Hardware, JobRecord, JobState, JobStep, Machine, MachineKind, MachineReadings, NeedsYou, Part, Reading, SeriesName, Session, Shape,
   StepState, Tile, TileState, UpdatesStatus, Vitals, VitalsRange,
-  Channel, Check, Notify,
+  Channel, Check, Notify, LabInfo, LabMedia, LabStatus,
 } from "./types";
 import { JOB_STATES, STEP_STATES } from "./types";
 
@@ -356,6 +356,44 @@ function step(o: Obj): JobStep | null {
   };
 }
 
+const MEDIA_NAME = /^(pv|th|of|fm)-[0-9a-f]{16}\.(png|jpg|webp|gif|mp4|webm|glb)$/;
+const mediaName = (v: unknown): string | null => (typeof v === "string" && MEDIA_NAME.test(v) ? v : null);
+
+function labMedia(o: Obj): LabMedia | null {
+  const media = mediaName(o.media), thumb = mediaName(o.thumb);
+  return {
+    kind: oneOf(o.kind, ["image", "video", "model3d", "file"] as const, "file"),
+    name: str(o.name, media ?? "a file"), media, thumb: thumb ?? (media && /\.(png|jpg|webp|gif)$/.test(media) ? media : null),
+    width: num(o.width), height: num(o.height), step: strOrNull(o.step),
+  };
+}
+
+/** A lab job's `lab` object, field by field; null for anything else. A media name is only ever
+ *  one the follower makes (lib/bromigos_labjobs.py, MEDIA_NAME): nothing else reaches a URL. */
+export function readLab(v: unknown, result: unknown): LabInfo | null {
+  const o = obj(v);
+  if (!o) return null;
+  const source = oneOf(o.source, ["comfyui", "feed"] as const, "comfyui");
+  const preview = obj(o.preview) ? labMedia(obj(o.preview)!) : null;
+  const outs = each(obj(result)?.outputs, labMedia);
+  return {
+    source, instance: strOrNull(o.instance), workflow: strOrNull(o.workflow), label: str(o.label, source === "feed" ? "Pipeline" : "ComfyUI"),
+    prompt: strOrNull(o.prompt), client: strOrNull(o.client), position: num(o.position), ahead: num(o.ahead),
+    elapsed_ms: num(o.elapsed_ms), estimate_ms: num(o.estimate_ms), estimated: bool(o.estimated), live: bool(o.live),
+    preview: preview && preview.media ? preview : null,
+    outputs: outs.length ? outs : each(o.outputs, labMedia),
+    interrupt: bool(o.interrupt),
+  };
+}
+
+export function readLabStatus(doc: unknown): LabStatus {
+  const d = obj(doc) ?? {};
+  return {
+    following: bool(d.following), at: num(d.at),
+    instances: each(d.instances, (i) => (str(i.name) ? { name: str(i.name), state: i.state === "ok" ? "ok" : "down", words: str(i.words), live: bool(i.live), relay: bool(i.relay) } : null)),
+  };
+}
+
 export function readJob(v: unknown): JobRecord | null {
   const o = obj(v);
   const id = str(o?.id);
@@ -382,6 +420,7 @@ export function readJob(v: unknown): JobRecord | null {
     can: strs(o.can),
     cancel_note: strOrNull(o.cancel_note),
     command: strs(o.command), unit: strOrNull(o.unit), log: strOrNull(o.log),
+    lab: readLab(o.lab, o.result),
   };
 }
 

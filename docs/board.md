@@ -21,7 +21,8 @@ gathers the readings, the Caddy site, and what the page never shows.
   its steps, what it asks, how it ended, and the command that looks closer
   (`bromigos activity show ID`). `#job/ID` opens one job. A job's answers, Stop and Start
   again are controls on a server that lets the page: see
-  [What the page may do](#what-the-page-may-do).
+  [What the page may do](#what-the-page-may-do). The lab's creation jobs show here too:
+  see [The lab's jobs](#the-labs-jobs).
 - **The door and signing in.** Signed out, every address shows the door: the ways in and
   the apps to open, nothing else. **Sign in** takes the one-time code that
   `sudo bromigos server board code` prints at the server.
@@ -441,6 +442,13 @@ Content-Security-Policy.
   can't be undone asking for a code, with Back; and against the service's real refusals
   (`danger-needs-code`, `ended`), the bodies sent, a busy answer that keeps the code, and
   the new job's link after Start again.
+- **The lab's jobs** (`tests/lab.spec.ts`): the generation that runs now with its picture,
+  ring, stage and queue, moved on by the stream; the filter; stopping (a running one asks
+  first); what ended jobs made, a 3D model on the table; the estimate without the relay
+  node, with the commands where the page may not act; a media name the follower doesn't
+  make never reaching a URL; every control's hint; and the phone. The fixtures `making` and
+  `making-estimate` are the service's own `activity_lab` answer, with the repository's art
+  as the pictures.
 - **One app** (`tests/app.spec.ts`): what the page says of a tile, from the fixtures and
   from the service's real answers; an app that measures nothing is "not measured", never
   zero; restart and remove offered only with the server's leave, and sent as the service
@@ -678,7 +686,7 @@ keep the reader running, and the door's tiles can be two minutes behind.
 | `system` | `bromigos server status --json` |
 | `storage` | `bromigos storage health --json` |
 | `backups` | `bromigos lab backups status --json` |
-| `activity` | `bromigos activity list --json` |
+| `activity` | `bromigos activity list --server --json` |
 | `alerts` | `bromigos alerts --json` |
 | `apps` | `bromigos lab apps list --json` |
 | `budget` | `bromigos lab apps budget --json` |
@@ -816,7 +824,7 @@ draws first from those same documents:
  "sources": {"storage": {"command": ["bromigos", "storage", "health", "--json"], "at": 1794289999000, "ok": true, "rc": 1},
              "apps": {"command": ["bromigos", "lab", "apps", "list", "--json"], "at": 1794289999000, "ok": false, "rc": 2,
                       "why": "bromigos lab: no command apps"}},
- "system": "… bromigos server status --json", "activity": "… bromigos activity list --json",
+ "system": "… bromigos server status --json", "activity": "… bromigos activity list --server --json",
  "alerts": "… bromigos alerts --json", "host": "myserver", "settings": {"door": true, "world": "wick"}}
 ```
 
@@ -1070,6 +1078,76 @@ helper waits for it, other requests wait their turn.
 
 A wrong code for a deletion is counted and slowed like a wrong code at sign-in.
 
+### The lab's jobs
+
+Activity also shows what the lab is making: each ComfyUI generation and each run of a tool
+that writes a job feed ([activity.md](activity.md#lab-jobs) has the sources, the record and
+the feed format).
+
+**On the page.**
+
+- **MAKING NOW.** The generation that runs now is the page's hero:
+  - the picture as ComfyUI makes it, on glass, with a progress ring;
+  - its stage (`Sample · 21 of 50 steps`) and its stages;
+  - how long it has taken, and how long that workflow usually takes;
+  - the prompt, and the queue behind it on the same ComfyUI.
+- **The other jobs.** A queued generation and a pipeline run are cards in GOING. An ended
+  one shows what it made: a picture, a clip that plays without sound, or a 3D model. A 3D
+  model turns on the projection table in the shipped hologram renderer (`lib/holo`, read
+  with three.js's GLTFLoader).
+- **The filter.** Three toggles over the list pick all jobs, this server's, or the lab's.
+- **The ComfyUIs.** A line names each ComfyUI the follower reads. "live" means its progress
+  and pictures come live. "queue and results" means the relay node isn't installed there,
+  so progress is an estimate, and the card says ESTIMATE.
+
+Stopping a generation is the job's own Stop (`job.cancel` in `[board] actions`). A queued
+generation leaves the queue at once. A running one is interrupted, and the card asks first,
+because what it made so far is lost. A pipeline run can't be stopped from the page: the
+program that writes it stops it.
+
+**On the server.** The API has no network, so a follower of its own reads the lab:
+
+- `bromigos-board-lab.service` runs `bromigos activity follow --system` as its own user,
+  `bromigos-labjobs`. When the API marks `wanted`, `bromigos-board-lab.path` starts
+  `bromigos-board-lab-start.service`, as root. That writes the follower's addresses (below)
+  and starts it. It stops when nobody has looked for 45 seconds.
+- It reads the ComfyUIs in `/etc/bromigos/labjobs.toml`, and only those: this machine's own
+  too must be named there (`url = "http://127.0.0.1:8188"`). Setting up the Creation studio
+  writes that file once, naming the studio; after that it is yours. It reads the system's feed
+  folder, `/var/lib/bromigos/activity/feed`, too.
+- It may connect to those ComfyUIs' exact addresses and nowhere else. The starter writes them
+  to `/run/systemd/system/bromigos-board-lab.service.d/50-allow.conf` (`IPAddressAllow`,
+  resolved from labjobs.toml; `bromigos activity follow --allow-dropin`), and systemd reloads
+  when they changed. With no labjobs.toml it may connect nowhere. It follows no redirect. It
+  can't bind a socket, so it opens no port. It writes only its two folders.
+- With the relay node's token (labjobs.toml's `relay_token`, a file the `bromigos-labjobs`
+  user can read, such as `/etc/bromigos/comfyui-relay.token`, 0640, group
+  `bromigos-labjobs`), it gets every prompt's progress and pictures live.
+- It writes `/run/bromigos-labjobs/jobs.json`, and keeps previews, thumbnails and outputs in
+  `/var/cache/bromigos-labjobs/` (512 MB at most). Both folders are setgid
+  `bromigos-board`, so the API's group reads them.
+
+The API passes these on:
+
+| Route | What |
+|---|---|
+| `GET /api/activity` | The lab's records join the stream, from `jobs.json` only. A feed's own paths are never in them |
+| `GET /api/lab` | `{following, at, instances: [{name, state, words, live, relay}]}`: the follower's word on each ComfyUI |
+| `GET /api/lab/media/NAME` | One of the follower's files. NAME must be one the follower makes (`pv-`, `th-`, `of-`, `fm-`, 16 hex digits, a picture, clip or model type). The file is opened once without following a link, must be a regular file owned by `bromigos-labjobs`, and is sent from that open file; anything else is 404. Served with its own type, `nosniff`, a sandboxing policy, and kept by the browser (the name is the content) |
+
+A Stop goes the existing way: the page, the requests folder, root's helper, then
+`bromigos-activity cancel ID --json`. That command has no network inside the helper's
+sandbox, so it hands the request to the follower through root's folder
+`/run/bromigos-labjobs-asks/`, which the follower only reads. The follower checks ComfyUI's
+queue again, acts on that one prompt (`POST /queue {"delete": [ID]}`, or `POST /interrupt
+{"prompt_id": ID}`), and answers in `/run/bromigos-labjobs/answers/`.
+
+```bash
+sudo systemctl status bromigos-board-lab.service       # the follower
+sudo cat /run/bromigos-labjobs/jobs.json | head         # what it last wrote
+bromigos activity list --lab                            # the same jobs at a terminal
+```
+
 ### The files
 
 | Path | What |
@@ -1086,6 +1164,10 @@ A wrong code for a deletion is counted and slowed like a wrong code at sign-in.
 | `/run/bromigos-board/requests/` | The page's actions, waiting for root's helper. The board's user's |
 | `/run/bromigos-board/results/` | The helper's answers. Root's |
 | `/var/lib/bromigos-board-root/codes/` | Root's own note of each code it made. Root's only |
+| `/run/bromigos-labjobs/` | The lab follower's `jobs.json` and its answers. The `bromigos-labjobs` user's, read by the board's group |
+| `/var/cache/bromigos-labjobs/` | The lab's previews, thumbnails and outputs. The same |
+| `/run/bromigos-labjobs-asks/` | What root's helper asks the follower (stopping a generation). Root's |
+| `/etc/bromigos/labjobs.toml` | The ComfyUIs and feed folders the follower reads ([activity.md](activity.md#which-comfyuis)) |
 
 ### The service's tests
 

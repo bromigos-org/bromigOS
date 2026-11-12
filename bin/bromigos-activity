@@ -1,24 +1,36 @@
 #!/usr/bin/env python3
-# bromigos:summary=What this computer is doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later
-# bromigos:args=[list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
-# bromigos:examples=bromigos activity; bromigos activity show; bromigos activity list --json; sudo bromigos activity answer drive.replace swapped; sudo bromigos activity cancel backup; sudo bromigos activity run --kind backup.run --title "Backing up" --lock backup-repo -- bromigos server backup run
+# bromigos:summary=What this computer and its lab are doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later; ComfyUI generations and pipeline runs beside them
+# bromigos:args=[list [--all] [--limit N] [--lab|--server] [--json]] | show [ID] [--log N] [--json] | watch [ID] [--lab|--server] [--no-images] [--once] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND… | emit RUN start --title WORDS [--kind KIND] [--subject TYPE:ID[:NAME]] [--pid PID] | emit RUN ::LINE… | emit RUN media PATH [--step ID] [--output] | emit RUN end [STATE] [WORDS…] | follow [--system] [--once] [--poll S] [--idle S --wanted FILE] [--allow-dropin PATH]
+# bromigos:examples=bromigos activity; bromigos activity watch; bromigos activity show; bromigos activity list --lab --json; sudo bromigos activity answer drive.replace swapped; sudo bromigos activity cancel backup; bromigos activity emit ships start --title "Universe assets: ships"; bromigos activity emit ships ::step cutout running Cutting out ship-a; sudo bromigos activity run --kind backup.run --title "Backing up" --lock backup-repo -- bromigos server backup run
 """bromigos-activity (`bromigos activity`): what this computer is doing (docs/activity.md).
 
-  bromigos activity [list]            the jobs still going, then the newest that ended
+  bromigos activity [list]            the jobs still going, then the newest that ended: this
+                                      computer's, and its lab's (ComfyUI generations and
+                                      pipeline runs, docs/activity.md "Lab jobs")
       --all                           every job kept (the last 30 days, 200 at most)
       --limit N                       at most N (default 20)
+      --lab                           the lab's jobs only
+      --server                        this computer's own jobs only
       --json                          the records
   bromigos activity show [ID]         one job: its steps, its notes, its command and the end of
                                       its log. ID is a job's id or a part of it; without one,
                                       the newest job
       --log N                         N lines of the log (default 20; 0 for all of it)
       --json                          the record, with the log's lines
+  bromigos activity watch [ID]        follow the jobs live in this terminal: progress, stage,
+                                      the queue, and in kitty the picture being made. Ctrl+C
+                                      stops watching (the jobs carry on). With ID, that job
+      --lab, --server                 as for list
+      --no-images                     no pictures, even in kitty
+      --once                          one look, then return (no live updates)
   bromigos activity answer ID CHOICE  answer the question a job asks (its state is "needs you").
                                       `show ID` prints the question and each CHOICE. The job
                                       carries on. Needs root
   bromigos activity cancel ID         stop a job. Refused unless the job says that stopping now
                                       is safe; it says why not. A job that only waits for
-                                      another job can always be stopped. Needs root
+                                      another job can always be stopped. Needs root. A lab
+                                      job: a queued generation leaves ComfyUI's queue, a
+                                      running one is interrupted (no root needed)
   bromigos activity retry ID          start again a job that failed, was cancelled or was
                                       interrupted, when it was started with --retry-safe: a new
                                       job with the same command. Takes run's --via, --device,
@@ -46,6 +58,31 @@
       --detach                        print the job's id and return at once
       --json                          don't show the output; print the record at the end
 
+  bromigos activity emit RUN …        add a line to a job feed: how a tool that isn't run by
+                                      `activity run` (a pipeline, a script on another
+                                      schedule) shows its steps everywhere jobs show. RUN is
+                                      short lower-case words (ships-20261112); the job's id is
+                                      feed-RUN. The feed is ~/.local/state/bromigos/activity/
+                                      feed/RUN.jsonl (root's: /var/lib/bromigos/activity/feed;
+                                      BROMIGOS_ACTIVITY_FEED chooses another folder)
+      start --title WORDS             begin the run (again): its title, and --kind (lab.pipeline),
+                                      --subject TYPE:ID[:NAME], --pid PID (the process that does
+                                      the work: when it's gone, the run reads as interrupted)
+      ::step ID STATE [WORDS]         any progress line `run` reads: ::step, ::stage, ::item,
+                                      ::note, ::error
+      media PATH                      a picture, clip or 3D model of the step (a thumbnail);
+                                      --step ID names the step, --output marks a result
+      end [STATE] [WORDS]             the run ended: succeeded (default), failed or cancelled
+  bromigos activity follow            keep the lab's jobs and their previews in a state folder,
+                                      live, for the pages that show them (the Lab board, the
+                                      start page). systemd runs it; --once looks once
+      --system                        the machine's own settings and folders (the board's)
+      --poll S                        seconds between looks at each ComfyUI (default 2)
+      --idle S --wanted FILE          stop when nobody touched FILE for S seconds
+      --allow-dropin PATH             write the systemd drop-in that lets the machine's follower
+                                      connect to labjobs.toml's ComfyUIs and nothing else, and
+                                      reload systemd when it changed (root; the board runs it)
+
 Where there's no systemd (a container), `run` runs the job in this terminal, with the same record.
 
 Exit status: `run` and `retry` end with COMMAND's own (130 when you stop watching with Ctrl+C,
@@ -53,9 +90,14 @@ or the job was cancelled; 127 when COMMAND isn't there). Otherwise 0, 1 for a pr
 words (no such job), 2 for a wrong command, 3 when the job refused: it isn't asking, it has no
 such answer, stopping it now isn't safe, or it can't be started again.
 """
+import hashlib
 import json
 import os
+import shutil
+import subprocess
 import sys
+import threading
+import time
 
 here = os.path.dirname(os.path.realpath(__file__))
 for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), "/usr/lib/bromigos/lib")):
@@ -63,6 +105,7 @@ for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), "/usr/lib
         sys.path.insert(0, candidate)
 
 import bromigos_activity as A  # noqa: E402
+import bromigos_labjobs as L  # noqa: E402
 
 USAGE = __doc__.split("\n\n", 1)[1]
 SELF = os.path.realpath(__file__)
@@ -104,12 +147,19 @@ def number(text, default):
         return default
 
 
+def which(got):
+    """list_jobs's lab and server from --lab and --server: both by default."""
+    if "--lab" in got and "--server" in got:
+        return None
+    return {"lab": None if "--server" in got else {}, "server": "--lab" not in got}
+
+
 def cmd_list(env, args):
-    got, rest = options(args, ("--json", "--all"), ("--limit",))
-    if got is None or rest:
+    got, rest = options(args, ("--json", "--all", "--lab", "--server"), ("--limit",))
+    if got is None or rest or which(got) is None:
         return usage()
     tidy(env)
-    jobs = A.list_jobs(env, None if "--all" in got else number(got.get("--limit"), 20) or None)
+    jobs = A.list_jobs(env, None if "--all" in got else number(got.get("--limit"), 20) or None, **which(got))
     if "--json" in got:
         print(json.dumps({"schema": A.SCHEMA, "jobs": jobs}, indent=1))
     else:
@@ -127,7 +177,7 @@ def cmd_show(env, args):
     except KeyError as e:
         say(str(e.args[0]))
         return 1
-    tail = A.log_tail(env, rec, number(got.get("--log"), 20))
+    tail = [] if rec.get("lab") else A.log_tail(env, rec, number(got.get("--log"), 20))
     if "--json" in got:
         print(json.dumps({"schema": A.SCHEMA, "job": rec, "log_tail": tail}, indent=1))
     else:
@@ -190,8 +240,8 @@ def cmd_cancel(env, args):
     if got is None or len(rest) != 1:
         return usage()
     rec = A.find(env, rest[0])
-    if rec["state"] not in A.FINAL and rec.get("cancel_safe"):
-        as_root(env)
+    if rec["state"] not in A.FINAL and rec.get("cancel_safe") and not rec.get("lab"):
+        as_root(env)                                 # a lab job is the ComfyUI's: no root needed
     out = A.cancel(env, rec["id"])
     if out["refused"] == "unsafe" and "--json" not in got:
         say("not stopped. " + out["words"])
@@ -274,6 +324,171 @@ def ran(env, got, code, job_id):
     return code
 
 
+def cmd_emit(env, args):
+    """A line in a job feed (bromigos_labjobs.Feed)."""
+    if len(args) < 2:
+        return usage()
+    run, what, rest = args[0].lower(), args[1], args[2:]
+    if what == "start":
+        got, left = options(rest, (), ("--title", "--kind", "--subject", "--pid"))
+        if got is None or left or "--title" not in got:
+            return usage()
+        if "--subject" in got:
+            A.parse_subject(got["--subject"])
+        pid = number(got.get("--pid"), None) if "--pid" in got else None
+        L.Feed(run, got["--title"], got.get("--kind", "lab.pipeline"), got.get("--subject"), env=env, pid=pid)
+        return 0
+    feed = L.Feed(run, run, env=env, resume=True, pid=None)
+    if what.startswith("::"):
+        feed.line(" ".join([what, *rest]))
+    elif what == "media":
+        got, left = options(rest, ("--output",), ("--step",))
+        if got is None or len(left) != 1:
+            return usage()
+        if not os.path.isfile(left[0]):
+            say(f"no such file: {left[0]}")
+            return 1
+        feed.media(left[0], got.get("--step"), output="--output" in got)
+    elif what == "end":
+        state = rest[0] if rest and rest[0] in ("succeeded", "failed", "cancelled") else "succeeded"
+        words = " ".join(rest[1:] if rest and rest[0] == state else rest)
+        feed.end(state, words)
+    else:
+        return usage()
+    return 0
+
+
+def cmd_follow(env, args):
+    got, rest = options(args, ("--system", "--once"), ("--poll", "--idle", "--wanted", "--allow-dropin"))
+    if got is None or rest:
+        return usage()
+    where = L.Where(env, system=True if "--system" in got else None)
+    if "--allow-dropin" in got:
+        # (root, before the board's follower starts: the only addresses it may connect to)
+        changed = L.write_allow_dropin(where, got["--allow-dropin"])
+        if changed and not env.stand_in and env.find("systemctl"):
+            subprocess.run([env.find("systemctl"), "daemon-reload"], check=False)
+        print("changed" if changed else "unchanged")
+        return 0
+    poll = max(0.5, float(got.get("--poll") or 2))
+    idle = float(got["--idle"]) if got.get("--idle") else None
+    return L.Follower(where, poll=poll).run(once="--once" in got, idle_s=idle, wanted=got.get("--wanted"))
+
+
+def watch_frame(jobs, now, one=None, width=100):
+    """What `watch` shows: (lines, the job whose picture goes beside them)."""
+    if one:
+        jobs = [j for j in jobs if j["id"] == one or one in j["id"]][:1]
+    going = [j for j in jobs if j["state"] not in A.FINAL and j["state"] != "queued"]
+    queued = [j for j in jobs if j["state"] == "queued"]
+    ended = [j for j in jobs if j["state"] in A.FINAL][: 1 if one else 4]
+    cut = lambda t, n=width: t if len(t) <= n else t[: n - 1] + "…"  # noqa: E731
+    lines = []
+    for j in going:
+        lab = j.get("lab") or {}
+        lines.append(cut(f"{A.MARKS['running']} {j['title']}  ({A.WORDS[j['state']]})"))
+        lines.append(cut(f"  [{L.bar(j.get('pct'))}] " + (f"{j['pct']} %" if j.get("pct") is not None else "") +
+                         (" (estimated)" if lab.get("estimated") else "") + (f"  {j['stage']}" if j.get("stage") else "")))
+        t = []
+        if lab.get("elapsed_ms") is not None:
+            t.append(f"{A.took(lab['elapsed_ms'])} so far")
+        elif not lab:
+            t.append(f"{A.took(now - j['started_at'])} so far")
+        if lab.get("estimate_ms"):
+            t.append(f"usually {A.took(lab['estimate_ms'])}")
+        if lab.get("instance"):
+            t.append(f"ComfyUI {lab['instance']}")
+        if lab.get("client"):
+            t.append(f"from {lab['client']}")
+        if t:
+            lines.append(cut("  " + " · ".join(t)))
+        if j["steps"]:
+            lines.append(cut("  " + "  ".join(f"{A.MARKS[s['state']]} {s['label']}" for s in j["steps"][:8])))
+        lines.append(f"  {j['id']}")
+        lines.append("")
+    if not going:
+        lines += ["Nothing is running now.", ""]
+    if queued:
+        lines.append(f"Queue ({len(queued)})")
+        lines += [cut(f"  {k + 1}. {j['title']}") for k, j in enumerate(queued[:8])]
+        if len(queued) > 8:
+            lines.append(f"  … and {len(queued) - 8} more")
+        lines.append("")
+    if ended:
+        lines.append("Ended")
+        lines += [cut(f"  {A.WORDS[j['state']]:<11} {A.ago(now - (j.get('ended_at') or j['started_at'])):<9} {j['title']}"
+                      + (f": {A.now_words(j)}" if A.now_words(j) else "")) for j in ended]
+    top = next((j for j in going if (j.get("lab") or {}).get("preview")), None) or \
+        next((j for j in going + ended if ((j.get("result") or {}).get("outputs") or [])), None)
+    return lines, top
+
+
+def picture_of(job, media_dir):
+    """The bytes of a job's live preview, else its first image output, or None."""
+    lab = job.get("lab") or {}
+    for m in [lab.get("preview")] + [o for o in (job.get("result") or {}).get("outputs") or [] if o.get("kind") == "image"]:
+        if not isinstance(m, dict):
+            continue
+        for p in ([m["path"]] if m.get("path") else []) + [L.media_path(media_dir, n) for n in (m.get("thumb"), m.get("media"))
+                                                             if n and media_dir]:
+            if p and os.path.isfile(p):
+                with open(p, "rb") as f:
+                    return f.read(L.MEDIA_MAX)
+    return None
+
+
+def cmd_watch(env, args):
+    got, rest = options(args, ("--lab", "--server", "--once", "--no-images"), ("--every",))
+    if got is None or len(rest) > 1 or which(got) is None:
+        return usage()
+    one = rest[0] if rest else None
+    every = max(0.5, float(got.get("--every") or 1))
+    kinds = which(got)
+    where = L.Where(env)
+    follower = None
+    if not "--once" in got and kinds["lab"] is not None and L.read_state(where)[0] is None:
+        # nobody keeps the lab's state on this machine: follow it here while watching, for the
+        # live progress and the pictures
+        follower = L.Follower(where, poll=1.5, log=lambda words: None)
+        threading.Thread(target=follower.run, daemon=True).start()
+    tty = sys.stdout.isatty() and "--once" not in got
+    pictures = tty and "--no-images" not in got and L.is_kitty(env.environ)
+    shown = None
+    try:
+        while True:
+            now = env.now_ms()
+            jobs = A.list_jobs(env, None, **kinds)
+            cols = shutil.get_terminal_size((100, 30)).columns
+            lines, top = watch_frame(jobs, now, one, (cols - 44 if pictures else cols) - 1)
+            head = ("LAB AND SERVER JOBS" if kinds["server"] and kinds["lab"] is not None else
+                    "LAB JOBS" if kinds["lab"] is not None else "JOBS") + (f"  ·  {time.strftime('%H:%M:%S')}" if tty else "")
+            lines = [L.clean(t) for t in lines]          # no record's text reaches the terminal as a control
+            if not tty:
+                print("\n".join([head, ""] + lines).rstrip())
+                return 0
+            out = ["\x1b[H"] + [f"{t}\x1b[K\n" for t in [head, ""] + lines] + ["\x1b[J"]
+            pic = None
+            if pictures and top:
+                _, media_dir = L.read_state(where)
+                pic = picture_of(top, media_dir)
+            key = hashlib.sha256(pic).hexdigest() if pic else None
+            if pictures and key != shown:
+                draw = L.kitty_image(pic) if pic else None
+                out.append(f"\x1b7\x1b[3;{max(1, cols - 42)}H" + (draw or "\x1b_Ga=d,d=I,i=7311,q=2\x1b\\") + "\x1b8")
+                shown = key
+            sys.stdout.write("".join(out))
+            sys.stdout.flush()
+            time.sleep(every)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        if follower:
+            follower.stop.set()
+        if pictures:
+            sys.stdout.write("\x1b_Ga=d,d=I,i=7311,q=2\x1b\\\n")
+            sys.stdout.flush()
+
+
 def tidy(env):
     """Whoever may write the folder closes what a restart left running, and drops the old."""
     if os.access(env.jobs_dir(), os.W_OK):
@@ -304,6 +519,12 @@ def main(argv):
             return cmd_cancel(env, rest)
         if verb == "retry":
             return cmd_retry(env, rest)
+        if verb == "watch":
+            return cmd_watch(env, rest)
+        if verb == "emit":
+            return cmd_emit(env, rest)
+        if verb == "follow":
+            return cmd_follow(env, rest)
     except (A.ActivityError, KeyError) as e:
         say(str(e.args[0]) if e.args else str(e))
         return 1

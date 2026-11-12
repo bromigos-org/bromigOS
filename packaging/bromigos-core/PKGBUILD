@@ -236,6 +236,8 @@ package() {
   install -Dm0644 "$_root/core/crates/bromigos-art/create.default.toml" "$pkgdir/usr/share/bromigos/default/create.toml"
   install -Dm0644 "$_root/core/crates/bromigos-art/targets.default.toml" "$pkgdir/usr/share/bromigos/default/targets.toml"
   install -Dm0644 -t "$pkgdir/usr/share/bromigos/art/workflows/" "$_root"/core/crates/bromigos-art/workflows/*.json
+  # the ComfyUI node that lets a watcher see every prompt's progress (docs/activity.md, "Lab jobs")
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/art/comfyui-relay/" "$_root"/core/crates/bromigos-art/comfyui-relay/__init__.py
   # the world-loop post step `bromigos art make video.loop --alpha` runs (docs/art.md)
   install -Dm0755 "$_root/theme/tools/glow-loop.py" "$pkgdir/usr/share/bromigos/tools/glow-loop.py"
   install -Dm0755 "$_root/live/tools/make-mehshell.py" "$pkgdir/usr/share/bromigos/tools/make-mehshell.py"

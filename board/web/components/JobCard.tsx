@@ -8,6 +8,7 @@
 // Otherwise the card shows the command that does it at the server. A choice the job marks as
 // can't be undone (`danger`) also asks for a fresh one-time code, as deleting an app's data does.
 import { useState, type CSSProperties } from "react";
+import { LabJobCard } from "@/components/LabJobCard";
 import { Icon, IconButton, Planned } from "@/components/ui";
 import { ApiError, cleanCode } from "@/lib/api/errors";
 import type { JobRecord, JobVerb } from "@/lib/api/types";
@@ -95,8 +96,13 @@ function Answer({ job, send, said }: { job: JobRecord; send: (verb: JobVerb, bod
 }
 
 /** `full`: the Activity page's card, with what the job said, how to look closer, and the
- *  commands that stop or restart it when the job says they may be used. */
-export function JobCard({ job, children = [], full = false }: { job: JobRecord; children?: JobRecord[]; full?: boolean }) {
+ *  commands that stop or restart it when the job says they may be used. A lab job (a ComfyUI
+ *  generation, a job feed's run) is drawn with its picture (components/LabJobCard.tsx). */
+export function JobCard({ job, children = [], full = false, big = false, compact = false }: { job: JobRecord; children?: JobRecord[]; full?: boolean; big?: boolean; compact?: boolean }) {
+  return job.lab ? <LabJobCard job={job} full={full} big={big} compact={compact} /> : <ServerJobCard job={job} children={children} full={full} />;
+}
+
+function ServerJobCard({ job, children = [], full = false }: { job: JobRecord; children?: JobRecord[]; full?: boolean }) {
   const { now, jobAct } = useLab();
   const t = now();
   const may = useJobMay(job);

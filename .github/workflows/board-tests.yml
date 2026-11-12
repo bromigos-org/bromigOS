@@ -11,6 +11,7 @@ on:
       - "packaging/bromigos-board/**"
       # what the board reads: the activity records, and the catalogue its door falls back to
       - "lib/bromigos_activity.py"
+      - "lib/bromigos_labjobs.py"
       - "bin/bromigos-activity"
       - "homelab/lib/bromigos_homelab/provcatalog.py"
       - "homelab/lib/bromigos_homelab/localprovision.py"
@@ -38,7 +39,7 @@ jobs:
       - name: tools
         # bromigos-board's depends and checkdepends (packaging/bromigos-board/PKGBUILD); caddy
         # checks that it reads the site
-        run: pacman -Syu --noconfirm --needed git python python-starlette uvicorn python-httpx caddy >/dev/null
+        run: pacman -Syu --noconfirm --needed git python python-starlette uvicorn python-httpx caddy python-websockets python-pillow >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
         # as a normal user, like makepkg's check(): a stand-in root, nothing listens on a port
@@ -63,7 +64,7 @@ jobs:
       - name: starlette and uvicorn
         run: |
           # (--ignore-installed: the runner's own python3-typing-extensions can't be replaced in place)
-          sudo python3 -m pip install --quiet --break-system-packages --ignore-installed starlette uvicorn
+          sudo python3 -m pip install --quiet --break-system-packages --ignore-installed starlette uvicorn websockets
           python3 -c "import starlette, uvicorn, sys; print(sys.version.split()[0], starlette.__version__, uvicorn.__version__)"
           systemctl --version | head -1
       - name: the folders, the sandboxes, sign-in, readings, actions
@@ -71,7 +72,7 @@ jobs:
       - name: what happened
         if: failure()
         run: |
-          for u in bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service; do
+          for u in bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service bromigos-board-lab.path bromigos-board-lab.service; do
             echo "== $u"; systemctl status "$u" --no-pager -n 0 || true
           done
           sudo journalctl -u 'bromigos-board*' --no-pager -n 200 || true

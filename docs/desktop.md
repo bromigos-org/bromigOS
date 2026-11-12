@@ -676,8 +676,8 @@ same controls.
 ## The start page
 
 `bromigos-desktop` ships a start page for your browser. It has a search box, a board of
-links that shows which are up, your homelab's status, your latest field notes and a clock,
-all in the theme's colours.
+links that shows which are up, your homelab's status, what your lab is making, your latest
+field notes and a clock, all in the theme's colours.
 
 - The page ships in `/usr/share/bromigos/startpage`. Each user's copy lives in
   `~/.local/share/bromigos/startpage`.
@@ -689,6 +689,22 @@ all in the theme's colours.
 - The homelab's status comes from `bromigos-homelab` when a homelab is configured.
   Otherwise it comes from a Lab API at the private overlay's `endpoints.lab`, with the
   read-only token in `~/.local/share/bromigos/lab-token`.
+- **LAB JOBS** shows what your lab's ComfyUI is making now: its picture so far, its stage
+  and how far it is, and what waits next. Beside it are the last six things the lab made.
+  It also shows the runs of tools that write a job feed. These are the jobs
+  `bromigos activity` lists ([activity.md](activity.md#lab-jobs)); the card appears once a
+  ComfyUI or a job feed is set up.
+  - The pictures come from `bromigos-labjobs.service`, a user service that follows the lab
+    (`bromigos activity follow`). The snapshot starts it when a ComfyUI is set. It looks
+    every 2 seconds while something runs or waits, and every 30 seconds otherwise. It runs
+    boxed in: it writes only `$XDG_RUNTIME_DIR/bromigos-labjobs` and
+    `~/.cache/bromigos/labjobs`, reads the rest of your home folder, and gets 512 MB of memory.
+  - The snapshot copies the pictures into the page folder's `lab/`, so they refresh every
+    minute with the rest. For the live view, use `bromigos activity watch` or the Lab
+    board.
+  - The picture of a generation while it runs needs the relay node on that ComfyUI
+    ([activity.md](activity.md#live-progress-and-previews)). Without it, the card says
+    QUEUE AND RESULTS, and pictures appear as jobs finish.
 
 Your links, and optionally where the page folder lives, go in
 `~/.config/bromigos/startpage.toml`:

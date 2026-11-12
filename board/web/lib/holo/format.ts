@@ -55,6 +55,12 @@ export function loadManifest(): Promise<HoloManifest | null> {
 
 const meshes = new Map<string, Promise<HoloMesh>>();
 
+/** The board's change to the copied file: a mesh made on the page (a lab job's GLB, read by
+ *  components/ModelHolo.tsx) is handed in under a key of its own, and loadMesh(key) gives it back. */
+export function putMesh(src: string, mesh: HoloMesh) {
+  meshes.set(src, Promise.resolve(mesh));
+}
+
 export function loadMesh(src: string): Promise<HoloMesh> {
   let p = meshes.get(src);
   if (!p) {

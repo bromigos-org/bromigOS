@@ -969,15 +969,41 @@ def _ids(env):
     return sorted(n[:-5] for n in names if n.endswith(".json") and JOB_ID_OK.match(n[:-5]))
 
 
-def list_jobs(env, limit=None, states=None):
-    """The records, as they stand now: the ones still going first, then the newest ended."""
-    out = [r for r in (_read(env, i) for i in _ids(env)) if r and (not states or r["state"] in states)]
+def _labjobs():
+    import bromigos_labjobs
+    return bromigos_labjobs
+
+
+def list_jobs(env, limit=None, states=None, lab=None, server=True):
+    """The records, as they stand now: the ones still going first, then the newest ended.
+    `lab`: the lab's jobs too (bromigos_labjobs: ComfyUI prompts and job feeds), with these
+    options for bromigos_labjobs.jobs ({} for its defaults); `server=False` leaves this
+    machine's own jobs out."""
+    out = [r for r in (_read(env, i) for i in _ids(env)) if r and (not states or r["state"] in states)] if server else []
+    if lab is not None:
+        try:
+            out += [r for r in _labjobs().jobs(env, **lab) if not states or r["state"] in states]
+        except Exception as e:      # a lab that can't be read never hides the server's jobs
+            print(f"bromigos activity: the lab's jobs couldn't be read ({type(e).__name__}: {e})", file=sys.stderr)
     out.sort(key=lambda r: (r["state"] in FINAL, -(r.get("ended_at") or r.get("started_at") or 0), r["id"]))
     return out[:limit] if limit else out
 
 
-def find(env, text=None):
-    """A job by its id, or by a part of it that names only one; the newest with no text."""
+_LAB_ID = re.compile(r"(comfy-[a-z0-9]{1,24}-[0-9a-f-]{36}|feed-[a-z0-9][a-z0-9._-]{0,63})\Z")
+
+
+def is_lab(text):
+    """Whether `text` is a lab job's id (comfy-…, feed-…): bromigos_labjobs.is_lab_id's rule,
+    without loading it."""
+    return bool(isinstance(text, str) and _LAB_ID.match(text))
+
+
+def find(env, text=None, lab=True):
+    """A job by its id, or by a part of it that names only one; the newest with no text. A lab
+    job's whole id finds it among the lab's (bromigos_labjobs), and so does a part of one that
+    no job of this machine's has."""
+    if text and lab and is_lab(text):
+        return _labjobs().find(env, text)
     ids = _ids(env)
     if not text:
         jobs = sorted((r for r in (_read(env, i) for i in ids) if r), key=lambda r: r.get("started_at") or 0)
@@ -985,6 +1011,8 @@ def find(env, text=None):
             raise KeyError("no jobs yet")
         return jobs[-1]
     hits = [i for i in ids if i == text] or [i for i in ids if text in i]
+    if not hits and lab:
+        return _labjobs().find(env, text)
     if len(hits) != 1:
         raise KeyError(f"no job {text!r}" if not hits else f"{text!r} matches {len(hits)} jobs: " + ", ".join(hits[:5]))
     rec = _read(env, hits[0])
@@ -1523,8 +1551,11 @@ def answer(env, text, choice, wait=TAKE_WAIT):
 def cancel(env, text, wait=STOP_GRACE + TAKE_WAIT):
     """Stop job `text`, if it says stopping now is safe. A parent stops with its children, and
     one that can't be stopped keeps them all going. Returns {"ok", "refused", "words", "job"}:
-    refused is None, "unsafe" (words: the job's own reason) or "ended"."""
+    refused is None, "unsafe" (words: the job's own reason) or "ended". A lab job: a queued
+    prompt leaves ComfyUI's queue, a running one is interrupted (bromigos_labjobs.cancel)."""
     rec = find(env, text)
+    if is_lab(rec["id"]):
+        return _labjobs().cancel(env, rec["id"])
     if rec["state"] in FINAL:
         return _outcome(rec, "ended", f"That job has already ended ({WORDS[rec['state']]}).")
     parts = [r for r in (_read(env, c) for c in rec.get("children") or []) if r and r["state"] not in FINAL] + [rec]
@@ -1630,6 +1661,15 @@ WORDS = {"queued": "queued", "running": "running", "needs-you": "needs you", "wa
 MARKS = {"todo": "·", "running": "▸", "waiting": "…", "done": "✓", "failed": "✗", "skipped": "-"}
 
 
+_SHOWN = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+def shown(lines):
+    """Lines for a terminal, joined: no control character in any (an escape sequence planted in a
+    record, a lab job's workflow or file name, can't reach the terminal that prints it)."""
+    return "\n".join(_SHOWN.sub(" ", str(x)) for x in lines)
+
+
 def ago(ms):
     s = max(0, int(ms // 1000))
     for n, unit in ((86400, "d"), (3600, "h"), (60, "min")):
@@ -1683,7 +1723,7 @@ def plain_list(jobs, now_ms):
     if asking:
         lines += ["", ("A job needs you" if len(asking) == 1 else f"{len(asking)} jobs need you") +
                   ". Its question and how to answer: " + "; ".join(f"bromigos activity show {i}" for i in asking)]
-    return "\n".join(lines)
+    return shown(lines)
 
 
 def control_lines(rec):
@@ -1694,7 +1734,10 @@ def control_lines(rec):
         lines += ["", "It asks", "  " + q["text"]]
         lines += [f"    {c['id']:<{w}}  {c['label']}" + ("  (this can't be undone)" if c.get("danger") else "") for c in q["choices"]]
         lines.append(f"  Answer with: sudo bromigos activity answer {job_id} " + (q["choices"][0]["id"] if len(q["choices"]) == 1 else "CHOICE"))
-    if rec["state"] not in FINAL and rec.get("cancel_safe"):
+    if rec["state"] not in FINAL and rec.get("cancel_safe") and rec.get("lab"):
+        what = "Interrupt it" if rec["state"] == "running" else "Take it out of the queue"
+        lines += ["", f"{what}: bromigos activity cancel {job_id}"]
+    elif rec["state"] not in FINAL and rec.get("cancel_safe"):
         lines += ["", f"Stopping it now is safe: sudo bromigos activity cancel {job_id}"]
     elif rec["state"] not in FINAL and rec.get("cancel_note"):      # a job that says nothing of it gets no line
         lines += ["", "Stopping it now isn't safe. " + rec["cancel_note"]]
@@ -1718,6 +1761,8 @@ def plain_show(rec, tail, now_ms):
     if rec["notes"]:
         lines += ["", "Notes"] + [f"  ▲ {n['id'] + ': ' if n.get('id') else ''}{n['words']}" for n in rec["notes"]]
     lines += control_lines(rec)
+    if rec.get("lab"):
+        return shown(lines + _labjobs().plain_lab(rec, now_ms))
     lines += ["", f"Command  {shlex.join(rec['command'])}", f"Unit     {rec['unit'] or 'none: it ran in the foreground'}",
               f"Log      {rec['log']}"]
     if rec.get("locks"):
@@ -1731,4 +1776,4 @@ def plain_show(rec, tail, now_ms):
     elif tail:
         lines += ["", f"The log's last {len(tail)} line{'s' if len(tail) != 1 else ''}"]
         lines += ["  " + _CONTROL.sub("", t.replace("\t", "    ")) for t in tail]
-    return "\n".join(lines)
+    return shown(lines)

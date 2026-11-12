@@ -37,6 +37,7 @@ modules to the same folder:
 | `bromigos_console.py` | Reads and safely saves text console font presets for the next boot; [console reference](../docs/console.md) |
 | `bromigos_power_menu.py` | Keyboard power selection and confirmation with a preview mode; [power menu reference](../docs/power-menu.md) |
 | `bromigos_splash.py` | Saved Plymouth and GRUB splash settings, with backups and rollback; [splash reference](../docs/splash.md) |
+| `bromigos_labjobs.py` | The lab's creation jobs as activity records: ComfyUI prompts (queue, history, live progress and previews) and job feeds, the follower that keeps them for pages, and the feed writer; [lab jobs](../docs/activity.md#lab-jobs) |
 | `bromigos_drives.py` | Drive health with history: each drive's readings over time, its verdict from the trend, the `disk.smart` alert and `bromigos storage health`; [drive health](../docs/storage.md#drive-health) |
 | `bromigos_alerts.py`, `bromigos_alerts_checks.py` | `bromigos alerts`: the checks that find what needs a person, their document for BRODEC's machine agent, custom checks and the desktop notification; [alerts reference](../docs/alerts.md) |
 | `bromigos_backups.py` | bromigOS Server's backups for people: `bromigos lab backups` (status, list, show, restore, test restore), and the one health verdict that it, `bromigos server` and the backup alert share; [Backups](../docs/server.md#backups) |

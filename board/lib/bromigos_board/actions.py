@@ -81,7 +81,10 @@ JOB_VERBS = {"answer": "job.answer", "cancel": "job.cancel", "retry": "job.retry
 JOB_WORDS = {"job.answer": "Answered.", "job.cancel": "Stopped.", "job.retry": "Started again."}
 # a job's id, whole, as the activity records name it (20261110-1200-app.restart-photos-1a2b)
 # ([0-9], never \d: \d is any script's digit, and "２0261110" isn't an id)
-JOB_ID = re.compile(r"[0-9]{8}-[0-9]{4}-[a-z0-9][a-z0-9.-]{0,80}-[0-9a-f]{4}\Z")
+JOB_ID = re.compile(r"[0-9]{8}-[0-9]{4}-[a-z0-9][a-z0-9.-]{0,80}-[0-9a-f]{4}\Z"
+                    # a lab job's (docs/activity.md, "Lab jobs"): a ComfyUI prompt, a job feed's run
+                    r"|comfy-[a-z0-9]{1,24}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z"
+                    r"|feed-[a-z0-9][a-z0-9._-]{0,63}\Z")
 ANSWER_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")       # a question's id, and a choice's
 DEFAULT_ACTIONS = (*VERBS, DELETE_DATA, *JOB_VERBS.values())
 ENDED = ("succeeded", "failed", "rolled-back", "cancelled", "interrupted")       # the activity records' final states

@@ -5,7 +5,7 @@ case "$*" in
   "server status --json") f=server-status.json ;;
   "storage health --json") f=storage-health.json; rc=1 ;;
   "lab backups status --json") f=backups-status.json ;;
-  "activity list --json") f=activity-list.json ;;
+  "activity list --server --json") f=activity-list.json ;;
   "alerts --json") f=alerts.json; rc=1 ;;
   "lab apps list --json") f=apps-list.json ;;
   "lab apps budget --json") f=apps-budget.json ;;

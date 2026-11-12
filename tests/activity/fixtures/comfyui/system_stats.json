@@ -1,0 +1,22 @@
+{
+ "system": {
+  "os": "linux",
+  "ram_total": 23622320128,
+  "ram_free": 6440108032,
+  "comfyui_version": "0.45.2",
+  "python_version": "3.13.16",
+  "pytorch_version": "2.11.0+cu130",
+  "embedded_python": false
+ },
+ "devices": [
+  {
+   "name": "cuda:0 NVIDIA GeForce RTX 5090 : cudaMallocAsync",
+   "type": "cuda",
+   "index": 0,
+   "vram_total": 33662173184,
+   "vram_free": 1590261924,
+   "torch_vram_total": 1308622848,
+   "torch_vram_free": 886143140
+  }
+ ]
+}

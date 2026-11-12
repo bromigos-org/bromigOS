@@ -324,6 +324,193 @@ done
   ends.
 - A parent must still be going when a child starts.
 
+## Lab jobs
+
+The lab's creation jobs show beside the computer's own: each ComfyUI generation (an image, an
+edit, a cut-out, a video, a 3D model) and each run of a multi-step tool that writes a **job
+feed**, such as an asset pipeline. They are activity records too, with the same states and
+steps, so `bromigos activity`, the [Lab board](board.md) and the start page show them with
+no second format. `lib/bromigos_labjobs.py` reads them.
+
+```bash
+bromigos activity                 # the computer's jobs and the lab's
+bromigos activity watch           # live: progress, the stage, the queue, the picture (in kitty)
+bromigos activity list --lab      # the lab's only; --server for the computer's only
+bromigos activity cancel comfy-studio-a92f9df3-…   # a queued generation leaves the queue,
+                                                   # a running one is interrupted
+```
+
+A lab job's id says where it is from: `comfy-<instance>-<prompt id>` for a ComfyUI prompt,
+`feed-<run>` for a feed run. Stopping a lab job needs no root: it is the ComfyUI's, not the
+system's. A feed run can't be stopped from outside; the program that writes it stops it.
+
+### Which ComfyUIs
+
+Each ComfyUI a reader follows, first match by address wins:
+
+1. `[[comfyui]]` tables in `/etc/bromigos/labjobs.toml`, and for a person also in
+   `~/.config/bromigos/labjobs.toml`:
+
+   ```toml
+   [[comfyui]]
+   name = "studio"                      # short: letters and digits
+   url = "http://127.0.0.1:8188"        # or a reference: "@env:…", "@private:…", "@file:…"
+   relay_token = "@file:/etc/bromigos/comfyui-relay.token"   # the relay node's token, if it has one
+
+   [feed]
+   dirs = ["/srv/pipeline/feed"]        # more feed folders to read
+   media = ["/srv/pipeline/out"]        # where a system feed's pictures may be read from
+   ```
+
+2. For a person, their creation settings: `create.toml`'s `[comfyui.<name>]` endpoints,
+   `BROMIGOS_COMFYUI_URL` (as `homelab`) and `art.toml`'s `comfyui_url`
+   ([art.md](art.md#creation-providers)). `@vault:` references aren't followed: reading
+   jobs never asks Vault.
+
+Nothing else is followed. This machine's own ComfyUI is named too
+(`url = "http://127.0.0.1:8188"`): an unnamed port would let any program listening there pose
+as it.
+
+Each answer is read with a whole deadline (15 seconds, a minute for an output file) and a size
+cap, and a redirect is refused: a ComfyUI can't point the reader anywhere else.
+### What a ComfyUI prompt becomes
+
+Each prompt in the queue and in the recent history (`GET /queue`, `GET /history`) becomes a
+record:
+
+- **Its kind and title** come from the workflow. A graph made from one of bromigos art's
+  workflows is recognised by the model files it loads and its nodes:
+  `Image: Qwen-Image-2512 · a brass telescope`, `3D: Pixal3D · ship-a.png`. Kinds are
+  `lab.image`, `lab.edit`, `lab.cutout`, `lab.upscale`, `lab.video`, `lab.model3d`.
+- **Its steps** are the graph's stages, in order: load the models, read the inputs, read the
+  prompt, sample, decode, save. Only the stages the graph has.
+- **Its progress** comes from the websocket: the node that runs, and the sampler's steps
+  (`Sample · 21 of 50 steps`). Without it, `pct` is an estimate from how long the same
+  workflow took on this ComfyUI before (`lab.estimated` is true). An estimate stops at 95 %.
+- **Its queue place**: `lab.position` and `lab.ahead` ("In the queue: 2 ahead").
+- **Its end**: done, failed (with ComfyUI's error and the node it failed in), or cancelled
+  when it was interrupted. `result.outputs` lists what it wrote, eight at most.
+
+Every text a record takes from ComfyUI or a feed (a workflow, a file name, an error) has its
+control characters replaced, and `bromigos activity` cleans every line it prints again: no
+escape sequence planted in a prompt reaches a terminal.
+
+The record's `lab` object has the rest: `instance`, `prompt_id`, `workflow`, `prompt`,
+`client` (who queued it), `queued_at`, `ran_at`, `elapsed_ms`, `estimate_ms`, `preview` and
+`interrupt` (true while stopping it means interrupting it).
+
+### Live progress and previews
+
+ComfyUI sends a prompt's progress and its preview frames only to the client that queued it.
+To see everyone's prompts live, install the relay node, a ComfyUI custom node with no nodes
+that copies those messages to the watchers that know its token (clients named
+`bromigos-watch-<token>-…`, four at most):
+
+```bash
+ln -s /usr/share/bromigos/art/comfyui-relay /path/to/ComfyUI/custom_nodes/bromigos-relay
+head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' > /etc/bromigos/comfyui-relay.token
+# ComfyUI reads it from BROMIGOS_RELAY_TOKEN_FILE (or BROMIGOS_RELAY_TOKEN); restart ComfyUI
+```
+
+The token is at least 16 letters and digits. Without one the relay copies nothing. The
+watchers read it from labjobs.toml's `relay_token`.
+
+Previews also need ComfyUI to make them. bromigos art asks for them with each prompt
+(`"extra_data": {"preview_method": "auto"}`). For other tools, start ComfyUI with
+`--preview-method auto`.
+
+Without the relay, a watcher still sees the queue, each prompt's stages when it ends, the
+outputs, and an estimated progress.
+
+### The follower
+
+`bromigos activity follow` keeps the lab's jobs in a state folder, live: it reads each
+ComfyUI every 2 seconds while something runs or waits (every 30 seconds otherwise), listens
+on its websocket, fetches the newest outputs once, and makes
+thumbnails (with Pillow). Pages that can't reach the network themselves read its files:
+
+| | A person's | The machine's (`--system`) |
+|---|---|---|
+| Records | `$XDG_RUNTIME_DIR/bromigos-labjobs/jobs.json` | `/run/bromigos-labjobs/jobs.json` |
+| Pictures, clips, models | `~/.cache/bromigos/labjobs/` | `/var/cache/bromigos-labjobs/` |
+
+Media files are named by their content (`pv-`, `th-`, `of-`, `fm-` and 16 hex digits), and
+only PNG, JPEG, WebP, GIF, MP4, WebM and GLB are kept, checked by their first bytes. The
+folder keeps 512 MB at most, as a hard limit: the oldest go first, and a file that doesn't fit
+isn't kept. A picture of more than 40 million pixels is never decoded for a thumbnail. Feed
+files, `jobs.json` and the follower's answers are read only when they are regular files (never
+through a link, never a pipe), and a feed file only when root or its folder's owner owns it. A reader uses a `jobs.json` only while it
+is less than 15 seconds old; otherwise `bromigos activity` reads each ComfyUI itself.
+`bromigos activity watch` runs a follower of its own while it watches, when none is running.
+
+### Job feeds
+
+A tool that isn't run by `bromigos activity run` can still show its steps everywhere jobs
+show: it appends to a job feed. A feed is a file of JSON lines, one file per run, in a feed
+folder:
+
+| Who writes | Folder |
+|---|---|
+| A person | `~/.local/state/bromigos/activity/feed/<run>.jsonl` |
+| root | `/var/lib/bromigos/activity/feed/<run>.jsonl` |
+| Either, elsewhere | `BROMIGOS_ACTIVITY_FEED` (folders, `:` between; the first is written) |
+
+The run's name is short lower-case words, digits, dots and dashes (`ships-20261112`). Its
+job's id is `feed-<run>`. Each line is one object, written whole, under 4096 bytes:
+
+```json
+{"v": 1, "at": 1794513000000, "start": {"title": "Universe assets: ships", "kind": "lab.pipeline", "pid": 4242, "boot_id": "…"}}
+{"at": 1794513000100, "line": "::step cutout running Cut out ship-a"}
+{"at": 1794513004000, "media": {"path": "/srv/out/ship-a/cut.png", "step": "cutout", "role": "preview"}}
+{"at": 1794513004100, "line": "::step cutout done"}
+{"at": 1794513090000, "media": {"path": "/srv/out/ship-a/ship-a.glb", "role": "output"}}
+{"at": 1794513090100, "end": {"state": "succeeded", "words": "1 ship made"}}
+```
+
+- `at` is milliseconds since 1970, UTC.
+- `start` begins the run: its `title`, `kind` (starts with `lab.`; default `lab.pipeline`),
+  `subject` (`TYPE:ID[:NAME]`), and `pid` with `boot_id`: the process doing the work. When
+  that process is gone, the run reads as interrupted.
+- `line` is any progress line `bromigos activity run` reads
+  ([Make a script a job](#make-a-script-a-job)): `::step`, `::stage`, `::item`, `::note`,
+  `::error`. The lines go through the same record a job run would keep, so a feed reads the
+  same.
+- `media` is a picture, a clip or a 3D model: a step's thumbnail (`role: preview`), or a
+  result (`role: output`). A relative path is relative to the feed's folder.
+- `end` ends the run: `succeeded`, `failed` or `cancelled`, with words.
+- A run that says nothing for an hour reads as interrupted. A run that ended more than 7
+  days ago isn't listed. Each folder lists its 30 newest runs.
+
+From Python, `bromigos_labjobs.Feed` writes it, with the same methods as a job's progress
+lines ([From Python](#from-python)):
+
+```python
+import sys; sys.path.append("/usr/lib/bromigos/lib")
+from bromigos_labjobs import Feed
+
+with Feed("ships-20261112", "Universe assets: ships") as feed:
+    feed.step("cutout", "Cut out ship-a")
+    feed.media("out/ship-a/cut.png")          # a thumbnail of this step
+    feed.step("shape", "Shape ship-a")
+    feed.output("out/ship-a/ship-a.glb")      # a result
+```
+
+Leaving the `with` ends the run: succeeded, or failed with the exception's words. A line that
+can't be written is dropped, so a feed never stops the tool that writes it.
+
+From any language, `bromigos activity emit` writes one line:
+
+```bash
+bromigos activity emit ships start --title "Universe assets: ships" --pid $$
+bromigos activity emit ships ::step cutout running Cut out ship-a
+bromigos activity emit ships media out/ship-a/cut.png --step cutout
+bromigos activity emit ships media out/ship-a/ship-a.glb --output
+bromigos activity emit ships end succeeded 1 ship made
+```
+
+The machine's follower reads a system feed's pictures only from the feed's own folder and
+`[feed] media` folders.
+
 ## When a job fails
 
 A job that ends `failed` raises an alert, the same way a failing drive does
@@ -625,6 +812,11 @@ password is asked. `BROMIGOS_ACTIVITY_NOW_MS` fixes the clock.
 replace-a-drive stand-in above: it asks, waits, is answered and carries on. Others cover two
 jobs on one lock, a cancel refused while unsafe, `retry`, a parent with a child, and the
 alert.
+
+`tests/activity/test_labjobs.py` covers lab jobs: a real ComfyUI's `/queue` and `/history`
+(`tests/activity/fixtures/comfyui/`, names scrubbed) as records, the websocket's frames, the
+follower's files, stopping a prompt, feeds and their writer, the command line, and the relay
+node. A stand-in answers every request; no ComfyUI is called.
 
 `tests/activity/fixtures/` holds real output of the lab's provisioning, which the parser is
 checked against. One test also reads the repository for every `::word` line a command prints,

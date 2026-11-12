@@ -1289,7 +1289,8 @@ STEP_UNITS = {"k3s": ["k3s.service"], "openbao": ["openbao.service", "bromigos-o
               "monitoring": ["prometheus.service", "grafana.service"], "backups": ["bromigos-lab-backup.timer"],
               "caddy": ["caddy.service"], "passwords": ["vaultwarden.service"], "file-sync": ["syncthing@syncthing.service"],
               "adblock": ["adguardhome.service"], "smb": ["smb.service"], "wings": ["docker.service", "wings.service"],
-              "lab-network": ["tailscaled.service"], "board": ["bromigos-board.socket", "bromigos-board-snapshot.path", "bromigos-board-act.path"]}
+              "lab-network": ["tailscaled.service"], "board": ["bromigos-board.socket", "bromigos-board-snapshot.path", "bromigos-board-act.path",
+                        "bromigos-board-lab.path"]}
 STEP_DOWNLOADS = {"k3s": ["k3s " + K3S_VERSION + " from get.k3s.io"], "helm-chart": ["package helm", "Helm chart"],
                   "openbao": ["package openbao"], "monitoring": ["package prometheus", "package grafana"],
                   "backups": ["package restic"], "caddy": ["package caddy"],
@@ -1386,7 +1387,19 @@ def studio_lock(host):
     return changed
 
 
+# The Lab board follows only the ComfyUIs labjobs.toml names (docs/board.md, "The lab's jobs"):
+# the studio names itself there, once. The file is the owner's after that: never written again.
+STUDIO_LABJOBS = """# bromigos lab provision --local: the ComfyUIs the Lab board shows the jobs of (docs/board.md,
+# "The lab's jobs"). Written once, when the Creation studio was set up; yours to change.
+[[comfyui]]
+name = "studio"
+url = "http://127.0.0.1:8188"
+"""
+
+
 def prepare_comfyui(host, it):
+    if not host.path("etc/bromigos/labjobs.toml").exists():
+        host.write("etc/bromigos/labjobs.toml", STUDIO_LABJOBS)
     return studio_lock(host)
 
 

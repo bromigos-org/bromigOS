@@ -1,0 +1,334 @@
+{
+ "_about": "Two ends the recorded history didn't have, made from a recorded entry with the message shapes of ComfyUI 0.45's execution.py (execution_error, execution_interrupted). Prompt ids are made up.",
+ "history": {
+  "0e5a4f6c-0000-4000-8000-00000000e001": {
+   "prompt": [
+    0,
+    "0e5a4f6c-0000-4000-8000-00000000e001",
+    {
+     "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+       "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+       "weight_dtype": "default"
+      }
+     },
+     "2": {
+      "class_type": "ModelSamplingAuraFlow",
+      "inputs": {
+       "model": [
+        "1",
+        0
+       ],
+       "shift": 3.1
+      }
+     },
+     "3": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+       "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+       "type": "qwen_image",
+       "device": "default"
+      }
+     },
+     "4": {
+      "class_type": "VAELoader",
+      "inputs": {
+       "vae_name": "qwen_image_vae.safetensors"
+      }
+     },
+     "5": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+       "clip": [
+        "3",
+        0
+       ],
+       "text": "A clean reference sheet of four separate square and round exhaust vents and louvred air vent boxes for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+      }
+     },
+     "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+       "clip": [
+        "3",
+        0
+       ],
+       "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+      }
+     },
+     "7": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+       "width": 1328,
+       "height": 1328,
+       "batch_size": 1
+      }
+     },
+     "8": {
+      "class_type": "KSampler",
+      "inputs": {
+       "model": [
+        "2",
+        0
+       ],
+       "positive": [
+        "5",
+        0
+       ],
+       "negative": [
+        "6",
+        0
+       ],
+       "latent_image": [
+        "7",
+        0
+       ],
+       "seed": 766,
+       "steps": 50,
+       "cfg": 4.0,
+       "sampler_name": "euler",
+       "scheduler": "simple",
+       "denoise": 1.0
+      }
+     },
+     "9": {
+      "class_type": "VAEDecode",
+      "inputs": {
+       "samples": [
+        "8",
+        0
+       ],
+       "vae": [
+        "4",
+        0
+       ]
+      }
+     },
+     "10": {
+      "class_type": "SaveImage",
+      "inputs": {
+       "images": [
+        "9",
+        0
+       ],
+       "filename_prefix": "my-pipeline/greeble-sheet-vent"
+      }
+     }
+    },
+    {
+     "client_id": "my-pipeline-21f40621",
+     "create_time": 1794511772880
+    },
+    [
+     "10"
+    ]
+   ],
+   "outputs": {},
+   "status": {
+    "status_str": "error",
+    "completed": false,
+    "messages": [
+     [
+      "execution_start",
+      {
+       "prompt_id": "0e5a4f6c-0000-4000-8000-00000000e001",
+       "timestamp": 1794511772880
+      }
+     ],
+     [
+      "execution_cached",
+      {
+       "nodes": [],
+       "prompt_id": "0e5a4f6c-0000-4000-8000-00000000e001",
+       "timestamp": 1794511772882
+      }
+     ],
+     [
+      "execution_error",
+      {
+       "prompt_id": "0e5a4f6c-0000-4000-8000-00000000e001",
+       "node_id": "8",
+       "node_type": "KSampler",
+       "executed": [
+        "1",
+        "3",
+        "4"
+       ],
+       "exception_message": "Allocation on device would exceed allowed memory. (out of memory)\n",
+       "exception_type": "torch.OutOfMemoryError",
+       "traceback": [
+        "  File \"execution.py\", line 1, in execute\n"
+       ],
+       "current_inputs": {},
+       "current_outputs": [],
+       "timestamp": 1794511813880
+      }
+     ]
+    ]
+   },
+   "meta": {}
+  },
+  "0e5a4f6c-0000-4000-8000-00000000e002": {
+   "prompt": [
+    0,
+    "0e5a4f6c-0000-4000-8000-00000000e002",
+    {
+     "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+       "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+       "weight_dtype": "default"
+      }
+     },
+     "2": {
+      "class_type": "ModelSamplingAuraFlow",
+      "inputs": {
+       "model": [
+        "1",
+        0
+       ],
+       "shift": 3.1
+      }
+     },
+     "3": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+       "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+       "type": "qwen_image",
+       "device": "default"
+      }
+     },
+     "4": {
+      "class_type": "VAELoader",
+      "inputs": {
+       "vae_name": "qwen_image_vae.safetensors"
+      }
+     },
+     "5": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+       "clip": [
+        "3",
+        0
+       ],
+       "text": "A clean reference sheet of four separate square and round exhaust vents and louvred air vent boxes for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+      }
+     },
+     "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+       "clip": [
+        "3",
+        0
+       ],
+       "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+      }
+     },
+     "7": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+       "width": 1328,
+       "height": 1328,
+       "batch_size": 1
+      }
+     },
+     "8": {
+      "class_type": "KSampler",
+      "inputs": {
+       "model": [
+        "2",
+        0
+       ],
+       "positive": [
+        "5",
+        0
+       ],
+       "negative": [
+        "6",
+        0
+       ],
+       "latent_image": [
+        "7",
+        0
+       ],
+       "seed": 766,
+       "steps": 50,
+       "cfg": 4.0,
+       "sampler_name": "euler",
+       "scheduler": "simple",
+       "denoise": 1.0
+      }
+     },
+     "9": {
+      "class_type": "VAEDecode",
+      "inputs": {
+       "samples": [
+        "8",
+        0
+       ],
+       "vae": [
+        "4",
+        0
+       ]
+      }
+     },
+     "10": {
+      "class_type": "SaveImage",
+      "inputs": {
+       "images": [
+        "9",
+        0
+       ],
+       "filename_prefix": "my-pipeline/greeble-sheet-vent"
+      }
+     }
+    },
+    {
+     "client_id": "my-pipeline-21f40621",
+     "create_time": 1794511772880
+    },
+    [
+     "10"
+    ]
+   ],
+   "outputs": {},
+   "status": {
+    "status_str": "error",
+    "completed": false,
+    "messages": [
+     [
+      "execution_start",
+      {
+       "prompt_id": "0e5a4f6c-0000-4000-8000-00000000e002",
+       "timestamp": 1794511772880
+      }
+     ],
+     [
+      "execution_cached",
+      {
+       "nodes": [],
+       "prompt_id": "0e5a4f6c-0000-4000-8000-00000000e002",
+       "timestamp": 1794511772882
+      }
+     ],
+     [
+      "execution_interrupted",
+      {
+       "prompt_id": "0e5a4f6c-0000-4000-8000-00000000e002",
+       "node_id": "8",
+       "node_type": "KSampler",
+       "executed": [
+        "1",
+        "3",
+        "4"
+       ],
+       "timestamp": 1794511784880
+      }
+     ]
+    ]
+   },
+   "meta": {}
+  }
+ }
+}
