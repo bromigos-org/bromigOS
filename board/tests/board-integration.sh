@@ -80,7 +80,7 @@ systemctl daemon-reload
 systemd-analyze verify --man=no /usr/lib/systemd/system/bromigos-board*.service /usr/lib/systemd/system/bromigos-board*.path \
     /usr/lib/systemd/system/bromigos-board.socket 2>&1 | tee /tmp/verify.txt
 ! grep -q bromigos-board /tmp/verify.txt || fail "systemd finds fault with a unit"
-systemctl enable --now bromigos-board.socket bromigos-board-snapshot.path bromigos-board-act.path
+systemctl enable --now bromigos-board.socket bromigos-board-snapshot.path bromigos-board-act.path bromigos-board-lab.path
 # as after a while of running: the two files were made long ago (a mark this fresh means "a
 # browser is connected", and the reader would go on reading for it)
 touch -d '10 minutes ago' /run/bromigos-board/wanted /run/bromigos-board/door
@@ -431,8 +431,36 @@ curl -sS -N --max-time 4 --unix-socket "$sock" -H "Host: $host.local" -H "X-Forw
 grep -q '^event: snapshot' /tmp/stream || fail "the activity stream: $(head -c 300 /tmp/stream)"
 grep -q '"kind":"app.restart"' /tmp/stream && grep -q '"via":"board"' /tmp/stream || fail "the page's own jobs aren't in the stream: $(head -c 400 /tmp/stream)"
 
+section "the lab follower: its own user and folders, the lab's jobs in the stream, no port"
+[[ $(owner /run/bromigos-labjobs) == "bromigos-labjobs:$board 2750" ]] || fail "/run/bromigos-labjobs is $(owner /run/bromigos-labjobs)"
+[[ $(owner /var/cache/bromigos-labjobs) == "bromigos-labjobs:$board 2750" ]] || fail "/var/cache/bromigos-labjobs is $(owner /var/cache/bromigos-labjobs)"
+[[ $(owner /run/bromigos-labjobs-asks) == "root:bromigos-labjobs 2750" ]] || fail "the asks folder is $(owner /run/bromigos-labjobs-asks)"
+# one ComfyUI named (nothing listens there): the follower may connect to that address and no other
+printf '[[comfyui]]\nname = "studio"\nurl = "http://127.0.0.1:18188"\n' > /etc/bromigos/labjobs.toml
+# a pipeline run in the system's feed folder, written as root does
+/usr/lib/bromigos/bin/bromigos-activity emit ci-run start --title "A pipeline run" || fail "emit start"
+/usr/lib/bromigos/bin/bromigos-activity emit ci-run ::step shape running Shaping the model || fail "emit a step"
+[[ $(api GET /api/lab -H "$session_cookie") == 200 ]] || fail "GET /api/lab: $(cat /tmp/body)"
+wait_for 30 systemctl is-active -q bromigos-board-lab.service || { journalctl -u bromigos-board-lab.service --no-pager -n 40; fail "the page is open, and the lab follower didn't start"; }
+wait_for 30 grep -q feed-ci-run /run/bromigos-labjobs/jobs.json || { journalctl -u bromigos-board-lab.service --no-pager -n 40; fail "the follower wrote no jobs.json with the run"; }
+[[ $(owner /run/bromigos-labjobs/jobs.json) == "bromigos-labjobs:$board 640" ]] || fail "jobs.json is $(owner /run/bromigos-labjobs/jobs.json)"
+allow=$(systemctl show -P IPAddressAllow bromigos-board-lab.service)
+[[ $allow == 127.0.0.1* ]] || fail "the follower may connect to: '$allow' (only labjobs.toml's address)"
+[[ $(systemctl show -P IPAddressDeny bromigos-board-lab.service) == *0.0.0.0/0* ]] || fail "the follower's deny isn't everything"
+fpid=$(systemctl show -P MainPID bromigos-board-lab.service)
+grep -q '^NoNewPrivs:[[:space:]]*1' "/proc/$fpid/status" || fail "the follower may gain privileges"
+! nsenter -t "$fpid" -m -S "$(id -u bromigos-labjobs)" -G "$(id -g bromigos-labjobs)" -- cat /run/bromigos-board/board.json >/dev/null 2>&1 \
+    || fail "the follower can read root's readings"
+! ss -Hltnp 2>/dev/null | grep -q "pid=$fpid," || fail "the follower listens on a port"
+[[ $(api GET /api/lab -H "$session_cookie") == 200 ]] && grep -q '"following": *true' /tmp/body || fail "the API doesn't see the follower: $(cat /tmp/body)"
+curl -sS -N --max-time 4 --unix-socket "$sock" -H "Host: $host.local" -H "X-Forwarded-For: $lan" -H "$session_cookie" http://board/api/activity > /tmp/stream 2>/dev/null || true
+grep -q '"id":"feed-ci-run"' /tmp/stream || fail "the lab's run isn't in the stream: $(head -c 400 /tmp/stream)"
+! grep -q '/var/lib/bromigos/activity/feed' /tmp/stream || fail "a feed's own path reached the stream"
+[[ $(api GET /api/lab/media/of-0000000000000000.png -H "$session_cookie") == 404 ]] || fail "a media file nobody made: $(cat /tmp/body)"
+
 section "nobody looks any more: the reader stops; nothing failed"
 wait_for 90 bash -c '! systemctl is-active -q bromigos-board-snapshot.service' || fail "the reader didn't stop after the board closed"
+wait_for 90 bash -c '! systemctl is-active -q bromigos-board-lab.service' || fail "the lab follower didn't stop after the board closed"
 wait_for 30 bash -c '[[ $(systemctl show -P ActiveState bromigos-board-act.service) == inactive ]]' || fail "the helper didn't end"
 [[ -z $(systemctl list-units --failed --no-legend 'bromigos-board*') ]] || { systemctl list-units --failed 'bromigos-board*'; fail "a unit failed"; }
 systemd-analyze security --no-pager bromigos-board.service | tail -1

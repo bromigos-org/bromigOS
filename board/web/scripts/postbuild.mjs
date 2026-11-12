@@ -9,6 +9,9 @@ if (process.env.BOARD_FIXTURES === "1") {
   const src = new URL("../fixtures/", import.meta.url).pathname;
   mkdirSync(join(out, "fixtures"), { recursive: true });
   for (const f of readdirSync(src).filter((f) => f.endsWith(".json"))) copyFileSync(join(src, f), join(out, "fixtures", f));
+  // the lab's example pictures, clip and model (scripts/make-fixtures.mjs)
+  mkdirSync(join(out, "fixtures", "lab"), { recursive: true });
+  for (const f of readdirSync(join(src, "lab"))) copyFileSync(join(src, "lab", f), join(out, "fixtures", "lab", f));
 }
 
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));

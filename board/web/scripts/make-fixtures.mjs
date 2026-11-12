@@ -10,7 +10,7 @@
 // more machines). Those additions are example data, and each is named below.
 //
 //   node scripts/make-fixtures.mjs
-import { mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 
 const dir = new URL("../fixtures/", import.meta.url).pathname;
 const real = JSON.parse(readFileSync(new URL("../tests/contract/service.json", import.meta.url), "utf8"));
@@ -107,6 +107,65 @@ const cantRead = { ...board("healthy", { measured: false }), apps: null, storage
   sources: { ...real.boards.healthy.sources, ...Object.fromEntries(["apps", "storage", "backups", "system"].map((k) => [k, real.boards[`${k}_missing`].sources[k]])) } };
 cantRead.machines = cantRead.machines.map((m) => ({ ...m, apps: null }));
 
+// ---------------------------------------------------------------- the lab's jobs
+// The lab's jobs are the service's own (activity_lab: the real lab follower on a real ComfyUI's
+// recorded queue, history and websocket, and a job feed's run). Their pictures there are one
+// made-up 1-pixel PNG; here each is one of the repository's own art, copied to fixtures/lab/ under
+// a name of the follower's shape (scripts/postbuild.mjs puts it in the test build): STATIC's crew
+// cut-outs and painted shells (mascot/), a bump clip, and the rack's model. Example data: one
+// ended Edit is shown as a video (a Wan 2.2 loop), which the recorded queue didn't have.
+const repo = new URL("../../../", import.meta.url).pathname;
+const labDir = `${dir}lab/`;
+const ART = {
+  image: ["mascot/crew/owl.webp", "mascot/crew/lineman.webp", "mascot/crew/noir.webp", "mascot/crew/lineman-stand.webp", "mascot/crew/owl-scan.webp"],
+  preview: ["mascot/static/antenna-336.webp", "mascot/static/host-336.webp"],
+  video: "mascot/bumps/static/clips/signal-in.mp4",
+  model3d: "homelab/holo/src/rack.glb",
+};
+const labNames = {};
+let labN = 0;
+function artAs(prefix, file) {
+  const name = `${prefix}-${(++labN).toString(16).padStart(16, "0")}.${file.split(".").pop()}`;
+  labNames[name] = file;
+  return name;
+}
+function labMedia(m, file, prefix = "of") {
+  if (!m) return m;
+  const media = artAs(prefix, file);
+  return { ...m, media, thumb: media };
+}
+const labLive = jobsOf("activity_lab");
+let img = 0;
+const labMade = labLive.map((j) => {
+  const lab = j.lab;
+  if (!lab) return j;
+  if (lab.source === "feed") return { ...j, lab: { ...lab, preview: labMedia(lab.preview, ART.image[0], "fm"), media: (lab.media ?? []).map((m) => labMedia(m, ART.image[0], "fm")) } };
+  if (j.state === "running") return { ...j, lab: { ...lab, preview: { ...lab.preview, media: artAs("pv", ART.preview[0]) } } };
+  if (j.state !== "succeeded") return j;
+  const outs = j.result.outputs.map((o) => labMedia(o, o.kind === "model3d" ? ART.model3d : ART.image[img++ % ART.image.length]));
+  return { ...j, result: { ...j.result, outputs: outs } };
+});
+// one ended Edit as a clip (example data, see above)
+const asVideo = labMade.findIndex((j) => j.kind === "lab.edit" && j.state === "succeeded");
+if (asVideo >= 0) {
+  const j = labMade[asVideo];
+  labMade[asVideo] = { ...j, kind: "lab.video", title: `Video: Wan 2.2 I2V A14B · ${j.lab.prompt.slice(0, 40)}…`,
+    lab: { ...j.lab, label: "Video", workflow: "Wan 2.2 I2V A14B", workflow_id: "wan2.2-i2v-a14b" },
+    result: { ...j.result, summary: "1 video made", outputs: [{ ...j.result.outputs[0], kind: "video", name: "loop_00001_.mp4", filename: "loop_00001_.mp4", media: artAs("of", ART.video), thumb: null }] } };
+}
+const labRun = labMade.find((j) => j.state === "running" && j.lab?.source === "comfyui");
+const labStatus = real.http.lab.body;
+// the generation moves on while you watch: the sampler's next steps, and a new preview
+const labStream = labRun ? [
+  { after_ms: 1200, event: "job", data: { ...labRun, pct: 88, stage: "Sample · 46 of 50 steps", updated_at: NOW + 1200,
+    steps: labRun.steps.map((s) => (s.id === "sample" ? { ...s, detail: "46 of 50 steps", progress: { done: 46, total: 50, unit: "steps" } } : s)),
+    lab: { ...labRun.lab, elapsed_ms: (labRun.lab.elapsed_ms ?? 0) + 1200, preview: { ...labRun.lab.preview, media: artAs("pv", ART.preview[1]) } } } },
+] : [];
+// the same lab when the ComfyUI has no relay node: its progress is estimated and it sends no picture
+const labEstimate = labMade.map((j) => (j.lab?.source === "comfyui" && j.state === "running"
+  ? { ...j, step: null, stage: "Running", steps: j.steps.map((s) => ({ ...s, state: "todo", detail: null, progress: null })),
+      lab: { ...j.lab, estimated: true, live: false, preview: null } } : j));
+
 const F = {
   "door-empty": { about: "Signed out, nothing installed yet: the door says apps appear here.", door: real.doors.no_snapshot, session: SIGNED_OUT, board: { $status: 401 }, activity: [] },
   door: { about: "Signed out: the door with the household's apps; the code KX7-42Q signs in.", door: doorOf(healthy), session: SIGNED_OUT, board: { $status: 401 },
@@ -148,6 +207,11 @@ const F = {
   jobs: { about: "Signed in; a disk asks with a choice that can't be undone, a backup runs and may be stopped, one failed and may be started again; the server lets the page answer, stop and start again.",
     door: doorOf(healthy), session: session(), board: { ...board("jobs_controls"), actions: real.boards.jobs_controls.actions },
     activity: real.boards.jobs_controls.activity.jobs },
+  making: { about: "Signed in; the lab's ComfyUI makes a picture while you watch (its live preview, ring and stage), two more wait, a pipeline run is on its second step, and what it made before is listed; the server lets the page stop a generation.",
+    door: doorOf(healthy), session: session(), board: { ...healthy, actions: real.boards.healthy.actions }, activity: [...jobsOf("activity_healthy"), ...labMade.filter((j) => j.lab)], stream: labStream, lab: labStatus },
+  "making-estimate": { about: "Signed in; the lab's ComfyUI has no relay node: the running generation's progress is estimated and there is no picture yet; the server doesn't let the page stop jobs, so the cards show the commands.",
+    door: doorOf(healthy), session: session(), board: { ...healthy, actions: ["add", "restart", "remove"] }, activity: [...jobsOf("activity_healthy"), ...labEstimate.filter((j) => j.lab)],
+    lab: { ...labStatus, instances: labStatus.instances.map((i) => ({ ...i, relay: false })) } },
   cameras: { about: "Signed in; a machine runs the Cameras app, so Cameras is in the rail.", door: doorOf(healthy), session: session(),
     board: { ...healthy, apps: [...healthy.apps, { ...healthy.apps.find((t) => t.id === "photos"), id: "cameras", job: "Cameras", app: "Frigate", holo: "", group: "cameras",
       version: "0.16.2", reading: null, update: null, open: { url: "https://cameras-myserver.local", port: 5000 } }] }, activity: [] },
@@ -156,4 +220,10 @@ const F = {
 mkdirSync(dir, { recursive: true }); // the folder isn't in the repository: it is made here
 for (const f of readdirSync(dir)) if (f.endsWith(".json")) unlinkSync(dir + f);
 for (const [name, f] of Object.entries(F)) writeFileSync(`${dir}${name}.json`, JSON.stringify(f) + "\n");
+rmSync(labDir, { recursive: true, force: true });
+mkdirSync(labDir, { recursive: true });
+for (const [name, file] of Object.entries(labNames)) {
+  if (!existsSync(repo + file)) throw new Error(`make-fixtures: the lab's example art ${file} isn't in the repository`);
+  copyFileSync(repo + file, labDir + name);
+}
 console.log(`wrote ${Object.keys(F).length} fixtures to ${dir}`);

@@ -327,7 +327,9 @@ class RootWritesItsAnswerInItsOwnFolder(Base):
             self.assertEqual(svc.get(key), [want], key)
         writable = " ".join(svc["ReadWritePaths"]).split()
         self.assertEqual(set(writable), {actions.REQUESTS, actions.RESULTS, paths.STATE, actions.ROOT_STATE,
-                                         "-/var/lib/bromigos/activity", "-/var/lib/bromigos/server/activity"})
+                                         "-/var/lib/bromigos/activity", "-/var/lib/bromigos/server/activity",
+                                         # root's folder of asks for the lab follower: stopping a generation (test_lab.py)
+                                         "-/run/bromigos-labjobs-asks"})
         # nothing wider: not /run/bromigos-board whole, not /var/lib/bromigos whole, nothing of /etc or /usr
         for path in writable:
             self.assertNotIn(path.lstrip("-"), ("/", "/run", "/run/bromigos-board", "/var", "/var/lib", "/var/lib/bromigos", "/etc", "/usr"))

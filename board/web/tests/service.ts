@@ -52,6 +52,8 @@ export class Service {
   activity: Live | string | Other | (() => Live | string | Other) = live("activity_healthy");
   vitals: unknown = NOT_FOUND;
   actions: unknown = NOT_FOUND;
+  /** GET /api/lab: the lab follower's word on its ComfyUIs (the real answer by default). */
+  lab: unknown = copy(real.http.lab.body);
   /** A job's actions (POST /api/activity/<id>/<verb>): one answer for all, or one per call, in turn. */
   jobAnswers: unknown[] = [];
   /** The signed-in browsers, when a test needs more than the real answer's one. The service's
@@ -132,6 +134,7 @@ export class Service {
     if (path === "/api/board") return this.send(route, typeof this.board === "function" ? this.board() : this.board);
     if (path === "/api/activity" && method === "GET") return this.stream(route, typeof this.activity === "function" ? this.activity() : this.activity);
     if (path === "/api/vitals") return this.send(route, this.vitals);
+    if (path === "/api/lab") return this.send(route, this.lab);
     if (path === "/api/actions" && method === "POST") return this.send(route, this.actions, 202);
     if (/^\/api\/activity\/[^/]+\/[^/]+$/.test(path) && method === "POST") {
       if (q.headers()["x-bromigos-board"] !== "1") return this.real(route, "signin_no_header");

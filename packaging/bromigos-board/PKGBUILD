@@ -29,7 +29,9 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 # bromigos-core: bromigos_activity (the activity stream) and the commands the reader runs
 # bromigos-board-web: the page itself (board/web/, its own package: it needs Node to build)
-depends=('python' 'python-starlette' 'uvicorn' 'caddy' 'bromigos-core' 'bromigos-lab' 'bromigos-board-web')
+depends=('python' 'python-starlette' 'uvicorn' 'caddy' 'bromigos-core' 'bromigos-lab' 'bromigos-board-web'
+         'python-websockets')   # the lab follower: ComfyUI's live progress and previews
+optdepends=('python-pillow: thumbnails of the lab'"'"'s pictures (the follower keeps the whole picture without it)')
 checkdepends=('python-httpx' 'caddy')
 install=$pkgname.install
 options=('!debug')

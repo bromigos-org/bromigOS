@@ -20,3 +20,10 @@ d /var/lib/bromigos-board/codes 0700 bromigos-board bromigos-board -
 # only a code noted here can approve deleting an app's data.
 d /var/lib/bromigos-board-root 0700 root root -
 d /var/lib/bromigos-board-root/codes 0700 root root -
+# The lab follower's (bromigos-board-lab.service): jobs.json and its answers in /run, previews and
+# outputs in /var/cache. setgid bromigos-board: what it writes, the API's group reads (0640).
+d /run/bromigos-labjobs 2750 bromigos-labjobs bromigos-board -
+d /var/cache/bromigos-labjobs 2750 bromigos-labjobs bromigos-board -
+# root's, which the follower only reads: what root's helper asks of it (stop a generation:
+# `bromigos activity cancel` hands it over, having no network of its own)
+d /run/bromigos-labjobs-asks 2750 root bromigos-labjobs -
