@@ -969,6 +969,7 @@ fn run(paths: &Paths, dirs: &[std::path::PathBuf], cmd: Cmd) -> Result<i32> {
                     providers,
                     nolgia_login: false,
                     nolgia_token_file: nolgia_token_file.clone(),
+                    ..Default::default()
                 })
             };
             let scale = pairs(&scales, "scale")?;

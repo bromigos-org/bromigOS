@@ -388,6 +388,48 @@ pub fn pages(cx: &Context, sections: &[&str]) -> Vec<Page> {
                         .collect::<Vec<_>>()
                         .join("; ")
                 };
+                if cx.gpu && cx.homelab_installed {
+                    out.push(Page {
+                        section: "create",
+                        item: "studio".into(),
+                        title: "Creation studio",
+                        help: "Make pictures, edits, cutouts, video loops and 3D models on this machine's graphics \
+                               card, at no cost per picture. The Creation studio is ComfyUI set up with the best open \
+                               models that fit your card (only ones whose licence lets you sell what you make), the \
+                               same way our own lab runs it. It downloads a few GB on a small card and about 80 GB on \
+                               a 24 GB one, and checks every file. It needs an NVIDIA or AMD card with 8 GB or more.\n\
+                               Later: Settings › Lab, or bromigos lab studio."
+                            .into(),
+                        choices: vec![
+                            choice("Not now", ""),
+                            choice("Set up the Creation studio on this graphics card", "yes"),
+                        ],
+                        sel: 0,
+                        focus: None,
+                    });
+                }
+                let apps_help = create::CREATIVE_APPS
+                    .iter()
+                    .map(|(_, _, words)| format!("  {words}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                out.push(Page {
+                    section: "create",
+                    item: "apps".into(),
+                    title: "Creative apps",
+                    help: format!(
+                        "Apps for making things yourself, from Arch's own repositories (they update with the system):\n\
+                         {apps_help}\nLater: sudo pacman -S blender godot."
+                    ),
+                    choices: vec![
+                        choice("None", ""),
+                        choice("Blender (3D)", "blender"),
+                        choice("Godot (games)", "godot"),
+                        choice("Both", "blender,godot"),
+                    ],
+                    sel: 0,
+                    focus: None,
+                });
                 for cap in create::CAPABILITIES {
                     let mut choices: Vec<Choice> = vec![choice(
                         "Follow where AI runs (bromigos target): the default",
@@ -582,9 +624,16 @@ pub fn answers(pages: &[Page], skipped: &[&str]) -> Answers {
                 })
             }
             "create" => {
+                if (p.item == "studio" || p.item == "apps") && v.is_empty() && a.create.is_none() {
+                    continue;                              // "Not now" / "None" alone answers nothing
+                }
                 let c = a.create.get_or_insert_with(CreateAnswer::default);
                 if p.item == "nolgia" {
                     c.nolgia_login = v == "login";
+                } else if p.item == "studio" {
+                    c.studio = v == "yes";
+                } else if p.item == "apps" {
+                    c.apps = v.split(',').filter(|x| !x.is_empty()).map(str::to_string).collect();
                 } else {
                     c.providers
                         .insert(p.item.clone(), v.split(',').map(str::to_string).collect());
@@ -698,6 +747,12 @@ pub fn summary(a: &Answers) -> Vec<String> {
         }
         if c.nolgia_login {
             out.push("create    nolgia: sign in".into());
+        }
+        if c.studio {
+            out.push("create    the Creation studio on this graphics card".into());
+        }
+        if !c.apps.is_empty() {
+            out.push(format!("create    install {}", c.apps.join(" and ")));
         }
     }
     if let Some(p) = &a.peripherals {
@@ -1010,5 +1065,39 @@ mod tests {
         // without bromigos-homelab there's nothing to find with
         let p = pages(&cx(false), &["homelab"]).remove(0);
         assert_eq!(p.choices.len(), 1);
+    }
+
+    #[test]
+    fn the_creation_studio_is_offered_with_a_card_and_the_lab_tools() {
+        let mut gpu = cx(true);
+        gpu.gpu = true;
+        let ps = pages(&gpu, &["create"]);
+        let studio = ps.iter().find(|p| p.item == "studio").expect("offered");
+        assert_eq!(studio.chosen().value, "", "never set up unasked: it's a big download");
+        assert!(studio.help.contains("checks every file"));
+        // no card, or no lab tools: not offered
+        assert!(!pages(&cx(true), &["create"]).iter().any(|p| p.item == "studio"));
+        let mut no_lab = cx(false);
+        no_lab.gpu = true;
+        assert!(!pages(&no_lab, &["create"]).iter().any(|p| p.item == "studio"));
+        let mut chosen: Vec<Page> = ps.into_iter().filter(|p| p.item == "studio" || p.item == "apps").collect();
+        chosen[0].sel = 1;
+        chosen[1].sel = 3;
+        let a = answers(&chosen, &[]);
+        let c = a.create.clone().unwrap();
+        assert!(c.studio);
+        assert_eq!(c.apps, ["blender", "godot"]);
+        let lines = summary(&a);
+        assert!(lines.iter().any(|l| l.contains("Creation studio")));
+        assert!(lines.iter().any(|l| l.contains("install blender and godot")));
+    }
+
+    #[test]
+    fn creative_apps_say_what_they_are_for_and_none_answers_nothing() {
+        let p = pages(&cx(false), &["create"]).into_iter().find(|p| p.item == "apps").unwrap();
+        assert!(p.help.contains("Blender: 3D modelling"));
+        assert!(p.help.contains("Godot: a game engine"));
+        assert_eq!(p.chosen().value, "");
+        assert!(answers(&[p], &[]).create.is_none());
     }
 }

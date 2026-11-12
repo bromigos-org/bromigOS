@@ -279,6 +279,8 @@ costs nothing.
 
 To set it up, choose one of these:
 
+- On a desktop: **Settings › Lab › Creation studio**, then **Set up**. The first-run
+  questions (`bromigos setup create`) offer it too.
 - In the Server installer, tick **Creation studio** under AI.
 - On the Lab board's Supply page, find **Images, video and 3D** and choose **Add**.
 - In a terminal: `sudo bromigos lab apps add comfyui`.
@@ -293,6 +295,21 @@ used. Its page is at `http://<your machine>:8188`. The page has no sign-in, so i
 own network only: a Server's firewall lets it in from your home network and your lab's private
 network and nowhere else, and on a desktop only that desktop reaches it. Nothing can be
 installed from the page.
+
+Settings › Lab shows what it makes, in plain words. If a model file goes missing, or a
+download stopped, it says so and shows **Fix**, which fetches it again and checks it. If
+ComfyUI stops answering, **Restart** starts it again.
+
+### Creative apps
+
+The first-run questions also offer two apps for making things yourself, from Arch's own
+repositories. They update with the system.
+
+- **Blender**: 3D modelling, sculpting, animation and rendering. It opens the 3D models
+  the studio makes.
+- **Godot**: a game engine, for making your own games and interactive scenes.
+
+Pick none, one or both. Later, `sudo pacman -S blender godot` installs them.
 
 ### For power users
 

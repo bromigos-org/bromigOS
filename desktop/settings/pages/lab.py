@@ -38,6 +38,94 @@ def _link_group(ctx, page):
             advanced={"runs": "bromigos welcome --step lab"})
 
 
+STUDIO_SETUP = ["bromigos", "lab", "apps", "add", "comfyui", "--json"]
+STUDIO_FIX = ["bromigos", "lab", "studio", "apply", "--json"]
+STUDIO_RESTART = ["bromigos", "lab", "apps", "restart", "comfyui", "--json"]
+STUDIO_PAGE = "http://127.0.0.1:8188"
+
+
+def studio_view(doc):
+    """The Creation studio group's rows from `bromigos lab studio status --json` (or None when it
+    didn't answer): [{title, subtitle, hint, buttons: [(label, action, hint)], runs}]. An action is
+    setup, fix, restart or open; the page turns each into its command."""
+    if not doc:
+        return [{"title": "The studio didn't answer", "subtitle": "bromigos lab studio status says why, in a terminal",
+                 "hint": "bromigos lab studio status", "buttons": [], "runs": "bromigos lab studio status"}]
+    if not doc.get("installed"):
+        return [{"title": "Not set up", "subtitle": "One choice sets up ComfyUI with the best open models that fit "
+                                                    "this machine's graphics card",
+                 "hint": "Downloads a few GB on a small card and about 80 GB on a 24 GB one, and checks every file. "
+                         "Only models whose licence lets you sell what you make. It needs an NVIDIA or AMD card with "
+                         "8 GB or more; the password prompt asks first.",
+                 "buttons": [("Set up", "setup", "Sets up the Creation studio on this machine: bromigos lab apps add "
+                                                 "comfyui, as a job the Activity panel follows")],
+                 "runs": " ".join(STUDIO_SETUP[:-1])}]
+    rows = []
+    caps = doc.get("capabilities") or []
+    ready = [c for c in caps if c.get("ready")]
+    broken = [c for c in caps if c.get("workflow") and not c.get("ready")]
+    if not doc.get("answers"):
+        rows.append({"title": "✖  ComfyUI doesn't answer", "subtitle": "It may still be starting; Restart starts it again",
+                     "hint": "bromigos lab apps logs comfyui says why",
+                     "buttons": [("Restart", "restart", "Restarts the Creation studio's service")],
+                     "runs": " ".join(STUDIO_RESTART[:-1])})
+    if broken:
+        n = len(doc.get("missing") or [])
+        rows.append({"title": f"✖  {n} model file{'s' if n != 1 else ''} missing",
+                     "subtitle": "Not ready: " + ", ".join(c["words"] for c in broken),
+                     "hint": "Fix downloads them again and checks each one against its published checksum",
+                     "buttons": [("Fix", "fix", "Fetches what's missing, checked, as a job the Activity panel follows")],
+                     "runs": " ".join(STUDIO_FIX[:-1])})
+    made = ", ".join(c["words"] for c in ready) or "nothing yet"
+    version = f"ComfyUI {doc['comfyui_version']} · " if doc.get("comfyui_version") else ""
+    rows.append({"title": ("●  Ready" if ready and not broken and doc.get("answers") else "Makes"),
+                 "subtitle": f"{version}makes {made}",
+                 "hint": "\n".join(f"{c['words']}: {c['workflow'] or 'nothing fits this card yet'}" for c in caps),
+                 "buttons": ([("Open", "open", "ComfyUI's own page, in your browser")] if doc.get("answers") else []) +
+                            ([] if broken else [("Check again", "fix", "Fetches anything missing, and anything a "
+                                                                       "better fit for this card")]),
+                 "runs": "bromigos lab studio"})
+    for c, prev in (doc.get("previous") or {}).items():
+        rows.append({"title": f"Earlier model kept: {c}", "subtitle": f"{prev['workflow']}, for 14 days after an upgrade",
+                     "hint": f"sudo bromigos lab studio rollback {c} puts it back", "buttons": [],
+                     "runs": f"bromigos lab studio rollback {c}"})
+    return rows
+
+
+def _studio(ctx, page):
+    """The Creation studio (docs/lab.md, "The Creation studio"): plain status, and Set up or Fix."""
+    g = ctx.group(page, "Creation studio", "Pictures, edits, cutouts, video loops and 3D models on this machine's "
+                                           "graphics card, at no cost per picture.",
+                  hint="ComfyUI with the models that fit your card, picked from the lab's model catalog "
+                       "(bromigos lab studio)", key="studio")
+    wait = _waiting(g, "Looking at the studio…")
+    rows = []
+
+    def act(action):
+        if action == "open":
+            return ctx.launch(["xdg-open", STUDIO_PAGE])
+        argv, said = {"setup": (STUDIO_SETUP, "Setting up the Creation studio: the Activity panel follows it"),
+                      "fix": (STUDIO_FIX, "Fetching the studio's models: the Activity panel follows it"),
+                      "restart": (STUDIO_RESTART, "Restarting the Creation studio")}[action]
+        ctx.toast(said, timeout=6)
+        ctx.json(argv, lambda doc, err: (ctx.toast("Done" if doc and doc.get("ok", True) else
+                                                   f"Not done: {(err or 'no answer')[:160]}", timeout=8), refresh()))
+
+    def shown(doc, err):
+        for w in [wait] + rows:
+            g.remove(w)
+        rows.clear()
+        for r in studio_view(doc):
+            row = ctx.row(g, r["title"], r["subtitle"], hint=r["hint"],
+                          buttons=[(label, (lambda a=a: act(a)), h) for label, a, h in r["buttons"]],
+                          advanced={"runs": r["runs"]})
+            rows.extend(w for w in (row, getattr(row, "_bromigos_details", None)) if w is not None)
+
+    def refresh():
+        ctx.json(["bromigos", "lab", "studio", "status", "--json"], shown)
+    refresh()
+
+
 def _waiting(g, text):
     w = Gtk.Label(label=text, xalign=0)
     w.add_css_class("dim-label")
@@ -104,6 +192,9 @@ def build(ctx):
     box.append(ctx.button("Lab deck", lambda: ctx.launch(["bromigos-live", "lab", "open"]),
                           "The rack as a hologram, lit by these readings (SUPER+SHIFT+H)"))
     g.set_header_suffix(box)
+
+    # ---------------------------------------------------------------- the Creation studio
+    _studio(ctx, page)
 
     # ---------------------------------------------------------------- media requests
     _media(ctx, page)
@@ -322,6 +413,8 @@ PAGE = Page(id="lab", title="Lab", icon="network-server-symbolic applications-sc
                      Entry("audio", "Media audio language", ["dub", "dual audio", "anime", "sonarr", "radarr", "language"],
                            "Media requests"),
                      Entry("subtitles", "Media subtitles", ["bazarr", "subs", "language"], "Media requests"),
+                     Entry("studio", "Creation studio", ["comfyui", "images", "video", "3d", "models", "fix",
+                                                         "pictures", "blender"], "Creation studio"),
                      Entry("models", "GPUs and models", ["vram", "unload", "comfyui", "ollama", "loaded"],
                            "GPUs and models"),
                      Entry("jobs", "Recent jobs", ["queue", "image", "hologram", "voice line", "results"],
