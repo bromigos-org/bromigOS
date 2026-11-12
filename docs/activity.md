@@ -410,7 +410,8 @@ outputs, and an estimated progress.
 ### The follower
 
 `bromigos activity follow` keeps the lab's jobs in a state folder, live: it reads each
-ComfyUI every 2 seconds, listens on its websocket, fetches the newest outputs once, and makes
+ComfyUI every 2 seconds while something runs or waits (every 30 seconds otherwise), listens
+on its websocket, fetches the newest outputs once, and makes
 thumbnails (with Pillow). Pages that can't reach the network themselves read its files:
 
 | | A person's | The machine's (`--system`) |
