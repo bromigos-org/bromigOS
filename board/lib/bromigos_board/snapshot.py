@@ -27,7 +27,9 @@ SOURCES = (
     ("system", ["bromigos", "server", "status", "--json"]),
     ("storage", ["bromigos", "storage", "health", "--json"]),
     ("backups", ["bromigos", "lab", "backups", "status", "--json"]),
-    ("activity", ["bromigos", "activity", "list", "--json"]),
+    # this server's own jobs: the lab's (ComfyUI, job feeds) come on the activity stream, from the
+    # lab follower's files, never from root reading a ComfyUI every 15 seconds
+    ("activity", ["bromigos", "activity", "list", "--server", "--json"]),
     ("alerts", ["bromigos", "alerts", "--json"]),
     # the app manager's list (DESIGN's tile contract): read when this server's bromigos has it
     ("apps", ["bromigos", "lab", "apps", "list", "--json"]),

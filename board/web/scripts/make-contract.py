@@ -341,7 +341,7 @@ def activity(root, which):
             end={"exit_code": 1}, retry=A.retry_spec(argv, "/")))
     Clock.t = NOW
     env2 = dict(os.environ, BROMIGOS_ROOT=str(root), PYTHONDONTWRITEBYTECODE="1")
-    r = subprocess.run([sys.executable, str(REPO / "bin/bromigos-activity"), "list", "--json"], env=env2,
+    r = subprocess.run([sys.executable, str(REPO / "bin/bromigos-activity"), "list", "--server", "--json"], env=env2,
                        capture_output=True, text=True)
     doc = json.loads(r.stdout)
     return doc, made

@@ -989,9 +989,13 @@ def list_jobs(env, limit=None, states=None, lab=None, server=True):
     return out[:limit] if limit else out
 
 
+_LAB_ID = re.compile(r"(comfy-[a-z0-9]{1,24}-[0-9a-f-]{36}|feed-[a-z0-9][a-z0-9._-]{0,63})\Z")
+
+
 def is_lab(text):
-    """Whether `text` is a lab job's id (comfy-…, feed-…)."""
-    return _labjobs().is_lab_id(text)
+    """Whether `text` is a lab job's id (comfy-…, feed-…): bromigos_labjobs.is_lab_id's rule,
+    without loading it."""
+    return bool(isinstance(text, str) and _LAB_ID.match(text))
 
 
 def find(env, text=None, lab=True):

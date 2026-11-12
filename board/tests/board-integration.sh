@@ -57,7 +57,7 @@ install -Dm0644 -t /usr/share/bromigos-board/placeholder/ "$b"/placeholder/*
 install -Dm0644 -t /usr/lib/bromigos/lib/bromigos_homelab/ "$repo"/homelab/lib/bromigos_homelab/*.py
 install -Dm0644 "$repo/homelab/share/provision-catalogue.toml" /usr/share/bromigos/lab/provision-catalogue.toml
 # bromigos-core's part the board uses: the activity records
-install -Dm0644 -t /usr/lib/bromigos/lib/ "$repo"/lib/bromigos_activity.py "$repo"/lib/bromigos_alerts*.py
+install -Dm0644 -t /usr/lib/bromigos/lib/ "$repo"/lib/bromigos_activity.py "$repo"/lib/bromigos_labjobs.py "$repo"/lib/bromigos_alerts*.py
 install -Dm0755 "$repo/bin/bromigos-activity" /usr/lib/bromigos/bin/bromigos-activity
 # the commands the reader runs: a stand-in that prints the tests' fixtures and notes what it was asked
 install -Dm0644 -t /usr/share/bromigos-board-test/fixtures/ "$b"/tests/fixtures/*.json

@@ -678,7 +678,7 @@ keep the reader running, and the door's tiles can be two minutes behind.
 | `system` | `bromigos server status --json` |
 | `storage` | `bromigos storage health --json` |
 | `backups` | `bromigos lab backups status --json` |
-| `activity` | `bromigos activity list --json` |
+| `activity` | `bromigos activity list --server --json` |
 | `alerts` | `bromigos alerts --json` |
 | `apps` | `bromigos lab apps list --json` |
 | `budget` | `bromigos lab apps budget --json` |
@@ -816,7 +816,7 @@ draws first from those same documents:
  "sources": {"storage": {"command": ["bromigos", "storage", "health", "--json"], "at": 1794289999000, "ok": true, "rc": 1},
              "apps": {"command": ["bromigos", "lab", "apps", "list", "--json"], "at": 1794289999000, "ok": false, "rc": 2,
                       "why": "bromigos lab: no command apps"}},
- "system": "… bromigos server status --json", "activity": "… bromigos activity list --json",
+ "system": "… bromigos server status --json", "activity": "… bromigos activity list --server --json",
  "alerts": "… bromigos alerts --json", "host": "myserver", "settings": {"door": true, "world": "wick"}}
 ```
 
