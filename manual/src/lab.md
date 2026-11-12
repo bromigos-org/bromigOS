@@ -289,7 +289,10 @@ adds research models, which are often stronger but only for personal use.
 
 Then it downloads the models that fit your card. That's a few GB on a small card and about
 80 GB on a 24 GB one, so the first setup takes a while. Every file is checked before it's
-used. Its page is at `http://<your machine>:8188`, for your home network only.
+used. Its page is at `http://<your machine>:8188`. The page has no sign-in, so it's for your
+own network only: a Server's firewall lets it in from your home network and your lab's private
+network and nowhere else, and on a desktop only that desktop reaches it. Nothing can be
+installed from the page.
 
 ### For power users
 

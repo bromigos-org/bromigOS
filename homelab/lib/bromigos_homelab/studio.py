@@ -265,7 +265,8 @@ def download(url, part, size, opener=None, token=None, progress=None):
 class Studio:
     """The studio's folder and its record. root: a stand-in root in tests."""
 
-    def __init__(self, root=None, run=None, fetch=None, http=None, now=None, free=None, say=None, environ=None):
+    def __init__(self, root=None, run=None, fetch=None, http=None, now=None, free=None, say=None, environ=None,
+                 status_of=None):
         self.root = root or L.ROOT
         self.run = run or (L.run if self.root == "/" else (lambda argv, *a, **kw: (127, "", "a stand-in root")))
         self.fetch = fetch or download
@@ -274,6 +275,7 @@ class Studio:
         self.free = free or (lambda p: shutil.disk_usage(p).free)
         self.say = say or (lambda sid, state, words="": None)
         self.environ = os.environ if environ is None else environ
+        self.status_of = status_of or _status_of
 
     def path(self, rel):
         return Path(L.at(rel, self.root))
@@ -299,6 +301,53 @@ class Studio:
 
     def installed(self):
         return self.path(QUADLET).exists()
+
+    # -- the page's lock (localprovision: STUDIO_LAUNCH, STUDIO_MANAGER_CONFIG)
+    def write(self, rel, text, mode=0o644):
+        """Host.write's shape, for localprovision.studio_lock: True when the file changed."""
+        p = self.path(rel)
+        if p.exists() and p.read_text() == text and (p.stat().st_mode & 0o777) == mode:
+            return False
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".bromigos-new")
+        tmp.write_text(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, p)
+        return True
+
+    def lock(self):
+        """The launcher without ComfyUI-Manager and the Manager's locked settings, written again
+        (an image update never reopens installs from the page); ComfyUI restarts when they changed."""
+        changed = L.studio_lock(self)
+        if changed:
+            self.run(["systemctl", "restart", UNIT])
+            self.say("lock", "done", "ComfyUI started again without its Manager")
+        return changed
+
+    def lock_problems(self):
+        """Why the page might install code: plain sentences, none when it's locked."""
+        out = []
+        base = DATA + "/"
+        unit = self.path(QUADLET).read_text() if self.installed() else ""
+        if "Exec=bash /bromigos/launch.sh" not in unit:
+            out.append("ComfyUI starts the image's own way, with its Manager: set it up again (sudo bromigos lab apps "
+                       "add comfyui)")
+        try:
+            if self.path(base + L.STUDIO_LAUNCH_FILE).read_text() != L.STUDIO_LAUNCH:
+                out.append("its launcher was changed")
+        except OSError:
+            out.append("its launcher is missing")
+        for rel in L.STUDIO_MANAGER_CONFIGS:
+            try:
+                if self.path(base + rel).read_text() != L.STUDIO_MANAGER_CONFIG:
+                    out.append(f"the Manager's settings ({rel}) aren't locked")
+            except OSError:
+                out.append(f"the Manager's settings ({rel}) are missing")
+        for route in ("/v2/manager/version", "/manager/version"):
+            if self.status_of(URL + route) == 200:
+                out.append("ComfyUI-Manager answers on the page, so it could install node packs")
+                break
+        return out
 
     # -- files
     def present(self, f, st):
@@ -345,6 +394,7 @@ class Studio:
         upgrade's previous ones). Returns what happened, in words and as data."""
         if not self.installed():
             raise StudioError("the Creation studio isn't set up on this machine (sudo bromigos lab apps add comfyui)")
+        locked = self.lock()
         cat = cat or C.load()
         wfs = load_workflows() if wfs is None else wfs
         st = self.state()
@@ -402,7 +452,7 @@ class Studio:
         toml = write_create_toml(user, st, wfs) if user else None
         return {"schema": SCHEMA, "ok": not failed, "fetched": fetched, "failed": failed, "left_out": left_out,
                 "capabilities": dict(st["capabilities"]), "workflows": st["workflows"], "node_packs": packs,
-                "retired": retired, "create_toml": toml}
+                "retired": retired, "create_toml": toml, "relocked": locked, "lock_problems": self.lock_problems()}
 
     def nodes(self, cat, classes, st):
         """The node packs those classes need, cloned at their pinned commit inside the container,
@@ -520,9 +570,11 @@ class Studio:
         man = C.files(cat)
         doc = {"schema": SCHEMA, "installed": self.installed(), "answers": None, "comfyui_version": None,
                "capabilities": [], "missing": [], "licence": st.get("licence"), "applied": st.get("applied"),
-               "previous": st["previous"], "node_packs": st["node_packs"]}
+               "previous": st["previous"], "node_packs": st["node_packs"], "locked": None, "lock_problems": []}
         if not doc["installed"]:
             return doc
+        doc["lock_problems"] = self.lock_problems()
+        doc["locked"] = not doc["lock_problems"]
         stats = self.http(URL + "/system_stats")
         doc["answers"] = stats is not None
         if stats:
@@ -542,6 +594,11 @@ class Studio:
             doc["capabilities"].append(row)
         doc["missing"] = list(dict.fromkeys(doc["missing"]))
         return doc
+
+
+def _status_of(url):
+    from . import labapps
+    return labapps.http_status(url)
 
 
 def _http_json(url, timeout=3.0):
@@ -783,6 +840,10 @@ def print_status(doc):
         return
     print("Creation studio: " + ("ComfyUI answers" + (f" (ComfyUI {doc['comfyui_version']})" if doc["comfyui_version"] else "")
                                  if doc["answers"] else "ComfyUI doesn't answer (bromigos lab apps logs comfyui says why)"))
+    if doc["locked"]:
+        print("Its page has no sign-in: it answers your own network only, and nothing can be installed from it.")
+    else:
+        print("✖ Its page isn't locked: " + "; ".join(doc["lock_problems"]) + ". sudo bromigos lab studio apply locks it.")
     for r in doc["capabilities"]:
         if not r["workflow"]:
             print(f"  · {r['words']:<26} nothing installed")
@@ -827,7 +888,7 @@ def main(argv, self_argv=None):
         if a.verb == "status":
             doc = s.status(cat)
             print(json.dumps(doc, indent=1)) if a.json else print_status(doc)
-            return EXIT_PROBLEM if doc["installed"] and (doc["missing"] or not doc["answers"]) else 0
+            return EXIT_PROBLEM if doc["installed"] and (doc["missing"] or not doc["answers"] or not doc["locked"]) else 0
         if a.verb == "plan":
             doc = plan(cat, hw, licence, region, a.goal, is_desktop(), only)
             print(json.dumps(doc, indent=1)) if a.json else print_plan(doc)

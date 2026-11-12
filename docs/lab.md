@@ -1180,6 +1180,34 @@ Adding it runs ComfyUI in a container ([lab-provision.md](lab-provision.md#quadl
 and then the studio's own step: it picks the models, fetches them, checks each one, and
 installs the workflows. The code is `homelab/lib/bromigos_homelab/studio.py`.
 
+### Who can reach it
+
+ComfyUI's page has no sign-in. Anyone who can reach it can make things on your card, so it's
+for your own network only. bromigOS keeps it there in three ways:
+
+- **On a Server, the firewall.** The page is on port 8188. A container's port goes straight
+  to the container and skips the firewall's usual rules, so the firewall's forward chain has
+  a rule for 8188 of its own: in from the local network and your lab's private network,
+  dropped from anywhere else, even if your router forwards the port
+  ([server.md](server.md#the-firewall); `server/nftables.nft`). The catalogue's `ports` open
+  nothing by themselves.
+- **On a desktop, this machine only.** A machine that isn't a Server has no such firewall, so
+  there the page listens on `127.0.0.1:8188` alone.
+- **Nothing can be installed from the page.** The image's own start runs ComfyUI-Manager,
+  whose page installs node packs, which are code. The studio starts ComfyUI with its own
+  launcher instead (`/srv/apps/comfyui/launch.sh`), without the Manager, and writes the
+  Manager's settings locked (`security_level = strong`, `network_mode = private`, no git-URL
+  or pip installs) in `user/__manager/config.ini` and `user/default/ComfyUI-Manager/config.ini`,
+  in case a later image starts it anyway. The node packs the studio needs it installs itself,
+  pinned to a commit.
+
+Every `apply` writes the launcher and the settings again and restarts ComfyUI if they had
+changed, so an image update can't quietly reopen installs. `bromigos lab studio` checks all of
+it, and also asks the page whether a Manager answers; anything wrong shows in `status` (exit
+1) and as **Fix** in Settings › Lab.
+
+Signing in to the page with the Lab board's sign-in, through Caddy, is planned.
+
 ### What it picks
 
 For each kind of art (create.toml's capabilities), the studio looks at the shipped

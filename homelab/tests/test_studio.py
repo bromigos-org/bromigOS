@@ -168,13 +168,15 @@ class ApplyTest(unittest.TestCase):
         self.addCleanup(p.stop)
         q = Path(self.root, S.QUADLET)
         q.parent.mkdir(parents=True)
-        q.write_text("[Container]\n")
+        q.write_text("[Container]\nExec=bash /bromigos/launch.sh\n")
+        self.manager = [404]
         self.home = Path(self.root, "home/me")
         self.home.mkdir(parents=True)
 
     def studio(self):
         return S.Studio(root=self.root, run=self.m, fetch=self.fetch, now=lambda: self.clock[0],
-                        free=lambda p: self.free[0], http=lambda url: {"system": {"comfyui_version": "0.38.0"}})
+                        free=lambda p: self.free[0], http=lambda url: {"system": {"comfyui_version": "0.38.0"}},
+                        status_of=lambda url: self.manager[0])
 
     def user(self):
         return (str(self.home), os.getuid(), os.getgid())
@@ -314,6 +316,42 @@ class ApplyTest(unittest.TestCase):
         s.rollback("image.cutout", wfs=WFS)
         self.assertEqual(self.model(dest).read_bytes(), content(dest))
         self.assertEqual(Path(self.root, S.PREVIOUS, dest).read_bytes(), newer)
+
+    def test_every_apply_locks_the_page_again(self):
+        s = self.studio()
+        s.apply(plan(NV8), CAT, WFS)
+        base = Path(self.root, S.DATA)
+        self.assertNotIn("--enable-manager", (base / "launch.sh").read_text())
+        for rel in ("user/__manager/config.ini", "user/default/ComfyUI-Manager/config.ini"):
+            cfg = (base / rel).read_text()
+            self.assertIn("security_level = strong\n", cfg)
+            self.assertIn("network_mode = private\n", cfg)
+            self.assertIn("allow_pip_install = false\n", cfg)
+        self.assertTrue(s.status(CAT, WFS)["locked"])
+        # an image update, or a hand, reopened it: status says so, and the next apply locks it again
+        (base / "user/__manager/config.ini").write_text("[default]\nsecurity_level = weak\n")
+        st = s.status(CAT, WFS)
+        self.assertFalse(st["locked"])
+        self.assertIn("the Manager's settings (user/__manager/config.ini) aren't locked", st["lock_problems"])
+        self.m.calls.clear()
+        r = s.apply(plan(NV8), CAT, WFS)
+        self.assertTrue(r["relocked"])
+        self.assertEqual(r["lock_problems"], [])
+        self.assertIn(["systemctl", "restart", "comfyui.service"], self.m.calls, "ComfyUI starts again to take it")
+        self.assertIn("security_level = strong", (base / "user/__manager/config.ini").read_text())
+        self.m.calls.clear()
+        self.assertFalse(s.apply(plan(NV8), CAT, WFS)["relocked"])
+        self.assertNotIn(["systemctl", "restart", "comfyui.service"], self.m.calls)
+
+    def test_a_manager_that_answers_or_the_image_s_own_start_is_a_problem(self):
+        s = self.studio()
+        s.apply(plan(NV8), CAT, WFS)
+        self.manager[0] = 200
+        self.assertIn("ComfyUI-Manager answers on the page, so it could install node packs",
+                      s.status(CAT, WFS)["lock_problems"])
+        self.manager[0] = 404
+        Path(self.root, S.QUADLET).write_text("[Container]\n")
+        self.assertTrue(any("the image's own way" in p for p in s.status(CAT, WFS)["lock_problems"]))
 
     def test_nothing_set_up_nothing_applied(self):
         Path(self.root, S.QUADLET).unlink()
