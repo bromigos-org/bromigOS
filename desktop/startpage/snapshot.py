@@ -12,8 +12,15 @@ and data.js. So it opens from anywhere: a new-tab extension loaded from it, a br
 home page, or a link to it.
 
 The lab: bromigos-homelab's snapshot (homelab.toml) when it's installed and configured,
-else the private overlay's endpoints.lab Lab API with the read-only token. The links:
-~/.config/bromigos/startpage.toml (docs/desktop.md, "The start page"):
+else the private overlay's endpoints.lab Lab API with the read-only token.
+
+The lab's jobs (the LAB JOBS card): what the lab's ComfyUI makes now and what it made, and the
+runs of tools that write a job feed, from bromigos-core's lib/bromigos_labjobs.py, the source
+`bromigos activity` and the Lab board read (docs/activity.md, "Lab jobs"). Their pictures are
+the user's follower's (bromigos-labjobs.service, started here when a ComfyUI is set and it
+isn't running), copied into the page folder's lab/.
+
+The links: ~/.config/bromigos/startpage.toml (docs/desktop.md, "The start page"):
 
     from_lab = ["argocd", "grafana"]          # services from the lab's own groups, by id
     [[link]]
@@ -21,9 +28,11 @@ else the private overlay's endpoints.lab Lab API with the read-only token. The l
     role = "what it is"                       # overlay key, so no address in a public file)
     endpoint = "myapp"
 """
+import hashlib
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import ssl
 import sys
@@ -237,6 +246,103 @@ def notes(limit=8):
         return {"lines": [], "count": 0, "mtime": None}
 
 
+LAB_LATEST = 6                  # ended lab jobs on the card, newest first
+LAB_FILE_MAX = 8 * 1024 * 1024  # bytes of one picture copied into the page folder
+
+
+def _lab_copy(m, media_dir, out, keep):
+    """A picture of a lab job (its follower's media name, or a feed's own file) copied into the
+    page folder's lab/ under a name made of its content; its name there, or None. Pictures only:
+    a clip or a model shows as its kind."""
+    try:
+        import bromigos_labjobs as L
+    except ImportError:
+        return None
+    src = None
+    for n in (m.get("thumb"), m.get("media")):
+        p = L.media_path(media_dir, n) if n and media_dir else None
+        if p:
+            src = p
+            break
+    if src is None and isinstance(m.get("path"), str):
+        src = m["path"]
+    try:
+        if not src or os.path.getsize(src) > LAB_FILE_MAX:
+            return None
+        with open(src, "rb") as f:
+            data = f.read(LAB_FILE_MAX + 1)
+    except OSError:
+        return None
+    ext = L.sniff(data)
+    if ext not in ("png", "jpg", "webp", "gif"):
+        return None
+    name = f"{hashlib.sha256(data).hexdigest()[:16]}.{ext}"
+    dst = os.path.join(out, name)
+    if not os.path.exists(dst):
+        tmp = dst + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, dst)
+    keep.add(name)
+    return "lab/" + name
+
+
+def lab_jobs():
+    """The LAB JOBS card's data, or None when there is no lab to show (bromigos-core's lab module
+    isn't here, or no ComfyUI and no job feed is set up)."""
+    try:
+        import bromigos_activity as A
+        import bromigos_labjobs as L
+    except Exception:
+        return None
+    try:
+        where = L.Where(A.Env(), system=False)
+        insts = [i for i in L.instances(where) if not i.get("quiet")]
+        if not insts and not L.feed_files(where):
+            return None
+        doc, media_dir = L.read_state(where)
+        if doc is None and insts and not os.environ.get("BROMIGOS_STARTPAGE_NO_FOLLOW"):
+            # the pictures as they're made come from the follower: start it for next time
+            try:
+                subprocess.run(["systemctl", "--user", "start", "--no-block", "bromigos-labjobs.service"],
+                               capture_output=True, timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        jobs = L.jobs(where=where)
+    except Exception as e:                  # a lab that can't be read never stops the page
+        return {"error": f"{type(e).__name__}", "running": [], "queued": {"count": 0, "titles": []}, "latest": [], "instances": []}
+    out = os.path.join(PAGE, "lab")
+    os.makedirs(out, exist_ok=True)
+    keep = set()
+    running, latest = [], []
+    for j in jobs:
+        lab = j.get("lab") or {}
+        if j["state"] == "running" and len(running) < 2:
+            running.append({"id": j["id"], "title": j["title"], "label": lab.get("label"), "stage": j.get("stage"),
+                            "pct": j.get("pct"), "estimated": bool(lab.get("estimated")),
+                            "where": f"ComfyUI {lab['instance']}" if lab.get("instance") else "a job feed",
+                            "client": lab.get("client"), "elapsed_ms": lab.get("elapsed_ms"), "estimate_ms": lab.get("estimate_ms"),
+                            "preview": _lab_copy(lab["preview"], media_dir, out, keep) if isinstance(lab.get("preview"), dict) else None})
+        elif j["state"] in ("succeeded", "failed", "cancelled", "interrupted") and len(latest) < LAB_LATEST:
+            outs = (j.get("result") or {}).get("outputs") or lab.get("outputs") or []
+            first = outs[0] if outs else None
+            latest.append({"id": j["id"], "title": j["title"], "label": lab.get("label"), "state": j["state"],
+                           "summary": (j.get("result") or {}).get("summary") or (j.get("error") or {}).get("words") or "",
+                           "ended_at": j.get("ended_at"), "kind": (first or {}).get("kind"),
+                           "thumb": _lab_copy(first, media_dir, out, keep) if first else None})
+    queued = [j for j in jobs if j["state"] == "queued"]
+    for n in os.listdir(out):               # pictures no job on the card shows any more
+        if n not in keep:
+            try:
+                os.unlink(os.path.join(out, n))
+            except OSError:
+                pass
+    return {"running": running, "queued": {"count": len(queued), "titles": [j["title"] for j in queued[:3]]},
+            "latest": latest, "following": doc is not None,
+            "instances": [{"name": i["name"], "state": i.get("state"), "live": i.get("live"), "relay": i.get("relay")}
+                          for i in ((doc or {}).get("instances") or [])]}
+
+
 def main():
     sync_page()
     d, state, source = lab_status()
@@ -246,6 +352,7 @@ def main():
                 "token_vault": PRIV.vault("lab_api")},
         "switchboard": switchboard(d),
         "notes": notes(),
+        "labjobs": lab_jobs(),
     }
     out = os.path.join(PAGE, "data.js")
     tmp = out + ".tmp"

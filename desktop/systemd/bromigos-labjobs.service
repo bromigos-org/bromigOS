@@ -1,0 +1,17 @@
+# The lab's creation jobs for this desktop (docs/activity.md, "Lab jobs"): `bromigos activity
+# follow` keeps what the lab's ComfyUI makes, and the runs of tools that write a job feed, in
+# $XDG_RUNTIME_DIR/bromigos-labjobs, with the pictures in ~/.cache/bromigos/labjobs: for the start
+# page's LAB JOBS card and `bromigos activity watch`. The start page's snapshot starts it when a
+# ComfyUI is set. It looks every 2 seconds while something runs or waits, and every 30 otherwise.
+[Unit]
+Description=bromigOS: follow the lab's creation jobs
+Documentation=file:///usr/share/doc/bromigos/desktop.md
+After=bromigos-private.service
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/bromigos/bin/bromigos-activity follow
+Nice=10
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=30

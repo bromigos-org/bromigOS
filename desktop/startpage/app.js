@@ -148,6 +148,61 @@ function renderNotes(s) {
   $("notes-meta").title = n.count > n.lines.length ? `Showing the last ${n.lines.length} of ${n.count} lines` : "All lines shown";
 }
 
+// ---------------------------------------------------------------- lab jobs
+function secs(ms) {
+  const s = Math.max(0, Math.round((ms || 0) / 1000));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+}
+function renderLabJobs(s, stale) {
+  const box = $("labjobs"), body = $("lj-body"), meta = $("lj-meta");
+  const lj = s.labjobs;
+  box.hidden = !lj;
+  if (!lj) return;
+  body.replaceChildren();
+  const now = el("div", { class: "lj-now" });
+  if (!lj.running.length) {
+    now.append(el("p", { class: "empty", title: "No generation or pipeline run is going on now" },
+      lj.queued.count ? `Nothing is running; ${lj.queued.count} waiting.` : "Nothing is being made right now."));
+  }
+  for (const r of lj.running) {
+    const pic = el("figure", { class: "lj-pic", title: r.preview ? "The picture as it's made: the latest preview the lab sent" :
+      "No picture yet: it comes from the follower (bromigos-labjobs.service), and from ComfyUI only with the relay node" });
+    if (r.preview) pic.append(el("img", { src: `${r.preview}?t=${s.at}`, alt: `${r.title}: the picture so far` }));
+    else pic.append(el("span", { class: "lj-none" }, (r.label || "LAB").toUpperCase()));
+    const pct = r.pct == null ? null : Math.max(0, Math.min(100, r.pct));
+    const bar = el("div", { class: "lj-bar", title: pct == null ? "How far: not said yet" : r.estimated ?
+      `About ${pct} %: estimated from how long this workflow took before` : `${pct} % done, as ComfyUI measures it` });
+    bar.append(el("i", { style: `width:${pct ?? 0}%` }));
+    const time = [r.elapsed_ms != null ? `${secs(r.elapsed_ms)} so far` : "", r.estimate_ms ? `usually ${secs(r.estimate_ms)}` : ""].filter(Boolean).join(" · ");
+    now.append(el("div", { class: "lj-run" }, pic,
+      el("div", {}, el("b", { title: r.title }, r.title),
+        el("small", { title: "Where it runs, and who asked" }, [r.where, r.client ? `from ${r.client}` : ""].filter(Boolean).join(" · ")),
+        el("span", { class: "lj-stage", title: "The stage it's at" }, `${r.stage || "Running"}${pct != null ? ` · ${pct} %${r.estimated ? " (estimate)" : ""}` : ""}`),
+        bar, el("small", {}, time),
+        el("code", { title: "Follow it live in a terminal" }, `bromigos activity watch ${r.id}`))));
+  }
+  if (lj.queued.count) {
+    now.append(el("p", { class: "lj-queue", title: lj.queued.titles.join("\n") }, `NEXT · ${lj.queued.count}: ${lj.queued.titles[0]}${lj.queued.count > 1 ? " …" : ""}`));
+  }
+  const made = el("ol", { class: "lj-made", "aria-label": "What it made lately" });
+  for (const m of lj.latest) {
+    const word = { succeeded: "made", failed: "failed", cancelled: "stopped", interrupted: "interrupted" }[m.state] || m.state;
+    const t = el("li", { title: `${m.title}: ${m.summary || word}` });
+    t.append(m.thumb ? el("img", { src: m.thumb, alt: m.title }) : el("span", { class: `lj-none ${m.state === "succeeded" ? "" : "bad"}` },
+      m.kind === "video" ? "CLIP" : m.kind === "model3d" ? "3D" : m.state === "succeeded" ? "DONE" : word.toUpperCase()));
+    t.append(el("small", {}, `${(m.label || "").toUpperCase()} · ${m.ended_at ? ago(s.at - m.ended_at / 1000) : word}`));
+    made.append(t);
+  }
+  if (!lj.latest.length) made.append(el("li", { class: "empty" }, "Nothing made yet."));
+  body.append(now, made);
+  const live = lj.instances.some((i) => i.relay);
+  meta.textContent = stale ? "STALE" : lj.error ? "CAN'T READ" : lj.following ? (live ? "LIVE PICTURES" : "QUEUE AND RESULTS") : "READ EVERY MINUTE";
+  meta.className = "meta" + (lj.error ? " bad" : stale ? " warn" : "");
+  meta.title = lj.error ? `The lab's jobs couldn't be read (${lj.error}): bromigos activity --lab says why`
+    : live ? "The follower gets ComfyUI's previews as it makes them (the relay node is installed there)"
+    : "Pictures appear as jobs finish; the picture while one is made needs the relay node on the ComfyUI (docs/activity.md)";
+}
+
 function render() {
   const s = window.BROMIGOS_SNAPSHOT;
   const foot = $("foot");
@@ -157,6 +212,7 @@ function render() {
     $("tiles").replaceChildren(el("p", { class: "empty" }, "The links come from the snapshot."));
     renderLab({ lab: { state: "no snapshot" } }, true);
     renderNotes({ notes: { lines: [] } });
+    renderLabJobs({}, true);
     return;
   }
   const age = Date.now() / 1000 - s.at;
@@ -164,6 +220,7 @@ function render() {
   renderSwitchboard(s, stale);
   renderLab(s, stale);
   renderNotes(s);
+  renderLabJobs(s, stale);
   foot.textContent = `Snapshot ${ago(age)}` + (stale ? " (stale: is bromigos-startpage.timer running?)" : "");
   foot.className = stale ? "warn" : "";
 }
