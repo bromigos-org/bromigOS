@@ -1661,6 +1661,15 @@ WORDS = {"queued": "queued", "running": "running", "needs-you": "needs you", "wa
 MARKS = {"todo": "·", "running": "▸", "waiting": "…", "done": "✓", "failed": "✗", "skipped": "-"}
 
 
+_SHOWN = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+def shown(lines):
+    """Lines for a terminal, joined: no control character in any (an escape sequence planted in a
+    record, a lab job's workflow or file name, can't reach the terminal that prints it)."""
+    return "\n".join(_SHOWN.sub(" ", str(x)) for x in lines)
+
+
 def ago(ms):
     s = max(0, int(ms // 1000))
     for n, unit in ((86400, "d"), (3600, "h"), (60, "min")):
@@ -1714,7 +1723,7 @@ def plain_list(jobs, now_ms):
     if asking:
         lines += ["", ("A job needs you" if len(asking) == 1 else f"{len(asking)} jobs need you") +
                   ". Its question and how to answer: " + "; ".join(f"bromigos activity show {i}" for i in asking)]
-    return "\n".join(lines)
+    return shown(lines)
 
 
 def control_lines(rec):
@@ -1753,7 +1762,7 @@ def plain_show(rec, tail, now_ms):
         lines += ["", "Notes"] + [f"  ▲ {n['id'] + ': ' if n.get('id') else ''}{n['words']}" for n in rec["notes"]]
     lines += control_lines(rec)
     if rec.get("lab"):
-        return "\n".join(lines + _labjobs().plain_lab(rec, now_ms))
+        return shown(lines + _labjobs().plain_lab(rec, now_ms))
     lines += ["", f"Command  {shlex.join(rec['command'])}", f"Unit     {rec['unit'] or 'none: it ran in the foreground'}",
               f"Log      {rec['log']}"]
     if rec.get("locks"):
@@ -1767,4 +1776,4 @@ def plain_show(rec, tail, now_ms):
     elif tail:
         lines += ["", f"The log's last {len(tail)} line{'s' if len(tail) != 1 else ''}"]
         lines += ["  " + _CONTROL.sub("", t.replace("\t", "    ")) for t in tail]
-    return "\n".join(lines)
+    return shown(lines)

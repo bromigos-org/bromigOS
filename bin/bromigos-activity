@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=What this computer and its lab are doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later; ComfyUI generations and pipeline runs beside them
-# bromigos:args=[list [--all] [--limit N] [--lab|--server] [--json]] | show [ID] [--log N] [--json] | watch [ID] [--lab|--server] [--no-images] [--once] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND… | emit RUN start --title WORDS [--kind KIND] [--subject TYPE:ID[:NAME]] [--pid PID] | emit RUN ::LINE… | emit RUN media PATH [--step ID] [--output] | emit RUN end [STATE] [WORDS…] | follow [--system] [--once] [--poll S] [--idle S --wanted FILE]
+# bromigos:args=[list [--all] [--limit N] [--lab|--server] [--json]] | show [ID] [--log N] [--json] | watch [ID] [--lab|--server] [--no-images] [--once] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND… | emit RUN start --title WORDS [--kind KIND] [--subject TYPE:ID[:NAME]] [--pid PID] | emit RUN ::LINE… | emit RUN media PATH [--step ID] [--output] | emit RUN end [STATE] [WORDS…] | follow [--system] [--once] [--poll S] [--idle S --wanted FILE] [--allow-dropin PATH]
 # bromigos:examples=bromigos activity; bromigos activity watch; bromigos activity show; bromigos activity list --lab --json; sudo bromigos activity answer drive.replace swapped; sudo bromigos activity cancel backup; bromigos activity emit ships start --title "Universe assets: ships"; bromigos activity emit ships ::step cutout running Cutting out ship-a; sudo bromigos activity run --kind backup.run --title "Backing up" --lock backup-repo -- bromigos server backup run
 """bromigos-activity (`bromigos activity`): what this computer is doing (docs/activity.md).
 
@@ -79,6 +79,9 @@
       --system                        the machine's own settings and folders (the board's)
       --poll S                        seconds between looks at each ComfyUI (default 2)
       --idle S --wanted FILE          stop when nobody touched FILE for S seconds
+      --allow-dropin PATH             write the systemd drop-in that lets the machine's follower
+                                      connect to labjobs.toml's ComfyUIs and nothing else, and
+                                      reload systemd when it changed (root; the board runs it)
 
 Where there's no systemd (a container), `run` runs the job in this terminal, with the same record.
 
@@ -91,6 +94,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -355,10 +359,17 @@ def cmd_emit(env, args):
 
 
 def cmd_follow(env, args):
-    got, rest = options(args, ("--system", "--once"), ("--poll", "--idle", "--wanted"))
+    got, rest = options(args, ("--system", "--once"), ("--poll", "--idle", "--wanted", "--allow-dropin"))
     if got is None or rest:
         return usage()
     where = L.Where(env, system=True if "--system" in got else None)
+    if "--allow-dropin" in got:
+        # (root, before the board's follower starts: the only addresses it may connect to)
+        changed = L.write_allow_dropin(where, got["--allow-dropin"])
+        if changed and not env.stand_in and env.find("systemctl"):
+            subprocess.run([env.find("systemctl"), "daemon-reload"], check=False)
+        print("changed" if changed else "unchanged")
+        return 0
     poll = max(0.5, float(got.get("--poll") or 2))
     idle = float(got["--idle"]) if got.get("--idle") else None
     return L.Follower(where, poll=poll).run(once="--once" in got, idle_s=idle, wanted=got.get("--wanted"))
@@ -451,6 +462,7 @@ def cmd_watch(env, args):
             lines, top = watch_frame(jobs, now, one, (cols - 44 if pictures else cols) - 1)
             head = ("LAB AND SERVER JOBS" if kinds["server"] and kinds["lab"] is not None else
                     "LAB JOBS" if kinds["lab"] is not None else "JOBS") + (f"  ·  {time.strftime('%H:%M:%S')}" if tty else "")
+            lines = [L.clean(t) for t in lines]          # no record's text reaches the terminal as a control
             if not tty:
                 print("\n".join([head, ""] + lines).rstrip())
                 return 0

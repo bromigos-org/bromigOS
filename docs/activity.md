@@ -355,6 +355,7 @@ Each ComfyUI a reader follows, first match by address wins:
    [[comfyui]]
    name = "studio"                      # short: letters and digits
    url = "http://127.0.0.1:8188"        # or a reference: "@env:…", "@private:…", "@file:…"
+   relay_token = "@file:/etc/bromigos/comfyui-relay.token"   # the relay node's token, if it has one
 
    [feed]
    dirs = ["/srv/pipeline/feed"]        # more feed folders to read
@@ -365,9 +366,13 @@ Each ComfyUI a reader follows, first match by address wins:
    `BROMIGOS_COMFYUI_URL` (as `homelab`) and `art.toml`'s `comfyui_url`
    ([art.md](art.md#creation-providers)). `@vault:` references aren't followed: reading
    jobs never asks Vault.
-3. With none of these, this machine's own ComfyUI at `http://127.0.0.1:8188`, when something
-   answers there.
 
+Nothing else is followed. This machine's own ComfyUI is named too
+(`url = "http://127.0.0.1:8188"`): an unnamed port would let any program listening there pose
+as it.
+
+Each answer is read with a whole deadline (15 seconds, a minute for an output file) and a size
+cap, and a redirect is refused: a ComfyUI can't point the reader anywhere else.
 ### What a ComfyUI prompt becomes
 
 Each prompt in the queue and in the recent history (`GET /queue`, `GET /history`) becomes a
@@ -384,7 +389,11 @@ record:
   workflow took on this ComfyUI before (`lab.estimated` is true). An estimate stops at 95 %.
 - **Its queue place**: `lab.position` and `lab.ahead` ("In the queue: 2 ahead").
 - **Its end**: done, failed (with ComfyUI's error and the node it failed in), or cancelled
-  when it was interrupted. `result.outputs` lists what it wrote.
+  when it was interrupted. `result.outputs` lists what it wrote, eight at most.
+
+Every text a record takes from ComfyUI or a feed (a workflow, a file name, an error) has its
+control characters replaced, and `bromigos activity` cleans every line it prints again: no
+escape sequence planted in a prompt reaches a terminal.
 
 The record's `lab` object has the rest: `instance`, `prompt_id`, `workflow`, `prompt`,
 `client` (who queued it), `queued_at`, `ran_at`, `elapsed_ms`, `estimate_ms`, `preview` and
@@ -394,11 +403,17 @@ The record's `lab` object has the rest: `instance`, `prompt_id`, `workflow`, `pr
 
 ComfyUI sends a prompt's progress and its preview frames only to the client that queued it.
 To see everyone's prompts live, install the relay node, a ComfyUI custom node with no nodes
-that copies those messages to watchers (clients named `bromigos-watch-…`):
+that copies those messages to the watchers that know its token (clients named
+`bromigos-watch-<token>-…`, four at most):
 
 ```bash
 ln -s /usr/share/bromigos/art/comfyui-relay /path/to/ComfyUI/custom_nodes/bromigos-relay
+head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' > /etc/bromigos/comfyui-relay.token
+# ComfyUI reads it from BROMIGOS_RELAY_TOKEN_FILE (or BROMIGOS_RELAY_TOKEN); restart ComfyUI
 ```
+
+The token is at least 16 letters and digits. Without one the relay copies nothing. The
+watchers read it from labjobs.toml's `relay_token`.
 
 Previews also need ComfyUI to make them. bromigos art asks for them with each prompt
 (`"extra_data": {"preview_method": "auto"}`). For other tools, start ComfyUI with
@@ -421,7 +436,10 @@ thumbnails (with Pillow). Pages that can't reach the network themselves read its
 
 Media files are named by their content (`pv-`, `th-`, `of-`, `fm-` and 16 hex digits), and
 only PNG, JPEG, WebP, GIF, MP4, WebM and GLB are kept, checked by their first bytes. The
-folder keeps 512 MB at most; the oldest go first. A reader uses a `jobs.json` only while it
+folder keeps 512 MB at most, as a hard limit: the oldest go first, and a file that doesn't fit
+isn't kept. A picture of more than 40 million pixels is never decoded for a thumbnail. Feed
+files, `jobs.json` and the follower's answers are read only when they are regular files (never
+through a link, never a pipe), and a feed file only when root or its folder's owner owns it. A reader uses a `jobs.json` only while it
 is less than 15 seconds old; otherwise `bromigos activity` reads each ComfyUI itself.
 `bromigos activity watch` runs a follower of its own while it watches, when none is running.
 

@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -33,6 +34,7 @@ RUNNING = QUEUE["queue_running"][0][1]
 PENDING = QUEUE["queue_pending"][0][1]
 INST = {"name": "studio", "url": "http://comfy.invalid:8188"}
 # a tiny PNG: what /view answers in these tests
+TOKEN = "0123456789abcdef0123"
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 
 
@@ -550,10 +552,34 @@ class Config(unittest.TestCase):
         self.assertEqual([i["name"] for i in L.instances(L.Where(env, system=True))], ["studio"])
         self.assertEqual([i["name"] for i in L.instances(L.Where(env, system=False))], ["studio", "mine", "homelab"])
 
-    def test_with_nothing_set_this_machines_own_port(self):
-        env = A.Env({k: v for k, v in self.m.environ.items() if k != "BROMIGOS_LABJOBS_NO_LOCAL"})
-        got = L.instances(L.Where(env, system=False))
-        self.assertEqual([(i["name"], i["url"], i.get("quiet")) for i in got], [("local", L.LOCAL_URL, True)])
+    def test_with_nothing_set_nothing_is_followed(self):
+        """No implicit 127.0.0.1:8188: any program on that port could pose as the lab's ComfyUI."""
+        for system in (False, True):
+            self.assertEqual(L.instances(L.Where(self.m.env(), system=system)), [])
+
+    def test_the_relay_token_is_read_from_its_reference(self):
+        tok = self.m.tmp / "relay.token"
+        tok.write_text("0123456789abcdefXYZ\n")
+        (self.cfg / "labjobs.toml").write_text(f'[[comfyui]]\nname = "studio"\nurl = "http://gpu.invalid:8188"\nrelay_token = "@file:{tok}"\n')
+        self.assertEqual(L.instances(L.Where(self.m.env(), system=False))[0]["relay_token"], "0123456789abcdefXYZ")
+
+    def test_the_followers_addresses_are_exactly_the_configured_ones(self):
+        sysconf = self.m.root / "etc/bromigos"
+        sysconf.mkdir(parents=True)
+        (sysconf / "labjobs.toml").write_text('[[comfyui]]\nname = "studio"\nurl = "http://gpu.lan:8188"\n'
+                                              '[[comfyui]]\nname = "here"\nurl = "http://127.0.0.1:8188"\n')
+        where = L.Where(self.m.env(), system=True)
+        names = {"gpu.lan": {"10.0.0.7", "fd00::7"}, "127.0.0.1": {"127.0.0.1"}}
+        self.assertEqual(L.allow_addresses(where, names.__getitem__), ["10.0.0.7", "127.0.0.1", "fd00::7"])
+        text = L.allow_dropin(where, names.__getitem__)
+        self.assertIn("IPAddressAllow=\nIPAddressAllow=10.0.0.7 127.0.0.1 fd00::7\n", text)
+        self.assertNotIn("link-local", text)
+        path = self.m.tmp / "d" / "50-allow.conf"
+        self.assertTrue(L.write_allow_dropin(where, str(path), names.__getitem__))
+        self.assertFalse(L.write_allow_dropin(where, str(path), names.__getitem__), "unchanged: not written again")
+        (sysconf / "labjobs.toml").write_text("")
+        self.assertTrue(L.write_allow_dropin(where, str(path), names.__getitem__))
+        self.assertTrue(path.read_text().endswith("[Service]\nIPAddressAllow=\n"), "no ComfyUI: no address at all")
 
 
 class MediaFiles(unittest.TestCase):
@@ -578,7 +604,7 @@ class MediaFiles(unittest.TestCase):
         self.assertTrue(L.media_path(media.folder, name))
         for bad in ("../jobs.json", "of-0000000000000000.svg", "of-00000000000000000.png", "/etc/passwd", None):
             self.assertIsNone(L.media_path(media.folder, bad))
-        small = L.Media(str(m.tmp / "media"), total=len(PNG))
+        small = L.Media(str(m.tmp / "media"), total=len(PNG) + 1)
         other = small.put(PNG + b"\x00", "of")
         small.prune(keep={other})
         self.assertTrue(L.media_path(small.folder, other))
@@ -605,7 +631,8 @@ class Relay(unittest.TestCase):
 
         class Server:
             def __init__(s):
-                s.sockets = {"client-a": object(), "bromigos-watch-1": object(), "other": object()}
+                s.sockets = {"client-a": object(), f"bromigos-watch-{TOKEN}-1": object(), "other": object(),
+                             "bromigos-watch-1": object(), "bromigos-watch-wrongtoken0000000-1": object()}
                 s.sent = []
 
             async def send_json(s, event, data, sid=None):
@@ -616,8 +643,9 @@ class Relay(unittest.TestCase):
         self.server = Server()
 
     def test_progress_and_previews_reach_the_watchers(self):
-        self.assertTrue(self.relay.install(self.server))
-        self.assertFalse(self.relay.install(self.server), "once")
+        self.assertFalse(self.relay.install(self.server, token=""), "no token: it copies nothing")
+        self.assertTrue(self.relay.install(self.server, token=TOKEN))
+        self.assertFalse(self.relay.install(self.server, token=TOKEN), "once")
         s = self.server
 
         async def go():
@@ -626,17 +654,24 @@ class Relay(unittest.TestCase):
             await s.send_json("executing", {}, None)
             await s.send_bytes(4, b"img", "client-a")
             await s.send_bytes(3, b"text", "client-a")
-            await s.send_json("progress", {}, "bromigos-watch-1")
+            await s.send_json("progress", {}, W)
+        W = f"bromigos-watch-{TOKEN}-1"
         asyncio.run(go())
         self.assertEqual(s.sent, [
-            ("json", "progress", "client-a"), ("json", "progress", "bromigos-watch-1"),
+            ("json", "progress", "client-a"), ("json", "progress", W),
             ("json", "status", "client-a"),
             ("json", "executing", None),
-            ("bytes", 4, "client-a"), ("bytes", 4, "bromigos-watch-1"),
+            ("bytes", 4, "client-a"), ("bytes", 4, W),
             ("bytes", 3, "client-a"),
-            ("json", "progress", "bromigos-watch-1"),
+            ("json", "progress", W),
         ])
         self.assertEqual(self.relay.NODE_CLASS_MAPPINGS, {})
+
+    def test_at_most_four_watchers_and_the_token_from_a_file(self):
+        self.server.sockets = {f"bromigos-watch-{TOKEN}-{i}": object() for i in range(10)}
+        self.assertEqual(len(self.relay.watchers(self.server, "x", TOKEN)), 4)
+        self.assertIsNone(self.relay.read_token({"BROMIGOS_RELAY_TOKEN": "short"}))
+        self.assertEqual(self.relay.read_token({"BROMIGOS_RELAY_TOKEN": TOKEN}), TOKEN)
 
 
 class ActivityHooks(unittest.TestCase):
@@ -658,3 +693,111 @@ class ActivityHooks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Hardening(unittest.TestCase):
+    """What the security review asked for: no escape reaches a terminal, an answer has a whole
+    deadline and no redirect, outputs and media are bounded, and no pipe or link is read."""
+
+    def setUp(self):
+        self.m = FakeMachine()
+        self.addCleanup(self.m.close)
+
+    def test_no_escape_sequence_reaches_the_terminal(self):
+        evil = "\x1b]52;c;aGVsbG8=\x07\x1b[2J\u202e"
+        h = json.loads(json.dumps(HISTORY))
+        pid = next(iter(h))
+        h[pid]["prompt"][2]["99"] = {"class_type": "UNETLoader", "inputs": {"unet_name": f"x{evil}.safetensors"}}
+        for node in h[pid]["outputs"].values():
+            for items in node.values():
+                for it in items:
+                    it["filename"], it["subfolder"] = f"a{evil}.png", f"sub{evil}"
+        h[pid]["status"]["messages"].append(["execution_error", {"prompt_id": pid, "node_id": "1", "node_type": f"K{evil}",
+                                                                 "exception_message": f"boom{evil}", "timestamp": 1}])
+        rec = next(r for r in records(history=h) if r["lab"]["prompt_id"] == pid)
+        self.assertNotIn("\x1b", json.dumps(rec, ensure_ascii=False))
+        self.assertNotIn("\u202e", json.dumps(rec, ensure_ascii=False))
+        # and a record that arrives with escapes anyway (a jobs.json written by someone else)
+        rec["title"] = f"T{evil}"
+        rec["lab"]["workflow"] = f"W{evil}"
+        rec["result"] = {"ok": True, "summary": f"S{evil}", "outputs": [{"kind": "image", "name": f"n{evil}", "subfolder": f"s{evil}"}]}
+        self.assertNotIn("\x1b", A.plain_show(rec, [], NOW))
+        self.assertNotIn("\x1b", A.plain_list([rec], NOW))
+        state = self.m.tmp / "state"
+        state.mkdir()
+        (state / "jobs.json").write_text(json.dumps({"schema": 1, "at": NOW, "instances": [], "jobs": [rec]}))
+        env = {"BROMIGOS_LABJOBS_STATE": str(state), "BROMIGOS_ACTIVITY_NOW_MS": str(NOW)}
+        for args in (("watch", "--once", "--lab"), ("list", "--lab"), ("show", rec["id"])):
+            code, out, err = self.m.cli(*args, env=env)
+            self.assertEqual(code, 0, err)
+            self.assertNotIn("\x1b", out + err, args)
+            self.assertNotIn("\x07", out + err, args)
+        doc, _ = L.read_state(L.Where(self.m.env(**env), system=False))
+        self.assertNotIn("\x1b", json.dumps(doc, ensure_ascii=False))
+
+    def test_an_answer_has_a_whole_deadline_and_a_cap(self):
+        class Drip:
+            def read(self, n):
+                return b"x"
+        clock = iter(range(0, 10_000))
+        with unittest.mock.patch.object(L.time, "monotonic", lambda: next(clock)):
+            with self.assertRaises(TimeoutError):
+                L.Http("http://comfy.invalid")._read(Drip(), 10_000, 15)
+        class Flood:
+            def read(self, n):
+                return b"x" * n
+        self.assertEqual(len(L.Http("http://comfy.invalid")._read(Flood(), 100, 15)), 101, "read no further than the cap")
+        self.assertIsNone(L._NoRedirect().redirect_request(None, None, 302, "", {}, "http://169.254.169.254/"))
+
+    def test_outputs_and_media_are_bounded(self):
+        h = json.loads(json.dumps(HISTORY))
+        pid = next(iter(h))
+        h[pid]["outputs"] = {"10": {"images": [{"filename": f"b_{i:05}.png", "subfolder": "", "type": "output"} for i in range(4096)]}}
+        rec = next(r for r in records(history=h) if r["lab"]["prompt_id"] == pid)
+        self.assertEqual(len(rec["result"]["outputs"]), L.OUTPUTS_PER_RECORD)
+        media = L.Media(str(self.m.tmp / "media"), total=3 * len(PNG) + 10)
+        names = [media.put(PNG + bytes([i]), "of") for i in range(3)]
+        media.keep = set(names)
+        later = media.put(PNG + b"\xff\xfe", "of")
+        self.assertIsNotNone(later)
+        self.assertLessEqual(media.used(), media.total, "a hard limit, whatever is kept")
+        media.prune(keep=set(names + [later]))
+        self.assertLessEqual(media.used(), media.total)
+        self.assertIsNone(media.put(b"\x89PNG\r\n\x1a\n" + b"0" * (media.total + 1)), "bigger than the whole folder")
+
+    def test_a_pipe_or_a_link_is_never_read(self):
+        feed = self.m.home / ".local/state/bromigos/activity/feed"
+        feed.mkdir(parents=True)
+        os.mkfifo(feed / "pipe.jsonl")
+        os.symlink("/etc/passwd", feed / "link.jsonl")
+        where = L.Where(self.m.env(), system=False)
+        t0 = time.monotonic()
+        self.assertEqual(L.feed_files(where), [])
+        self.assertEqual(L._read_feed_lines(str(feed / "pipe.jsonl")), [])
+        self.assertEqual(L._read_feed_lines(str(feed / "link.jsonl")), [])
+        state = self.m.tmp / "state"
+        state.mkdir()
+        os.mkfifo(state / "jobs.json")
+        env = self.m.env(BROMIGOS_LABJOBS_STATE=state)
+        self.assertEqual(L.read_state(L.Where(env, system=False)), (None, None))
+        (state / "jobs.json").unlink()
+        real = self.m.tmp / "real.json"
+        real.write_text(json.dumps({"schema": 1, "at": env.now_ms(), "instances": [], "jobs": []}))
+        os.symlink(real, state / "jobs.json")
+        self.assertEqual(L.read_state(L.Where(env, system=False)), (None, None))
+        self.assertLess(time.monotonic() - t0, 5, "nothing waited on a pipe")
+        # a ComfyUI prompt's id reads no feed at all
+        with unittest.mock.patch.object(L, "feed_records", side_effect=AssertionError("a feed was read")):
+            with self.assertRaises(KeyError):
+                L.find(self.m.env(), "comfy-studio-" + RUNNING, where, http={})
+
+    def test_a_decompression_bomb_isnt_decoded(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow isn't installed")
+        out = io.BytesIO()
+        Image.new("1", (10_000, 10_000)).save(out, format="PNG")
+        self.assertIsNone(L.safe_image(out.getvalue()))
+        self.assertIsNone(L.Media(str(self.m.tmp / "m")).thumb(out.getvalue()))
+        self.assertIsNone(L.kitty_image(b"GIF89a" + out.getvalue()))

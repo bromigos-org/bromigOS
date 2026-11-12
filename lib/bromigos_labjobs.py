@@ -45,7 +45,9 @@ import json
 import os
 import re
 import secrets
+import pwd
 import socket
+import stat
 import statistics
 import struct
 import sys
@@ -65,7 +67,8 @@ SYSTEM_STATE = "/run/bromigos-labjobs"          # the follower's (bromigos-board
 SYSTEM_MEDIA = "/var/cache/bromigos-labjobs"    # its media: previews, thumbnails, outputs
 SYSTEM_ASKS = "/run/bromigos-labjobs-asks"      # root's: what root asks the follower to do (cancel)
 LOCAL_URL = "http://127.0.0.1:8188"
-WATCH_PREFIX = "bromigos-watch-"                # the relay node copies progress to these clients
+WATCH_PREFIX = "bromigos-watch-"                # the relay node copies progress to these clients (with its token)
+FOLLOWER_USER = "bromigos-labjobs"              # the machine's follower's user: its files are the only ones trusted
 
 COMFY_ID = re.compile(r"comfy-([a-z0-9]{1,24})-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\Z")
 FEED_ID = re.compile(r"feed-([a-z0-9][a-z0-9._-]{0,63})\Z")
@@ -81,6 +84,12 @@ FEED_READ_MAX = 512 * 1024  # bytes of a feed file read (its end)
 FEED_LINE_MAX = 4096
 FEED_QUIET_MS = 3600_000    # a feed run that said nothing for this long reads as interrupted
 MEDIA_MAX = 64 * 1024 * 1024            # bytes of one cached file
+JSON_MAX = 16 * 1024 * 1024             # bytes of one ComfyUI answer read
+DEADLINE_S = 15.0                       # seconds one ComfyUI answer may take, whole (not per read)
+FETCH_DEADLINE_S = 60.0                 # seconds one output file may take, whole
+OUTPUTS_PER_RECORD = 8                  # outputs a record lists (a batch of 4096 lists 8)
+WS_MAX = 4 * 1024 * 1024                # bytes of one websocket message (a preview frame is far smaller)
+IMAGE_PIXELS_MAX = 40_000_000           # pixels of a picture decoded for a thumbnail or the terminal
 MEDIA_TOTAL = 512 * 1024 * 1024         # bytes of the whole media folder; the oldest go first
 OUTPUTS_CACHED = 12         # ended prompts whose outputs the follower keeps, per ComfyUI
 THUMB_PX = 512
@@ -123,9 +132,85 @@ def _slug(text, n=24):
     return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())[:n] or "comfyui"
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
 def _cut(text, n):
-    text = " ".join(re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", str(text or "")).split())
+    text = " ".join(_CONTROL.sub(" ", str(text or "")).split())
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
+def clean(text):
+    """Text that is safe to print in a terminal: every control character (an escape sequence's
+    ESC, OSC 52's clipboard write, a carriage return, bidi overrides) becomes a space. Newlines
+    are the caller's to put back: clean each line."""
+    return _CONTROL.sub(" ", str(text if text is not None else ""))
+
+
+def clean_doc(doc):
+    """A record read back from a file, with every string cleaned (clean): a follower's jobs.json
+    is printed by root's terminal and shown by pages."""
+    if isinstance(doc, dict):
+        return {clean(k): clean_doc(v) for k, v in doc.items()}
+    if isinstance(doc, list):
+        return [clean_doc(v) for v in doc]
+    if isinstance(doc, str):
+        return clean(doc)
+    return doc
+
+
+def owner_uid(name=FOLLOWER_USER):
+    try:
+        return pwd.getpwnam(name).pw_uid
+    except KeyError:
+        return None
+
+
+def read_regular(path, cap, owners=None, dir_fd=None):
+    """A file's bytes, or None: opened without following a link and without waiting on a pipe
+    (O_NOFOLLOW, O_NONBLOCK), and read only when it is a regular file, of at most `cap` bytes
+    (its end when longer: see tail), owned by one of `owners` when given."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dir_fd)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or (owners is not None and st.st_uid not in owners):
+            return None
+        if st.st_size > cap:
+            return None
+        chunks, left = [], cap + 1
+        while left > 0:
+            b = os.read(fd, min(left, 1 << 20))
+            if not b:
+                break
+            chunks.append(b)
+            left -= len(b)
+        data = b"".join(chunks)
+        return None if len(data) > cap else data
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def open_regular(path, owners=None):
+    """(fd, stat) of a regular file opened without following a link or waiting on a pipe, owned
+    by one of `owners` when given; (None, None) otherwise. The caller closes fd."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None, None
+    try:
+        st = os.fstat(fd)
+    except OSError:
+        os.close(fd)
+        return None, None
+    if not stat.S_ISREG(st.st_mode) or (owners is not None and st.st_uid not in owners):
+        os.close(fd)
+        return None, None
+    return fd, st
 
 
 # ------------------------------------------------------------------ where things are
@@ -266,8 +351,9 @@ def config(where):
 
     The ComfyUIs: labjobs.toml's [[comfyui]] (name, url), then for a person their creation
     settings: create.toml's [comfyui.<name>] endpoints, BROMIGOS_COMFYUI_URL (as "homelab")
-    and art.toml's comfyui_url. Each address once. With none at all, this machine's own
-    ComfyUI (local, http://127.0.0.1:8188) when something answers there."""
+    and art.toml's comfyui_url. Each address once. Nothing is followed without being set:
+    this machine's own ComfyUI too is named (`url = "http://127.0.0.1:8188"`), so no other
+    program on the port can pose as it."""
     env = where.env.environ
     out, seen = [], set()
 
@@ -301,13 +387,66 @@ def config(where):
         art = _toml(os.path.join(where.config_home, "bromigos", "art.toml"))
         if isinstance(art.get("comfyui_url"), str):
             add("homelab", art["comfyui_url"], "art.toml")
-    if not out and env.get("BROMIGOS_LABJOBS_NO_LOCAL") != "1":
-        out.append({"name": "local", "url": LOCAL_URL, "from": "default", "quiet": True})
+    for c in out:                     # (a relay token: [[comfyui]] relay_token, a reference)
+        c.setdefault("relay_token", "")
+    for path in where.config_files():
+        for c in _toml(path).get("comfyui") or []:
+            if isinstance(c, dict) and c.get("relay_token"):
+                for o in out:
+                    if o["name"] == _slug(c.get("name") or "comfyui"):
+                        o["relay_token"] = resolve(str(c["relay_token"]), env).strip()
     return {"comfyui": out, "feed_dirs": feed_dirs, "media_roots": media_roots}
 
 
 def instances(where):
     return config(where)["comfyui"]
+
+
+def allow_addresses(where, resolve_host=None):
+    """The exact addresses the machine's follower may connect to: each configured ComfyUI's host,
+    resolved now (systemd's IPAddressAllow takes addresses, not names). Nothing else: no other
+    private range, no link-local, and this machine only when an instance names it."""
+    resolve_host = resolve_host or (lambda host: {a[4][0] for a in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)})
+    out = set()
+    for inst in instances(where):
+        host = urllib.parse.urlsplit(inst["url"]).hostname
+        if not host:
+            continue
+        try:
+            out |= {a.split("%")[0] for a in resolve_host(host)}
+        except (OSError, UnicodeError):
+            continue
+    return sorted(out)
+
+
+def allow_dropin(where, resolve_host=None):
+    """The systemd drop-in for the machine's follower's unit: IPAddressAllow= emptied, then only
+    allow_addresses (none: it may connect nowhere)."""
+    addrs = allow_addresses(where, resolve_host)
+    lines = ["# Written by bromigos activity follow --allow-dropin from /etc/bromigos/labjobs.toml's",
+             "# ComfyUIs (docs/board.md, \"The lab's jobs\"): the follower connects to these addresses only.",
+             "[Service]", "IPAddressAllow="]
+    if addrs:
+        lines.append("IPAddressAllow=" + " ".join(addrs))
+    return "\n".join(lines) + "\n"
+
+
+def write_allow_dropin(where, path, resolve_host=None):
+    """Write the drop-in at `path` when it changed; whether it did."""
+    text = allow_dropin(where, resolve_host)
+    try:
+        with open(path) as f:
+            if f.read() == text:
+                return False
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+    tmp = f"{path}.{secrets.token_hex(4)}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
+    return True
 
 
 def reachable(url, timeout=0.6):
@@ -323,25 +462,55 @@ def reachable(url, timeout=0.6):
 
 # ------------------------------------------------------------------ talking to a ComfyUI
 
-class Http:
-    """GET and POST JSON, and GET bytes, from one ComfyUI (urllib). Tests pass their own."""
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A ComfyUI that answers with a redirect gets no second request: it might point anywhere."""
 
-    def __init__(self, url, timeout=TIMEOUT_S):
-        self.url, self.timeout = url.rstrip("/"), timeout
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# no proxy from the environment, and no redirect followed
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+
+
+class Http:
+    """GET and POST JSON, and GET bytes, from one ComfyUI (urllib). Each answer has a whole
+    deadline, not one per read, and a size cap; a redirect is an error. Tests pass their own."""
+
+    def __init__(self, url, timeout=TIMEOUT_S, deadline=DEADLINE_S):
+        self.url, self.timeout, self.deadline = url.rstrip("/"), timeout, deadline
 
     def _open(self, path, body=None):
         req = urllib.request.Request(self.url + path, data=None if body is None else json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"} if body is not None else {},
                                      method="POST" if body is not None else "GET")
-        return urllib.request.urlopen(req, timeout=self.timeout)
+        return _OPENER.open(req, timeout=self.timeout)
+
+    def _read(self, r, cap, deadline):
+        """At most cap + 1 bytes, by `deadline` seconds from now: a server that sends a byte a
+        second is cut off, whatever each read's own timeout."""
+        end = time.monotonic() + deadline
+        chunks, n = [], 0
+        while n <= cap:
+            if time.monotonic() > end:
+                raise TimeoutError("the answer took too long")
+            b = r.read(min(64 * 1024, cap + 1 - n))
+            if not b:
+                break
+            chunks.append(b)
+            n += len(b)
+        return b"".join(chunks)
 
     def get(self, path):
         with self._open(path) as r:
-            return json.loads(r.read(16 * 1024 * 1024))
+            data = self._read(r, JSON_MAX, self.deadline)
+        if len(data) > JSON_MAX:
+            raise ValueError("the answer is too big")
+        return json.loads(data)
 
     def post(self, path, body):
         with self._open(path, body) as r:
-            data = r.read(1024 * 1024)
+            data = self._read(r, 1024 * 1024, self.deadline)
         try:
             return json.loads(data) if data else {}
         except ValueError:
@@ -349,7 +518,7 @@ class Http:
 
     def fetch(self, path, cap=MEDIA_MAX):
         with self._open(path) as r:
-            data = r.read(cap + 1)
+            data = self._read(r, cap, FETCH_DEADLINE_S)
         return None if len(data) > cap else data
 
 
@@ -547,10 +716,11 @@ def outputs_of(history):
                 ext = it["filename"].rsplit(".", 1)[-1].lower()
                 meta = it.get("metadata") if isinstance(it.get("metadata"), dict) else {}
                 o = {"kind": EXT_KIND.get(ext, "file"), "name": _cut(os.path.basename(it["filename"]), 120),
-                     "filename": it["filename"], "subfolder": str(it.get("subfolder") or ""), "type": str(it.get("type") or "output"),
+                     "filename": _cut(it["filename"], 255), "subfolder": _cut(it.get("subfolder") or "", 255),
+                     "type": "temp" if it.get("type") == "temp" else "output",
                      "width": meta.get("width"), "height": meta.get("height"), "media": None, "thumb": None}
                 (found if o["type"] == "output" else temp).append(o)
-    return found or temp
+    return (found or temp)[:OUTPUTS_PER_RECORD]
 
 
 def estimate_ms(wf, durations):
@@ -642,7 +812,8 @@ def comfy_record(inst, p, now, wfs, live=None, durations=None):
         e = msgs.get("execution_error") or {}
         why = _cut(A.redact(str(e.get("exception_message") or "").strip()), 300) or "ComfyUI stopped the job with an error."
         node_step = nodes.get(str(e.get("node_id"))) if e.get("node_id") is not None else None
-        err = {"step": node_step, "words": why, "code": "comfyui", "fix": f"It failed in {e['node_type']}." if e.get("node_type") else None}
+        err = {"step": node_step, "words": why, "code": "comfyui",
+               "fix": f"It failed in {_cut(e['node_type'], 80)}." if e.get("node_type") else None}
         result = {"ok": False, "undo": None, "summary": "It didn't finish.", "outputs": outs}
     elif state == "cancelled":
         result = {"ok": False, "undo": None, "summary": "Interrupted before it finished.", "outputs": outs}
@@ -664,7 +835,7 @@ def comfy_record(inst, p, now, wfs, live=None, durations=None):
         "cancel_note": None, "result": result, "error": err, "exit_code": None, "command": [], "log": None,
         "parent": None, "children": [], "boot_id": None,
         "lab": {"source": "comfyui", "instance": inst["name"], "prompt_id": p["prompt_id"], "number": p.get("number"),
-                "workflow": name, "workflow_id": wf["id"] if wf else None, "label": label, "prompt": _cut(words, 300),
+                "workflow": _cut(name, 120), "workflow_id": wf["id"] if wf else None, "label": label, "prompt": _cut(words, 300),
                 "client": _client(extra), "position": p.get("position"), "ahead": p.get("ahead"),
                 "queued_at": created, "ran_at": ran if state != "queued" else None,
                 "elapsed_ms": ((ended_at or now) - ran) if ran and state != "queued" else None,
@@ -795,14 +966,30 @@ def _job_in_memory(env, job_id, kind, title, subject, started):
     return j, clock
 
 
-def _read_feed_lines(path):
+def feed_owners(path):
+    """Whose feed files are read in this file's folder: root's, and the folder owner's (a
+    person's own folder, or one labjobs.toml names). Anyone else's file there is passed over."""
     try:
-        with open(path, "rb") as f:
-            size = os.fstat(f.fileno()).st_size
-            if size > FEED_READ_MAX:
-                f.seek(size - FEED_READ_MAX)
+        return {0, os.stat(os.path.dirname(path) or ".").st_uid}
+    except OSError:
+        return {0}
+
+
+def _read_feed_lines(path):
+    """A feed file's lines: its first (the start) and its last FEED_READ_MAX bytes. A link, a
+    pipe, or a file that isn't root's or its folder owner's is no feed (read_regular's rules)."""
+    fd, st = open_regular(path, feed_owners(path))
+    if fd is None:
+        return []
+    try:
+        with os.fdopen(fd, "rb") as f:
+            if st.st_size > FEED_READ_MAX:
+                head = f.readline(FEED_LINE_MAX + 1)
+                f.seek(st.st_size - FEED_READ_MAX)
                 f.readline()                    # the first, cut line goes
-            data = f.read(FEED_READ_MAX)
+                data = head + f.read(FEED_READ_MAX)
+            else:
+                data = f.read(FEED_READ_MAX)
     except OSError:
         return []
     out = []
@@ -913,7 +1100,9 @@ def feed_files(where):
             if n.endswith(".jsonl") and RUN_OK.match(n[:-6]):
                 p = os.path.join(d, n)
                 with contextlib.suppress(OSError):
-                    files.append((os.path.getmtime(p), p))
+                    st = os.lstat(p)
+                    if stat.S_ISREG(st.st_mode):        # a link or a pipe in its place is no feed
+                        files.append((st.st_mtime, p))
         out += [p for _, p in sorted(files, reverse=True)[:FEED_RUNS]]
     return out
 
@@ -1049,13 +1238,24 @@ def read_state(where):
     now = where.env.now_ms()
     for state, media in where.state_dirs():
         doc = None
-        with contextlib.suppress(OSError, ValueError):
-            with open(os.path.join(state, "jobs.json")) as f:
-                doc = json.load(f)
+        data = read_regular(os.path.join(state, "jobs.json"), JSON_MAX * 2, state_owners(where, state))
+        with contextlib.suppress(ValueError, TypeError):
+            doc = json.loads(data) if data else None
         if isinstance(doc, dict) and isinstance(doc.get("at"), int) and 0 <= now - doc["at"] <= STATE_FRESH_MS \
                 and isinstance(doc.get("jobs"), list):
-            return doc, media
+            return clean_doc(doc), media
     return None, None
+
+
+def state_owners(where, state):
+    """Whose jobs.json a reader trusts: the machine's follower's (or root's) in the machine's
+    folder; this person's own in theirs. None in a stand-in root (the tests' own files)."""
+    if where.env.stand_in or where.env.environ.get("BROMIGOS_LABJOBS_STATE"):
+        return None
+    if state == where.path(SYSTEM_STATE):
+        uid = owner_uid()
+        return {0} | ({uid} if uid is not None else set())
+    return {os.getuid()}
 
 
 def jobs(env=None, where=None, live=True, feeds=True, comfy=True, http=None, files=True):
@@ -1102,8 +1302,9 @@ def _order(r):
 
 
 def find(env, text, where=None, http=None):
-    """A lab job by its whole id, or by a part only one has. KeyError otherwise."""
-    all_jobs = jobs(env, where, http=http)
+    """A lab job by its whole id, or by a part only one has. KeyError otherwise. A ComfyUI
+    prompt's id reads no feed file, and a feed's no ComfyUI."""
+    all_jobs = jobs(env, where, http=http, feeds=not COMFY_ID.match(text or ""), comfy=not FEED_ID.match(text or ""))
     hits = [j for j in all_jobs if j["id"] == text] or [j for j in all_jobs if text and text in j["id"]]
     if len(hits) != 1:
         raise KeyError(f"no job {text!r}" if not hits else f"{text!r} matches {len(hits)} jobs: " + ", ".join(h["id"] for h in hits[:5]))
@@ -1174,12 +1375,14 @@ def hand_off(where, job_id, wait=10.0):
     end = time.monotonic() + wait
     answer = os.path.join(where.state_dir(), "answers", rid + ".json")
     try:
+        uid = owner_uid()
+        owners = None if where.env.stand_in or uid is None else {uid}
         while time.monotonic() < end:
-            with contextlib.suppress(OSError, ValueError):
-                with open(answer) as f:
-                    doc = json.load(f)
+            data = read_regular(answer, 64 * 1024, owners)
+            with contextlib.suppress(ValueError, TypeError):
+                doc = json.loads(data) if data else None
                 if isinstance(doc, dict) and doc.get("id") == rid:
-                    return doc
+                    return clean_doc(doc)
             time.sleep(0.1)
         return None
     finally:
@@ -1213,22 +1416,44 @@ MEDIA_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "g
 
 class Media:
     """The follower's media folder: files named by what they hold (<kind>-<16 hex>.<type>), so a
-    name never changes meaning and a browser may keep it. Bounded: the oldest go first."""
+    name never changes meaning and a browser may keep it. Bounded, hard: a file that would take
+    it past `total` makes room (the oldest go, the ones shown last), or isn't kept."""
 
     def __init__(self, folder, total=MEDIA_TOTAL):
         self.folder, self.total = folder, total
         os.makedirs(folder, mode=0o750, exist_ok=True)
+        self.keep = set()
+
+    def _files(self):
+        out = []
+        try:
+            names = os.listdir(self.folder)
+        except OSError:
+            return out
+        for n in names:
+            if MEDIA_NAME.match(n):
+                with contextlib.suppress(OSError):
+                    st = os.lstat(os.path.join(self.folder, n))
+                    out.append((st.st_mtime, st.st_size, n))
+        return out
+
+    def used(self):
+        return sum(s for _, s, _ in self._files())
 
     def put(self, data, prefix="of"):
         ext = sniff(data)
-        if ext is None or len(data) > MEDIA_MAX:
+        if ext is None or len(data) > MEDIA_MAX or len(data) > self.total:
             return None
         name = f"{prefix}-{hashlib.sha256(data).hexdigest()[:16]}.{ext}"
         path = os.path.join(self.folder, name)
-        if os.path.exists(path):
+        if os.path.lexists(path):
             with contextlib.suppress(OSError):
-                os.utime(path)
+                os.utime(path, follow_symlinks=False)
             return name
+        if self.used() + len(data) > self.total:
+            self.prune(self.keep, room=len(data))
+            if self.used() + len(data) > self.total:
+                return None
         tmp = os.path.join(self.folder, f".{name}.{secrets.token_hex(4)}.tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
         try:
@@ -1241,11 +1466,13 @@ class Media:
         return name
 
     def thumb(self, data):
-        """A small WebP of an image (Pillow), or None when it can't make one."""
+        """A small WebP of an image (Pillow), or None when it can't make one: a picture of more
+        than IMAGE_PIXELS_MAX pixels is never decoded (safe_image)."""
         try:
             import io
-            from PIL import Image
-            im = Image.open(io.BytesIO(data))
+            im = safe_image(data)
+            if im is None:
+                return None
             im.thumbnail((THUMB_PX, THUMB_PX))
             if im.mode not in ("RGB", "RGBA"):
                 im = im.convert("RGBA")
@@ -1255,28 +1482,58 @@ class Media:
         except Exception:
             return None
 
-    def prune(self, keep=()):
-        try:
-            files = [(os.path.getmtime(os.path.join(self.folder, n)), n) for n in os.listdir(self.folder) if MEDIA_NAME.match(n)]
-        except OSError:
-            return
-        size = 0
-        for _, n in sorted(files, reverse=True):
-            p = os.path.join(self.folder, n)
-            with contextlib.suppress(OSError):
-                s = os.path.getsize(p)
-                if size + s > self.total and n not in keep:
-                    os.unlink(p)
-                else:
-                    size += s
+    def prune(self, keep=(), room=0):
+        """The folder within `total` less `room`: files not in `keep` go first, oldest first;
+        then, if it is still over, the kept ones too, oldest first. The total is a hard limit."""
+        files = sorted(self._files())                 # oldest first
+        size = sum(s for _, s, _ in files) + room
+        for pass_keep in (False, True):
+            for _, s, n in files:
+                if size <= self.total:
+                    return
+                if (n in keep) != pass_keep:
+                    continue
+                with contextlib.suppress(OSError):
+                    os.unlink(os.path.join(self.folder, n))
+                    size -= s
+
+
+def safe_image(data):
+    """A Pillow image of `data`, or None: its size is read from its header first, and a picture
+    of more than IMAGE_PIXELS_MAX pixels (a decompression bomb) is never decoded."""
+    try:
+        import io
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = IMAGE_PIXELS_MAX
+        im = Image.open(io.BytesIO(data))
+        w, h = im.size
+        if w * h > IMAGE_PIXELS_MAX:
+            return None
+        im.load()
+        return im
+    except Exception:
+        return None
 
 
 def media_path(folder, name):
-    """The file of a media name in `folder`, or None: the name must be one the follower makes."""
+    """The file of a media name in `folder`, or None: the name must be one the follower makes,
+    and the file a regular one (not a link). Who serves it opens it with open_media."""
     if not isinstance(name, str) or not MEDIA_NAME.match(name):
         return None
     p = os.path.join(folder, name)
-    return p if os.path.isfile(p) and not os.path.islink(p) else None
+    try:
+        return p if stat.S_ISREG(os.lstat(p).st_mode) else None
+    except OSError:
+        return None
+
+
+def open_media(folder, name, owners=None):
+    """(fd, stat) of a media file by its name, opened without following a link, a regular file
+    owned by one of `owners` (the follower's user), or (None, None). For whoever serves it: the
+    file it checked is the file it sends."""
+    if not isinstance(name, str) or not MEDIA_NAME.match(name):
+        return None, None
+    return open_regular(os.path.join(folder, name), owners)
 
 
 def _under(path, roots):
@@ -1285,6 +1542,16 @@ def _under(path, roots):
 
 
 # ------------------------------------------------------------------ the follower
+
+def _ws_connect(connect, url):
+    """A websocket to a ComfyUI: messages of WS_MAX bytes at most, four waiting at most, and no
+    proxy from the environment (websockets 15 and newer use one by default)."""
+    kw = dict(max_size=WS_MAX, max_queue=4, open_timeout=TIMEOUT_S, close_timeout=1)
+    try:
+        return connect(url, proxy=None, **kw)
+    except TypeError:                # websockets before 15: no proxy support, so none is used
+        return connect(url, **kw)
+
 
 class Follower:
     """Follows every configured ComfyUI and feed folder and keeps <state>/jobs.json and the media
@@ -1408,20 +1675,24 @@ class Follower:
             p["preview"] = {"media": media, "at": self.where.env.now_ms()}
             p["seen"] = True
 
-    def _ws_loop(self, inst):
+    def _ws_loop(self, inst, gone):
+        """`gone` ends this instance's socket alone (it left labjobs.toml, or its address changed)."""
         try:
             from websockets.sync.client import connect
         except ImportError:
             self._say(inst["name"], "ws", "live progress needs python-websockets: queue and results only")
             return
         delay = 1.0
-        url = inst["url"].replace("http", "ws", 1) + "/ws?clientId=" + WATCH_PREFIX + secrets.token_hex(8)
-        while not self.stop.is_set():
+        # the relay node copies other clients' progress only to a watcher that names its token
+        token = re.sub(r"[^A-Za-z0-9]", "", inst.get("relay_token") or "")
+        cid = WATCH_PREFIX + (token + "-" if token else "") + secrets.token_hex(8)
+        url = inst["url"].replace("http", "ws", 1) + "/ws?clientId=" + cid
+        while not self.stop.is_set() and not gone.is_set():
             try:
-                with connect(url, max_size=32 * 1024 * 1024, open_timeout=TIMEOUT_S, close_timeout=1) as ws:
+                with _ws_connect(connect, url) as ws:
                     self.ws_up[inst["name"]] = True
                     delay = 1.0
-                    while not self.stop.is_set():
+                    while not self.stop.is_set() and not gone.is_set():
                         try:
                             msg = ws.recv(timeout=1.0)
                         except TimeoutError:
@@ -1430,7 +1701,7 @@ class Follower:
             except Exception:
                 pass
             self.ws_up[inst["name"]] = False
-            self.stop.wait(delay)
+            gone.wait(delay)
             delay = min(30.0, delay * 2)
 
     # -- one pass
@@ -1446,6 +1717,9 @@ class Follower:
         outs = []
         for o in (rec.get("result") or {}).get("outputs") or []:
             o = dict(o)
+            outs.append(o)
+            if self.media.used() >= self.media.total * 0.9:      # no room: listed, not fetched
+                continue
             q = urllib.parse.urlencode({"filename": o["filename"], "subfolder": o["subfolder"], "type": o["type"]})
             with contextlib.suppress(Exception):
                 data = http.fetch("/view?" + q)
@@ -1453,11 +1727,10 @@ class Follower:
                     o["media"] = self.media.put(data, "of")
                     if o["media"] and o["kind"] == "image":
                         o["thumb"] = self.media.thumb(data) or o["media"]
-            outs.append(o)
         self.cached[key] = outs
         return outs
 
-    def _feed_media(self, rec):
+    def _feed_media(self, rec, seen):
         roots = [os.path.dirname(rec["lab"]["file"])] + config(self.where)["media_roots"]
         for m in rec["lab"]["media"] + rec["lab"]["outputs"] + ([rec["lab"]["preview"]] if rec["lab"]["preview"] else []):
             p = m.get("path")
@@ -1465,17 +1738,25 @@ class Follower:
                 continue
             if self.where.system and not _under(p, roots):
                 continue
+            # opened once, not followed through a link, a regular file; and where it really is
+            # (the open file's own path) is checked again against the roots
+            fd, st = open_regular(p)
+            if fd is None:
+                continue
+            seen.add(p)
             try:
-                st = os.stat(p)
+                if self.where.system and not _under(os.readlink(f"/proc/self/fd/{fd}"), roots):
+                    continue
+                hit = self.feed_media.get(p)
+                data = None
+                if (not hit or hit[0] != st.st_mtime) and st.st_size <= MEDIA_MAX:
+                    with contextlib.suppress(OSError):
+                        data = os.read(fd, MEDIA_MAX + 1)
             except OSError:
                 continue
-            hit = self.feed_media.get(p)
+            finally:
+                os.close(fd)
             if not hit or hit[0] != st.st_mtime:
-                data = None
-                with contextlib.suppress(OSError):
-                    if st.st_size <= MEDIA_MAX:
-                        with open(p, "rb") as f:
-                            data = f.read(MEDIA_MAX + 1)
                 name = self.media.put(data, "fm") if data else None
                 thumb = self.media.thumb(data) if name and sniff(data) in ("png", "jpg", "webp", "gif") else None
                 hit = self.feed_media[p] = (st.st_mtime, name, thumb or name)
@@ -1486,7 +1767,18 @@ class Follower:
         now = self.where.env.now_ms()
         wfs = workflows(self.where)
         records, notes = [], []
-        for inst in instances(self.where):
+        insts = instances(self.where)
+        # an instance that left the settings: its socket ends, and what was kept of it goes
+        names = {i["name"] for i in insts}
+        for name in [n for n in self.threads if n not in names]:
+            self.threads.pop(name)[0].set()
+        with self.lock:
+            for name in [n for n in self.live if n not in names]:
+                del self.live[name]
+        for key in [k for k in list(self.cached) + list(self.preview_at) if k[0] not in names]:
+            self.cached.pop(key, None)
+            self.preview_at.pop(key, None)
+        for inst in insts:
             http = self.http.get(inst["name"]) or Http(inst["url"])
             if not self.http and not reachable(inst["url"]):
                 if not inst.get("quiet"):
@@ -1498,10 +1790,13 @@ class Follower:
             except Exception as e:
                 notes.append({"name": inst["name"], "state": "down", "words": _why(e), "live": False, "relay": False})
                 continue
-            if self.use_ws and inst["name"] not in self.threads:
-                t = threading.Thread(target=self._ws_loop, args=(inst,), daemon=True, name=f"ws-{inst['name']}")
-                self.threads[inst["name"]] = t
-                t.start()
+            key = (inst["url"], inst.get("relay_token") or "")
+            if self.use_ws and (inst["name"] not in self.threads or self.threads[inst["name"]][1] != key):
+                if inst["name"] in self.threads:
+                    self.threads[inst["name"]][0].set()
+                gone = threading.Event()
+                threading.Thread(target=self._ws_loop, args=(inst, gone), daemon=True, name=f"ws-{inst['name']}").start()
+                self.threads[inst["name"]] = (gone, key)
             with self.lock:
                 for e in _entries(queue, history):
                     self.graphs[(inst["name"], e["prompt_id"])] = e["graph"]
@@ -1520,15 +1815,21 @@ class Follower:
             with self.lock:
                 for pid in [p for p in self.live.get(inst["name"], {}) if p not in known]:
                     del self.live[inst["name"]][pid]
+                for key in [k for k in list(self.cached) + list(self.preview_at) if k[0] == inst["name"] and k[1] not in known]:
+                    self.cached.pop(key, None)
+                    self.preview_at.pop(key, None)
                 for key in [k for k in self.graphs if k[0] == inst["name"] and k[1] not in known]:
                     del self.graphs[key]
                 pend = self._pending_preview
                 if pend and pend[0] == inst["name"]:
                     self._pending_preview = None
                     self._store_preview(pend[0], pend[1], pend[2], self.live.setdefault(inst["name"], {}))
+        seen = set()
         for r in feed_records(self.where, now):
-            self._feed_media(r)
+            self._feed_media(r, seen)
             records.append(r)
+        for p in [p for p in self.feed_media if p not in seen]:
+            del self.feed_media[p]
         records.sort(key=_order)
         self.handle_asks()
         keep = set()
@@ -1537,6 +1838,7 @@ class Follower:
             for m in [lab.get("preview")] + list(lab.get("media") or []) + list((r.get("result") or {}).get("outputs") or []):
                 if isinstance(m, dict):
                     keep.update(x for x in (m.get("media"), m.get("thumb")) if x)
+        self.media.keep = keep
         self.media.prune(keep)
         self.write({"schema": SCHEMA, "at": now, "instances": notes, "jobs": records})
         return records
@@ -1570,9 +1872,9 @@ class Follower:
                 continue
             self.answered.add(rid)
             doc = None
-            with contextlib.suppress(OSError, ValueError):
-                with open(os.path.join(folder, n)) as f:
-                    doc = json.load(f)
+            data = read_regular(os.path.join(folder, n), 64 * 1024, None if self.where.env.stand_in else {0})
+            with contextlib.suppress(ValueError, TypeError):
+                doc = json.loads(data) if data else None
             if not isinstance(doc, dict) or doc.get("id") != rid or doc.get("verb") != "cancel":
                 continue
             if not isinstance(doc.get("at"), int) or abs(self.where.env.now_ms() - doc["at"]) > 60_000:
@@ -1642,9 +1944,11 @@ def kitty_image(data, cols=40, rows=14, image_id=7311):
     if sniff(data) != "png":
         try:
             import io
-            from PIL import Image
+            im = safe_image(data)            # (never a picture of more than IMAGE_PIXELS_MAX pixels)
+            if im is None:
+                return None
             out = io.BytesIO()
-            Image.open(io.BytesIO(data)).convert("RGBA").save(out, format="PNG")
+            im.convert("RGBA").save(out, format="PNG")
             data = out.getvalue()
         except Exception:
             return None
