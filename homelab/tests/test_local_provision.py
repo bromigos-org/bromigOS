@@ -920,6 +920,12 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertTrue(L.studio_lock(host))
         self.assertIn("security_level = strong", Path(self.root, "srv/apps/comfyui/user/__manager/config.ini").read_text())
         self.assertFalse(L.studio_lock(host), "nothing to change the second time")
+        # the Lab board follows the studio's jobs: it names itself in labjobs.toml, once
+        labjobs = Path(self.root, "etc/bromigos/labjobs.toml")
+        self.assertIn('url = "http://127.0.0.1:8188"', labjobs.read_text())
+        labjobs.write_text("# mine\n")
+        L.prepare_comfyui(host, None)
+        self.assertEqual(labjobs.read_text(), "# mine\n", "the owner's file is never written again")
 
     def test_an_amd_card_needs_no_toolkit(self):
         host = self.host(["comfyui"], hw=dict(HW, gpu="amd", gpu_vram_gb=24, disk_gb=900, ram_gb=64))

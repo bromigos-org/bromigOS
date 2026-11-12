@@ -1112,7 +1112,8 @@ program that writes it stops it.
   `bromigos-board-lab-start.service`, as root. That writes the follower's addresses (below)
   and starts it. It stops when nobody has looked for 45 seconds.
 - It reads the ComfyUIs in `/etc/bromigos/labjobs.toml`, and only those: this machine's own
-  too must be named there (`url = "http://127.0.0.1:8188"`). It reads the system's feed
+  too must be named there (`url = "http://127.0.0.1:8188"`). Setting up the Creation studio
+  writes that file once, naming the studio; after that it is yours. It reads the system's feed
   folder, `/var/lib/bromigos/activity/feed`, too.
 - It may connect to those ComfyUIs' exact addresses and nowhere else. The starter writes them
   to `/run/systemd/system/bromigos-board-lab.service.d/50-allow.conf` (`IPAddressAllow`,

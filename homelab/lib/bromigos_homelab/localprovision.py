@@ -1387,7 +1387,19 @@ def studio_lock(host):
     return changed
 
 
+# The Lab board follows only the ComfyUIs labjobs.toml names (docs/board.md, "The lab's jobs"):
+# the studio names itself there, once. The file is the owner's after that: never written again.
+STUDIO_LABJOBS = """# bromigos lab provision --local: the ComfyUIs the Lab board shows the jobs of (docs/board.md,
+# "The lab's jobs"). Written once, when the Creation studio was set up; yours to change.
+[[comfyui]]
+name = "studio"
+url = "http://127.0.0.1:8188"
+"""
+
+
 def prepare_comfyui(host, it):
+    if not host.path("etc/bromigos/labjobs.toml").exists():
+        host.write("etc/bromigos/labjobs.toml", STUDIO_LABJOBS)
     return studio_lock(host)
 
 
