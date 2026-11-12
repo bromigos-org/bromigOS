@@ -593,6 +593,6 @@ test("every request that changes something carries the header and JSON; nothing 
   await openReal(page, s, "home");
   for (const place of PLACES) await go(page, place);
   const asked = [...new Set(s.seen.map((x) => `${x.method} ${x.path}`))].sort();
-  expect(asked).toEqual(["GET /api/activity", "GET /api/board", "GET /api/door", "GET /api/session", "GET /api/vitals"]);
+  expect(asked).toEqual(["GET /api/activity", "GET /api/board", "GET /api/door", "GET /api/lab", "GET /api/session", "GET /api/vitals"]);
   expect(s.seen.filter((x) => x.method !== "GET")).toEqual([]);
 });
