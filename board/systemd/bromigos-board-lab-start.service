@@ -1,0 +1,29 @@
+# The Lab board's lab follower, started (docs/board.md, "The lab's jobs"): as root, it writes the
+# drop-in that lets bromigos-board-lab.service connect to the exact addresses of the ComfyUIs in
+# /etc/bromigos/labjobs.toml and nowhere else (systemd reloads when it changed), then starts the
+# follower. bromigos-board-lab.path starts this when the API marks `wanted`.
+[Unit]
+Description=bromigOS Lab board: start the lab follower with its addresses
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-activity follow --system --allow-dropin /run/systemd/system/bromigos-board-lab.service.d/50-allow.conf
+ExecStart=/usr/bin/systemctl start --no-block bromigos-board-lab.service
+ProtectSystem=strict
+ReadWritePaths=/run/systemd/system
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# names are resolved (getaddrinfo) through this machine's resolver only
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=localhost

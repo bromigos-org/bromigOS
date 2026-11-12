@@ -2,9 +2,10 @@
 # keeps the lab's creation jobs (ComfyUI generations and job feeds, docs/activity.md "Lab jobs")
 # in /run/bromigos-labjobs/jobs.json, with their previews and outputs in
 # /var/cache/bromigos-labjobs, for the API to read and serve. Started with the reader while a
-# signed-in browser is connected (bromigos-board-lab.path); it stops when nobody has looked for
-# 45 seconds. Its own user; it reads the network, listens on none, and talks only to private
-# addresses: the lab's ComfyUIs.
+# signed-in browser is connected (bromigos-board-lab.path, through bromigos-board-lab-start.service);
+# it stops when nobody has looked for 45 seconds. Its own user; it listens on nothing, and may
+# connect only to the exact addresses of the ComfyUIs in /etc/bromigos/labjobs.toml (the drop-in
+# bromigos-board-lab-start.service writes before it starts it; none without that file).
 [Unit]
 Description=bromigOS Lab board: follow the lab's creation jobs
 Documentation=file:///usr/share/doc/bromigos-board/board.md
@@ -46,10 +47,11 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
-# out to the lab's ComfyUIs: this machine and private addresses only, and no listening socket
+# out to the lab's ComfyUIs only: IPAddressAllow comes from the drop-in
+# /run/systemd/system/bromigos-board-lab.service.d/50-allow.conf (labjobs.toml's exact addresses);
+# with none, nowhere. And no listening socket.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any
-IPAddressAllow=localhost link-local 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
 SocketBindDeny=any
 MemoryMax=256M
 TasksMax=32

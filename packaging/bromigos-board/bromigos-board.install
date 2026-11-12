@@ -45,7 +45,8 @@ post_upgrade() {
 pre_remove() {
   systemctl disable --now bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path \
     bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service \
-    bromigos-board-lab.path bromigos-board-lab.service >/dev/null 2>&1 || true
+    bromigos-board-lab.path bromigos-board-lab-start.service bromigos-board-lab.service >/dev/null 2>&1 || true
+  rm -rf run/systemd/system/bromigos-board-lab.service.d 2>/dev/null || true
   if [ -e etc/caddy/conf.d/bromigos-board.caddy ]; then
     rm -f etc/caddy/conf.d/bromigos-board.caddy
     systemctl reload caddy.service >/dev/null 2>&1 || true

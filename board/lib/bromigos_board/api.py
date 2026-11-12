@@ -32,8 +32,8 @@ import sys
 import time
 
 from starlette.applications import Starlette
-from starlette.concurrency import run_in_threadpool
-from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from . import SCHEMA, actions, auth, board, door, net, paths
@@ -430,11 +430,35 @@ async def get_lab_media(request):
     name = request.path_params["name"]
     _, folder = await run_in_threadpool(lab_state)
     L = _labjobs()
-    path = L.media_path(folder or paths.at(L.SYSTEM_MEDIA), name)
-    if not path:
+    # the file is opened once, without following a link, and must be a regular file of the
+    # follower's own user; what is sent is read from that descriptor, never opened again by name
+    fd, st = L.open_media(folder or paths.at(L.SYSTEM_MEDIA), name, media_owners())
+    if fd is None:
         return error(404, ("no-media", "The lab keeps no such picture: it may have made room for newer ones."))
     kind = L.MEDIA_TYPES[name.rsplit(".", 1)[1]]
-    return FileResponse(path, media_type=kind, headers=dict(MEDIA_HEADERS))
+
+    def chunks():
+        try:
+            left = st.st_size
+            while left > 0:
+                b = os.read(fd, min(left, 256 * 1024))
+                if not b:
+                    break
+                left -= len(b)
+                yield b
+        finally:
+            os.close(fd)
+    return StreamingResponse(iterate_in_threadpool(chunks()), media_type=kind,
+                             headers=dict(MEDIA_HEADERS, **{"Content-Length": str(st.st_size)}))
+
+
+def media_owners():
+    """Whose media files the API serves: the lab follower's user's (bromigos-labjobs). None in a
+    stand-in root (the tests' own files)."""
+    if paths.stand_in():
+        return None
+    uid = _labjobs().owner_uid()
+    return {uid} if uid is not None else set()
 
 
 async def post_actions(request):

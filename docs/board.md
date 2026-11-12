@@ -1108,13 +1108,20 @@ program that writes it stops it.
 **On the server.** The API has no network, so a follower of its own reads the lab:
 
 - `bromigos-board-lab.service` runs `bromigos activity follow --system` as its own user,
-  `bromigos-labjobs`. `bromigos-board-lab.path` starts it when the API marks `wanted`, as
-  the reader starts. It stops when nobody has looked for 45 seconds.
-- It reads the ComfyUIs in `/etc/bromigos/labjobs.toml`. With none set, it reads this
-  machine's own at `http://127.0.0.1:8188`, when something answers there. It reads the
-  system's feed folder, `/var/lib/bromigos/activity/feed`, too.
-- It may connect only to this machine and private addresses (`IPAddressAllow`). It can't
-  bind a socket, so it opens no port. It writes only its two folders.
+  `bromigos-labjobs`. When the API marks `wanted`, `bromigos-board-lab.path` starts
+  `bromigos-board-lab-start.service`, as root. That writes the follower's addresses (below)
+  and starts it. It stops when nobody has looked for 45 seconds.
+- It reads the ComfyUIs in `/etc/bromigos/labjobs.toml`, and only those: this machine's own
+  too must be named there (`url = "http://127.0.0.1:8188"`). It reads the system's feed
+  folder, `/var/lib/bromigos/activity/feed`, too.
+- It may connect to those ComfyUIs' exact addresses and nowhere else. The starter writes them
+  to `/run/systemd/system/bromigos-board-lab.service.d/50-allow.conf` (`IPAddressAllow`,
+  resolved from labjobs.toml; `bromigos activity follow --allow-dropin`), and systemd reloads
+  when they changed. With no labjobs.toml it may connect nowhere. It follows no redirect. It
+  can't bind a socket, so it opens no port. It writes only its two folders.
+- With the relay node's token (labjobs.toml's `relay_token`, a file the `bromigos-labjobs`
+  user can read, such as `/etc/bromigos/comfyui-relay.token`, 0640, group
+  `bromigos-labjobs`), it gets every prompt's progress and pictures live.
 - It writes `/run/bromigos-labjobs/jobs.json`, and keeps previews, thumbnails and outputs in
   `/var/cache/bromigos-labjobs/` (512 MB at most). Both folders are setgid
   `bromigos-board`, so the API's group reads them.
@@ -1125,7 +1132,7 @@ The API passes these on:
 |---|---|
 | `GET /api/activity` | The lab's records join the stream, from `jobs.json` only. A feed's own paths are never in them |
 | `GET /api/lab` | `{following, at, instances: [{name, state, words, live, relay}]}`: the follower's word on each ComfyUI |
-| `GET /api/lab/media/NAME` | One of the follower's files. NAME must be one the follower makes (`pv-`, `th-`, `of-`, `fm-`, 16 hex digits, a picture, clip or model type); anything else, or a link, is 404. Served with its own type, `nosniff`, a sandboxing policy, and kept by the browser (the name is the content) |
+| `GET /api/lab/media/NAME` | One of the follower's files. NAME must be one the follower makes (`pv-`, `th-`, `of-`, `fm-`, 16 hex digits, a picture, clip or model type). The file is opened once without following a link, must be a regular file owned by `bromigos-labjobs`, and is sent from that open file; anything else is 404. Served with its own type, `nosniff`, a sandboxing policy, and kept by the browser (the name is the content) |
 
 A Stop goes the existing way: the page, the requests folder, root's helper, then
 `bromigos-activity cancel ID --json`. That command has no network inside the helper's

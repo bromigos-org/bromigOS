@@ -108,10 +108,16 @@ class Lab(Base):
         self.assertEqual(r.headers["x-content-type-options"], "nosniff")
         self.assertIn("sandbox", r.headers["content-security-policy"])
         self.assertIn("immutable", r.headers["cache-control"])
+        # a file that isn't the follower's own user's isn't served
+        from bromigos_board import api as API
+        from unittest import mock
+        with mock.patch.object(API, "media_owners", return_value={os.getuid() + 12345}):
+            self.assertEqual(self.c.get(f"/api/lab/media/{name}").status_code, 404)
         media = self.root / "var/cache/bromigos-labjobs"
         os.symlink("/etc/passwd", media / "of-00000000000000aa.png")
+        os.mkfifo(media / "of-00000000000000bb.png")
         (media / "notes.txt").write_text("x")
-        for bad in ("of-00000000000000aa.png", "notes.txt", "..%2Fjobs.json", "of-0000000000000000.svg", "of-0000000000000000.png"):
+        for bad in ("of-00000000000000aa.png", "of-00000000000000bb.png", "notes.txt", "..%2Fjobs.json", "of-0000000000000000.svg", "of-0000000000000000.png"):
             r = self.c.get(f"/api/lab/media/{bad}")
             self.assertEqual(r.status_code, 404, bad)
             self.assertNotIn(b"root:", r.content)
@@ -158,9 +164,15 @@ class FollowerUnit(unittest.TestCase):
         self.assertEqual((svc["User"], svc["Group"]), ("bromigos-labjobs", "bromigos-labjobs"))
         self.assertTrue(svc["ExecStart"].startswith("/usr/lib/bromigos/bin/bromigos-activity follow --system"))
         self.assertEqual(svc["IPAddressDeny"], "any")
-        allow = svc["IPAddressAllow"].split()
-        self.assertNotIn("any", allow)
-        self.assertTrue(all(a in ("localhost", "link-local") or a.startswith(("10.", "172.16.", "192.168.", "100.64.", "fc00:")) for a in allow), allow)
+        # no range of its own: the exact addresses come from the drop-in the starter writes
+        self.assertNotIn("IPAddressAllow", svc)
+        start = unit("bromigos-board-lab-start.service")
+        self.assertIn("--allow-dropin /run/systemd/system/bromigos-board-lab.service.d/50-allow.conf",
+                      " ".join(unit_lines("bromigos-board-lab-start.service", "ExecStart")))
+        self.assertEqual(unit_lines("bromigos-board-lab-start.service", "ExecStart")[-1],
+                         "/usr/bin/systemctl start --no-block bromigos-board-lab.service")
+        self.assertEqual((start["IPAddressDeny"], start["IPAddressAllow"]), ("any", "localhost"))
+        self.assertEqual(unit("bromigos-board-lab.path")["Unit"], "bromigos-board-lab-start.service")
         self.assertEqual(svc["SocketBindDeny"], "any")
         self.assertEqual(svc["RestrictAddressFamilies"], "AF_UNIX AF_INET AF_INET6")
         self.assertEqual(set(" ".join(unit_lines("bromigos-board-lab.service", "ReadWritePaths")).split()),

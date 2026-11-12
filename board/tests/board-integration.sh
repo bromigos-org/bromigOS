@@ -435,6 +435,8 @@ section "the lab follower: its own user and folders, the lab's jobs in the strea
 [[ $(owner /run/bromigos-labjobs) == "bromigos-labjobs:$board 2750" ]] || fail "/run/bromigos-labjobs is $(owner /run/bromigos-labjobs)"
 [[ $(owner /var/cache/bromigos-labjobs) == "bromigos-labjobs:$board 2750" ]] || fail "/var/cache/bromigos-labjobs is $(owner /var/cache/bromigos-labjobs)"
 [[ $(owner /run/bromigos-labjobs-asks) == "root:bromigos-labjobs 2750" ]] || fail "the asks folder is $(owner /run/bromigos-labjobs-asks)"
+# one ComfyUI named (nothing listens there): the follower may connect to that address and no other
+printf '[[comfyui]]\nname = "studio"\nurl = "http://127.0.0.1:18188"\n' > /etc/bromigos/labjobs.toml
 # a pipeline run in the system's feed folder, written as root does
 /usr/lib/bromigos/bin/bromigos-activity emit ci-run start --title "A pipeline run" || fail "emit start"
 /usr/lib/bromigos/bin/bromigos-activity emit ci-run ::step shape running Shaping the model || fail "emit a step"
@@ -442,6 +444,9 @@ section "the lab follower: its own user and folders, the lab's jobs in the strea
 wait_for 30 systemctl is-active -q bromigos-board-lab.service || { journalctl -u bromigos-board-lab.service --no-pager -n 40; fail "the page is open, and the lab follower didn't start"; }
 wait_for 30 grep -q feed-ci-run /run/bromigos-labjobs/jobs.json || { journalctl -u bromigos-board-lab.service --no-pager -n 40; fail "the follower wrote no jobs.json with the run"; }
 [[ $(owner /run/bromigos-labjobs/jobs.json) == "bromigos-labjobs:$board 640" ]] || fail "jobs.json is $(owner /run/bromigos-labjobs/jobs.json)"
+allow=$(systemctl show -P IPAddressAllow bromigos-board-lab.service)
+[[ $allow == 127.0.0.1* ]] || fail "the follower may connect to: '$allow' (only labjobs.toml's address)"
+[[ $(systemctl show -P IPAddressDeny bromigos-board-lab.service) == *0.0.0.0/0* ]] || fail "the follower's deny isn't everything"
 fpid=$(systemctl show -P MainPID bromigos-board-lab.service)
 grep -q '^NoNewPrivs:[[:space:]]*1' "/proc/$fpid/status" || fail "the follower may gain privileges"
 ! nsenter -t "$fpid" -m -S "$(id -u bromigos-labjobs)" -G "$(id -g bromigos-labjobs)" -- cat /run/bromigos-board/board.json >/dev/null 2>&1 \
