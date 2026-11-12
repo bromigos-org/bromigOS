@@ -282,6 +282,25 @@ class Live(unittest.TestCase):
         listed = L.jobs(env, L.Where(env), live=False)
         self.assertEqual({j["id"] for j in listed}, {j["id"] for j in doc["jobs"]})
 
+    def test_with_nothing_to_follow_it_looks_less_often(self):
+        """Between two looks: about 30 s while nothing runs or waits, 2 s while something does."""
+        def between(follower):
+            waits, looks, real = [], [0], follower.pass_once
+
+            def look():
+                looks[0] += 1
+                if looks[0] == 2:
+                    follower.stop.set()
+                return real()
+            follower.pass_once = look
+            follower.run(sleep=waits.append)
+            return sum(waits)
+        idle = L.Follower(self.where, websocket=False, log=lambda w: None,
+                          http={"studio": FakeHttp(queue={"queue_running": [], "queue_pending": []}, history={})})
+        busy = L.Follower(self.where, websocket=False, http={"studio": FakeHttp()}, log=lambda w: None)
+        self.assertGreaterEqual(between(idle), 28)
+        self.assertLessEqual(between(busy), 2.5)
+
     def test_an_old_state_file_isnt_used(self):
         self.f.pass_once()
         doc = json.loads(Path(self.where.state_dir(), "jobs.json").read_text())

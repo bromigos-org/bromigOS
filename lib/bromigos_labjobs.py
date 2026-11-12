@@ -87,6 +87,7 @@ THUMB_PX = 512
 TIMEOUT_S = 4.0
 STATE_FRESH_MS = 15_000     # a follower's jobs.json older than this isn't used
 PREVIEW_EVERY_S = 1.0       # a running prompt's preview is written at most this often
+IDLE_POLL_S = 30.0          # the follower's look while nothing runs or waits (the websocket still says when one starts)
 
 # the stages a graph's nodes fall in, in the order they run, and how much of a job each is
 STAGES = (("load", "Load the models", 10), ("inputs", "Read the inputs", 2), ("prompt", "Read the prompt", 5),
@@ -1294,8 +1295,8 @@ class Follower:
     bromigos-watch-<hex>) for the node that runs, the sampler's steps and the preview frames.
     Outputs of the newest ended prompts are fetched once (/view) and kept, with a thumbnail."""
 
-    def __init__(self, where, poll=2.0, websocket=True, http=None, log=None):
-        self.where, self.poll_s, self.use_ws = where, poll, websocket
+    def __init__(self, where, poll=2.0, websocket=True, http=None, log=None, idle_poll=IDLE_POLL_S):
+        self.where, self.poll_s, self.use_ws, self.idle_poll_s = where, poll, websocket, idle_poll
         self.http = http or {}
         self.log = log or (lambda words: print(words, file=sys.stderr, flush=True))
         self.state = where.state_dir()
@@ -1606,11 +1607,11 @@ class Follower:
             while True:
                 t0 = time.monotonic()
                 try:
-                    self.pass_once()
+                    got = self.pass_once()
                 except OSError as e:
                     self.log(f"bromigos activity follow: can't write {getattr(e, 'filename', None) or self.state}: {e.strerror}")
                     return 1
-                if once:
+                if once or self.stop.is_set():
                     return 0
                 if wanted and idle_s is not None:
                     try:
@@ -1619,7 +1620,16 @@ class Follower:
                         age = None
                     if age is None or age > idle_s:
                         return 0
-                sleep(max(0.2, self.poll_s - (time.monotonic() - t0)))
+                # while nothing runs or waits, a look every 30 s; the websocket's first word of a
+                # prompt (another client's, through the relay) brings the next look forward
+                busy = any(r["state"] in ("queued", "running") for r in got) or any(self.live.values())
+                every = self.poll_s if busy else self.idle_poll_s
+                waited = 0.0
+                while waited < every - (time.monotonic() - t0) and not self.stop.is_set():
+                    sleep(min(self.poll_s, max(0.2, every - (time.monotonic() - t0))))
+                    waited += self.poll_s
+                    if any(self.live.values()):
+                        break
         finally:
             self.stop.set()
 
