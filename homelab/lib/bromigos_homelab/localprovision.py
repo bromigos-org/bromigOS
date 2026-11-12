@@ -258,7 +258,8 @@ def downloads_of(it, hw):
         return ["package " + p for p in inst.get(vendor, inst["pacman"]) if vendor in inst] or \
             ["package " + p for p in inst["pacman"]]
     if "quadlet" in inst:
-        return ["image " + image_ref(it, name, hw).split("@")[0] for name in sorted(image_names(it))]
+        return ["image " + image_ref(it, name, hw).split("@")[0] for name in sorted(image_names(it))] + \
+            list(STEP_DOWNLOADS.get(AFTER.get(it["id"], ""), []))
     return list(STEP_DOWNLOADS.get(inst["step"], []))
 
 
@@ -674,6 +675,18 @@ def install_quadlet(host, it):
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     for u in units:
         host.must(["systemctl", "restart" if changed else "start", u], f"start {u}")
+    if it["id"] in AFTER:                                # what an app needs once it runs (the studio's models)
+        host.steps[AFTER[it["id"]]](host, it)
+
+
+def step_studio_models(host, it):
+    """The Creation studio's models, node packs and workflows (studio.py), once ComfyUI runs."""
+    from . import studio
+    studio.provision_step(host, it)
+
+
+# steps run after an app's own units start, by item
+AFTER = {"comfyui": "studio-models"}
 
 
 def install(host, it):
@@ -1270,7 +1283,8 @@ STEPS = {"k3s": step_k3s, "helm-chart": _helm, "openbao": step_openbao, "monitor
          "backups": step_backups, "caddy": step_caddy, "passwords": step_passwords, "file-sync": step_file_sync,
          "adblock": step_adblock, "smb": step_smb, "backup-target": step_backup_target, "wings": step_wings,
          "models": step_models, "lab-network": step_lab_network, "media-library": step_media_library,
-         "youtube-library": step_youtube_library, "den-tv": step_den_tv, "board": step_board}
+         "youtube-library": step_youtube_library, "den-tv": step_den_tv, "board": step_board,
+         "studio-models": step_studio_models}
 STEP_UNITS = {"k3s": ["k3s.service"], "openbao": ["openbao.service", "bromigos-openbao-unseal.service"],
               "monitoring": ["prometheus.service", "grafana.service"], "backups": ["bromigos-lab-backup.timer"],
               "caddy": ["caddy.service"], "passwords": ["vaultwarden.service"], "file-sync": ["syncthing@syncthing.service"],
@@ -1282,7 +1296,8 @@ STEP_DOWNLOADS = {"k3s": ["k3s " + K3S_VERSION + " from get.k3s.io"], "helm-char
                   "passwords": ["package vaultwarden", "package vaultwarden-web"], "file-sync": ["package syncthing"],
                   "adblock": ["package adguardhome"], "smb": ["package samba"],
                   "wings": ["package docker", "Wings " + WINGS[0] + " (pinned checksum)"], "models": ["the chosen models"],
-                  "board": ["package bromigos-board"]}
+                  "board": ["package bromigos-board"],
+                  "studio-models": ["the models that fit this card, each checked against its sha256"]}
 STEP_PACKAGES = {"openbao": ["openbao"], "monitoring": ["prometheus", "grafana"], "backups": ["restic"], "caddy": ["caddy"],
                  "passwords": ["vaultwarden", "vaultwarden-web"], "file-sync": ["syncthing"], "adblock": ["adguardhome"],
                  "smb": ["samba"], "wings": ["docker"], "helm-chart": ["helm"], "board": ["bromigos-board"]}

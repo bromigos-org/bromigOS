@@ -14,6 +14,12 @@ Art can be made in two places:
 
 Which one makes what is a setting, described [below](#creation-providers).
 
+**No ComfyUI yet?** The Creation studio sets one up on your machine, with the models that
+fit its graphics card and these workflows: tick it in the Server installer, Add it on the
+Lab board, or run `sudo bromigos lab apps add comfyui`. It writes your create.toml so
+`bromigos art` uses it first. Its commands (`bromigos lab studio plan`, `apply`,
+`rollback`) are in [lab.md](lab.md#the-creation-studio).
+
 This page is for contributors who make a world's art. A *world* is a theme whose
 wallpaper is a living scene. The theme format is in [theming.md](theming.md), and where
 AI work runs is in [targets.md](targets.md). The [glossary](../manual/src/glossary.md)
@@ -657,3 +663,11 @@ This records an asset whose outputs exist as made with its current recipe. Use i
 made by hand or by an older script. `--at` takes an RFC 3339 time and defaults to now.
 Mire and Tidewell were seeded this way from the first art pass's script log, with
 `--by "gen.sh (bromigos-worlds)"`. The credits there are what that script recorded.
+
+## Later: models and scenes
+
+Making a world's 3D models and scenes is done with our own tools outside this repository
+today. They may come here as `bromigos art model` and `bromigos art scene`. If they do, they
+fit beside the commands on this page: their jobs route through create.toml's providers, run
+on a ComfyUI such as the [Creation studio](lab.md#the-creation-studio), and are logged with
+their licences. Nothing of them is built here yet.

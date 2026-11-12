@@ -209,6 +209,7 @@ class Variant:
     caps: tuple = ()                 # only these of its model's capabilities (default: all)
     parts: bool = None               # mesh: separate parts (None: the model's)
     built_on: tuple = ()             # parts only this variant brings (an official runtime's extras)
+    files: tuple = ()                # its weights, pinned: ({dest, repo, rev, path, bytes, sha256}, …)
 
     @property
     def key(self):
@@ -388,8 +389,10 @@ class Catalog:
                     v.get("workflow", ""), v.get("quality_delta"), float(v.get("weights_gib", 0)),
                     tuple(v.get("match", ())), v.get("notes", ""),
                     tuple(c for c in (ALIASES.get(c, c) for c in v.get("capabilities", ())) if c in self.caps),
-                    v.get("parts"), self._parts(path, f"{m.get('id')}/{v.get('id')}", v.get("built_on", ()))))
+                    v.get("parts"), self._parts(path, f"{m.get('id')}/{v.get('id')}", v.get("built_on", ())),
+                    tuple(dict(f) for f in v.get("file", ()))))
             self.models[mod.id] = mod
+        self.node_packs = {k: dict(t, id=k) for k, t in (doc.get("node_pack") or {}).items()}
         self.pending = list(doc.get("pending") or [])
         self.archived = list(doc.get("archived") or [])    # pending entries that waited too long, or were added
         self.combos = list(doc.get("combo") or [])
@@ -2160,6 +2163,7 @@ def validate(cat):
                 out.append(f"{m.id}: built_on {p.name!r}: needs a licence or a model")
             if not p.cite and p.licence is not None:
                 out.append(f"{m.id}: built_on {p.name!r}: cite the card or LICENSE it was read from")
+    out += validate_files(cat)
     for c in cat.cap_ids:
         if not cat.variants(c):
             out.append(f"{c}: no models")
@@ -2169,6 +2173,59 @@ def validate(cat):
         if t.parent and t.parent not in cat.caps:
             out.append(f"{c}: parent {t.parent!r} isn't a capability")
     out += [n for n in cat.notes]
+    return out
+
+
+FILE_KEYS = ("dest", "repo", "rev", "path", "bytes", "sha256")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+REV = re.compile(r"[0-9a-f]{40}")
+
+
+def files(cat):
+    """{dest: file row} over every variant's pinned files (the Creation studio's manifest)."""
+    out = {}
+    for m in cat.models.values():
+        for v in m.variants:
+            for f in v.files:
+                out.setdefault(f["dest"], dict(f, variant=v.key))
+    return out
+
+
+def validate_files(cat):
+    """The pinned files and node packs: whole, plain paths, one sha256 for one destination."""
+    out, seen = [], {}
+    for m in cat.models.values():
+        for v in m.variants:
+            for f in v.files:
+                d = str(f.get("dest", ""))
+                missing = [k for k in FILE_KEYS if k not in f]
+                extra = [k for k in f if k not in FILE_KEYS]
+                if missing or extra:
+                    out.append(f"{v.key}: file {d or '?'}: " + "; ".join(
+                        x for x in (f"needs {', '.join(missing)}" if missing else "",
+                                    f"unknown keys {', '.join(extra)}" if extra else "") if x))
+                    continue
+                parts = d.split("/")
+                if len(parts) < 2 or d.startswith("/") or any(p in ("", ".", "..") for p in parts):
+                    out.append(f"{v.key}: file {d!r}: dest is <folder>/<file> inside ComfyUI's models folder")
+                if not SHA256.fullmatch(str(f["sha256"])):
+                    out.append(f"{v.key}: file {d}: sha256 is 64 hex digits")
+                if not REV.fullmatch(str(f["rev"])):
+                    out.append(f"{v.key}: file {d}: rev is the repository's 40-digit commit")
+                if not isinstance(f["bytes"], int) or isinstance(f["bytes"], bool) or f["bytes"] <= 0:
+                    out.append(f"{v.key}: file {d}: bytes is its size, a whole number")
+                if d in seen and seen[d] != f["sha256"]:
+                    out.append(f"{v.key}: file {d}: another variant pins it to a different sha256")
+                seen.setdefault(d, f["sha256"])
+            if v.files and v.runtime != "comfyui":
+                out.append(f"{v.key}: files are for ComfyUI variants")
+    for k, p in cat.node_packs.items():
+        if not str(p.get("repo", "")).startswith("https://"):
+            out.append(f"node_pack {k}: repo is an https:// address")
+        if not REV.fullmatch(str(p.get("commit", ""))):
+            out.append(f"node_pack {k}: commit is a 40-digit commit")
+        if not p.get("classes") or not p.get("licence"):
+            out.append(f"node_pack {k}: needs the node classes it provides and its licence")
     return out
 
 

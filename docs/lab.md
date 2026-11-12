@@ -1162,6 +1162,148 @@ Elsewhere the four commands keep their Phase 2 message.
   keeping a note in its data, added again with `bromigos lab deploy` (the note is there),
   and removed with `--delete-data`. Each add and remove is a job in a unit of its own.
 
+## The Creation studio
+
+The Creation studio is ComfyUI on your own machine, set up with the models that fit its
+graphics card and bromigOS's own workflows. It makes pictures, edits, cutouts, larger
+pictures and clips, video loops and 3D models, for `bromigos art`, VECTOR's create tool
+and your worlds' art, at no cost per picture. It's the same stack our own lab runs. The
+manual's [Creation studio](../manual/src/lab.md#the-creation-studio) is the plain path.
+
+It is one app of the provisioning catalogue, `comfyui` (job "Images, video and 3D"), so
+it's added like any other:
+
+- in the Server installer's checklist, or the Lab board's Supply page (Add);
+- on any machine with `sudo bromigos lab apps add comfyui`.
+
+Adding it runs ComfyUI in a container ([lab-provision.md](lab-provision.md#quadlet-templates))
+and then the studio's own step: it picks the models, fetches them, checks each one, and
+installs the workflows. The code is `homelab/lib/bromigos_homelab/studio.py`.
+
+### What it picks
+
+For each kind of art (create.toml's capabilities), the studio looks at the shipped
+workflows that make it (`core/crates/bromigos-art/workflows/`). Each workflow names its
+catalog variant in `_meta.catalog`. The studio keeps the workflows whose variant the
+[model catalog](lab-models.md) says fits this machine's card, within your licence filter
+and region, and takes the best by the catalog's own score. A workflow's fast sibling, such
+as `qwen-image-2512-lightning`, comes with it.
+
+| Card | What it makes (licences that let you sell what you make, in the US) |
+|---|---|
+| 8 GB | cutouts (Lucida), video loops (Wan 2.2 TI2V 5B) |
+| 12 GB | the same, and 3D models (Hunyuan3D 2.1; not in the EU, the UK or South Korea) |
+| 16 GB | the same, and larger pictures and clips (SeedVR2 7B) |
+| 24 GB and up | everything: pictures (Qwen-Image-2512), edits (Qwen-Image-Edit-2511), cutouts, larger pictures and clips, video loops (Wan 2.2 I2V A14B), 3D models (Pixal3D) |
+
+A desktop's card keeps 1.5 GB for its screen, so a 24 GB desktop card still fits all of
+these. ComfyUI uses the machine's first GPU, and the studio plans for the largest one. On
+a smaller card, `plan` says what the catalog would pick there and that bromigOS has no
+workflow for it yet.
+
+The licence filter is the app's setup field, "Models": `commercial` (the default: only
+models whose licence allows commercial use) or `any` (research and non-commercial models
+too, such as Qwen-Image 2.1). The region comes from the machine's time zone.
+
+### Commands
+
+```bash
+bromigos lab studio                     # what it has: each kind of art, ready or missing files
+bromigos lab studio plan                # what it would install on this card, and why
+bromigos lab studio plan --vram 12 --vendor amd --licence any   # for a card you name
+sudo bromigos lab studio apply          # fetch what's missing, checked; nodes; workflows
+sudo bromigos lab studio rollback video.loop    # put back the model an upgrade replaced
+bromigos lab studio upgrade             # what the upgrade policy would change
+sudo bromigos lab studio upgrade --apply        # change it (= bromigos lab models upgrades --apply)
+```
+
+| Option | For |
+|---|---|
+| `--licence any\|commercial\|permissive` | the licence filter, in place of the setup field |
+| `--region US\|EU\|UK\|KR\|any` | the region, in place of the time zone's |
+| `--goal quality\|balanced\|speed` | the catalog's goal (`balanced` by default) |
+| `--vram GiB`, `--vendor nvidia\|amd` | `plan` for a card this machine doesn't have |
+| `--only WORKFLOW,…` | these workflows only |
+| `--json` | the same, for scripts and Settings |
+
+`apply`, `rollback` and `upgrade --apply` are activity jobs ([activity.md](activity.md)),
+under the `apps` lock, so they queue behind an app being added. They need root: the job
+asks with `sudo` or `pkexec`. Exit codes: 0 done, 1 something is missing or didn't
+download, 2 a usage mistake, 3 refused (not set up, or no root), 4 the catalog couldn't
+be read.
+
+### How a file is fetched
+
+Every file comes from a `[[model.variant.file]]` row of the catalog: a Hugging Face
+repository at a pinned commit, the file's path, its size and its sha256
+([lab-models.md](lab-models.md#files-and-node-packs)).
+
+1. Before anything downloads, the studio adds up what's missing. When that and 10 GB
+   more don't fit on the disk, it leaves out the last kinds of art in the list (3D models
+   first) and says so.
+2. Each file downloads to `<file>.part`. A download that stops is resumed from there.
+3. Only a file whose size and sha256 are right moves into place. One that doesn't match is
+   thrown away, and that kind of art isn't wired up.
+4. A file already there at the right size is read once, to check its sha256, then kept.
+
+`HF_TOKEN`, when set, is sent to Hugging Face. Every file the studio fetches today is
+public.
+
+### Node packs and workflows
+
+A workflow that needs a node class ComfyUI doesn't have gets its node pack, from the
+catalog's `[node_pack.*]`: cloned inside the container at its pinned commit, with its
+Python packages, then ComfyUI restarts. Every shipped workflow but `birefnet` (ComfyUI-RMBG,
+GPL-3.0) runs on ComfyUI's own nodes.
+
+The chosen workflows are copied to `/srv/apps/comfyui/user/default/workflows/bromigos/`,
+so they appear in ComfyUI's own workflow list.
+
+### create.toml
+
+When a person asked (with `sudo`, `pkexec` or from Settings), the studio wires itself into
+their `~/.config/bromigos/create.toml` ([art.md](art.md#creation-providers)):
+
+- `[comfyui.local]` at `http://127.0.0.1:8188`, unless the file names one;
+- each capability's `comfyui` list led by what the studio installed, then the model it
+  replaced, then the shipped defaults, so other ComfyUIs keep working.
+
+Everything else in the file stays as it is. A Server set up at first boot has nobody's
+file to write; a desktop reaches it through `homelab.toml` ([art.md](art.md)).
+
+### Upgrades and rollback
+
+`bromigos lab studio upgrade` applies the catalog's [upgrade policy](lab-models.md#upgrades)
+to the studio: `[upgrade]` in the asking person's `~/.config/bromigos/lab.toml`. A kind of
+art moves to a new model only when upgrades are on, its policy allows the change (`safe`:
+the same family, newer or better quantised; `any`: any model 3 quality points better), and
+it fits. A kind of art the studio didn't make yet is simply added.
+
+- The new model is fetched and checked, then create.toml points at it.
+- The model it replaced stays installed for 14 days, second in create.toml's list.
+- A file replaced at the same path is kept in `models/.previous/`.
+- `rollback [CAPABILITY]` swaps them back. After 14 days the next `apply` removes what no
+  kept workflow needs.
+
+### Where it keeps things
+
+| Path | What |
+|---|---|
+| `/srv/apps/comfyui/models/` | the model files, by ComfyUI's folder (`diffusion_models/`, `vae/`, …) |
+| `/srv/apps/comfyui/models/.previous/` | files an upgrade replaced at the same path |
+| `/srv/apps/comfyui/custom_nodes/`, `local/` | node packs and their Python packages |
+| `/srv/apps/comfyui/user/default/workflows/bromigos/` | bromigOS's workflows, for ComfyUI's list |
+| `/srv/apps/comfyui/output/` | what it made |
+| `/srv/apps/comfyui/studio.json` | the studio's record: files and their sha256, each kind of art's workflow, the previous ones, node packs |
+
+### Its tests
+
+`homelab/tests/test_studio.py` runs on the real catalog and the shipped workflows. It
+checks every pinned file and that every workflow's files are pinned, what each card size
+gets, and applying a plan under a stand-in root with a fake downloader: the checksum, the
+resumed download, the disk gate, node packs, an upgrade, a rollback, the 14 days, and
+create.toml. Nothing downloads.
+
 ## Planned: changing the lab
 
 > **Planned.** These commands exist, but they only say they aren't built yet. The design

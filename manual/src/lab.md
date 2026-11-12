@@ -270,6 +270,42 @@ it. VECTOR's voice always keeps its share. A job that has to wait says why.
 Jobs run on your lab, which costs nothing. A paid cloud service is only used for a job if
 you add `--cloud` to it.
 
+## The Creation studio
+
+The Creation studio makes pictures, edits, cutouts, video loops and 3D models on your own
+graphics card. It's ComfyUI, set up for you with the best open models that fit the card,
+the same way our own lab runs it. bromigOS's art tools and VECTOR use it, and each picture
+costs nothing.
+
+To set it up, choose one of these:
+
+- In the Server installer, tick **Creation studio** under AI.
+- On the Lab board's Supply page, find **Images, video and 3D** and choose **Add**.
+- In a terminal: `sudo bromigos lab apps add comfyui`.
+
+It needs an NVIDIA or AMD card with 8 GB or more. It asks one thing: which models. The
+recommended choice keeps to models whose licence lets you sell what you make. The other
+adds research models, which are often stronger but only for personal use.
+
+Then it downloads the models that fit your card. That's a few GB on a small card and about
+80 GB on a 24 GB one, so the first setup takes a while. Every file is checked before it's
+used. Its page is at `http://<your machine>:8188`, for your home network only.
+
+### For power users
+
+```bash
+bromigos lab studio                    # what it makes now, and what's missing
+bromigos lab studio plan               # what fits this card, and why
+sudo bromigos lab studio apply         # fetch anything missing again (checked)
+sudo bromigos lab models upgrades --apply   # move to better models, by your upgrade policy
+sudo bromigos lab studio rollback video.loop   # go back to the model an upgrade replaced
+```
+
+The studio keeps everything in `/srv/apps/comfyui`, and writes your
+`~/.config/bromigos/create.toml` so `bromigos art` uses it first. An upgrade keeps the
+model it replaced for 14 days. How it picks, the files, the licences and every option are
+in [the developer docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#the-creation-studio).
+
 ## Models
 
 ```bash
