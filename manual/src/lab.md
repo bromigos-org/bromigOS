@@ -297,7 +297,8 @@ network and nowhere else, and on a desktop only that desktop reaches it. Nothing
 installed from the page.
 
 Settings › Lab shows what it makes, in plain words. If a model file goes missing, or a
-download stopped, it says so and shows **Fix**, which fetches it again and checks it. If
+download stopped, it says so and shows **Fix**, which fetches it again and checks it. If its
+page ever could install something (an update changed how it starts), Fix locks it again. If
 ComfyUI stops answering, **Restart** starts it again.
 
 ### Creative apps

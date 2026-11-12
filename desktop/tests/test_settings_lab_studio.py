@@ -32,6 +32,7 @@ def cap(c, words, workflow, ready, missing=()):
 
 
 READY = {"installed": True, "answers": True, "comfyui_version": "0.38.0", "missing": [], "previous": {},
+         "locked": True, "lock_problems": [],
          "capabilities": [cap("image.cutout", "cutouts", "lucida", True),
                           cap("video.loop", "video loops", "wan2.2-ti2v-5b", True),
                           cap("image.generate", "pictures from a prompt", None, False)]}
@@ -73,6 +74,14 @@ class StudioView(unittest.TestCase):
         self.assertEqual([b[1] for b in rows[0]["buttons"]], ["restart"])
         self.assertTrue(any(r["runs"] == "bromigos lab studio rollback video.loop" for r in rows))
         self.assertNotIn("open", [b[1] for r in rows for b in r["buttons"]])
+
+    def test_an_unlocked_page_gets_a_fix_and_is_not_ready(self):
+        rows = self.m.studio_view(dict(READY, locked=False,
+                                       lock_problems=["ComfyUI-Manager answers on the page, so it could install node packs"]))
+        self.assertEqual(rows[0]["title"], "✖  Its page isn't locked")
+        self.assertIn("Manager answers", rows[0]["hint"])
+        self.assertEqual([b[1] for b in rows[0]["buttons"]], ["fix"])
+        self.assertNotEqual(rows[-1]["title"], "●  Ready")
 
     def test_no_answer_says_where_to_look(self):
         rows = self.m.studio_view(None)

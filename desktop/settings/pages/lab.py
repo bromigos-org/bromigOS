@@ -69,6 +69,12 @@ def studio_view(doc):
                      "hint": "bromigos lab apps logs comfyui says why",
                      "buttons": [("Restart", "restart", "Restarts the Creation studio's service")],
                      "runs": " ".join(STUDIO_RESTART[:-1])})
+    if doc.get("locked") is False:
+        rows.append({"title": "✖  Its page isn't locked",
+                     "subtitle": "Fix starts ComfyUI again without its Manager, so nothing can be installed from the page",
+                     "hint": "The page has no sign-in. " + "; ".join(doc.get("lock_problems") or []),
+                     "buttons": [("Fix", "fix", "Locks the page again, as a job the Activity panel follows")],
+                     "runs": " ".join(STUDIO_FIX[:-1])})
     if broken:
         n = len(doc.get("missing") or [])
         rows.append({"title": f"✖  {n} model file{'s' if n != 1 else ''} missing",
@@ -78,7 +84,8 @@ def studio_view(doc):
                      "runs": " ".join(STUDIO_FIX[:-1])})
     made = ", ".join(c["words"] for c in ready) or "nothing yet"
     version = f"ComfyUI {doc['comfyui_version']} · " if doc.get("comfyui_version") else ""
-    rows.append({"title": ("●  Ready" if ready and not broken and doc.get("answers") else "Makes"),
+    rows.append({"title": ("●  Ready" if ready and not broken and doc.get("answers") and doc.get("locked") is not False
+                           else "Makes"),
                  "subtitle": f"{version}makes {made}",
                  "hint": "\n".join(f"{c['words']}: {c['workflow'] or 'nothing fits this card yet'}" for c in caps),
                  "buttons": ([("Open", "open", "ComfyUI's own page, in your browser")] if doc.get("answers") else []) +
