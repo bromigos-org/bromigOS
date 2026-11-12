@@ -309,20 +309,23 @@ From the `bromigos-core` package.
 
 ### bromigos activity
 
-What this computer is doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later.
+What this computer and its lab are doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later; ComfyUI generations and pipeline runs beside them.
 
 ```text
-bromigos activity [list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
+bromigos activity [list [--all] [--limit N] [--lab|--server] [--json]] | show [ID] [--log N] [--json] | watch [ID] [--lab|--server] [--no-images] [--once] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND… | emit RUN start --title WORDS [--kind KIND] [--subject TYPE:ID[:NAME]] [--pid PID] | emit RUN ::LINE… | emit RUN media PATH [--step ID] [--output] | emit RUN end [STATE] [WORDS…] | follow [--system] [--once] [--poll S] [--idle S --wanted FILE]
 ```
 
 For example:
 
 ```text
 bromigos activity
+bromigos activity watch
 bromigos activity show
-bromigos activity list --json
+bromigos activity list --lab --json
 sudo bromigos activity answer drive.replace swapped
 sudo bromigos activity cancel backup
+bromigos activity emit ships start --title "Universe assets: ships"
+bromigos activity emit ships ::step cutout running Cutting out ship-a
 sudo bromigos activity run --kind backup.run --title "Backing up" --lock backup-repo -- bromigos server backup run
 ```
 

@@ -445,6 +445,10 @@ comfyui = "qwen-image-2512-lightning"
 comfyui = "qwen-image-edit-2511-lightning"
 ```
 
+**Watching a job.** Each prompt bromigos art queues asks ComfyUI for preview frames
+(`preview_method: auto`), so `bromigos activity watch` and the Lab board can show the picture
+as it's made ([lab jobs](activity.md#lab-jobs)).
+
 **The ComfyUI's address** is `BROMIGOS_COMFYUI_URL`, or `comfyui_url = "…"` in
 `~/.config/bromigos/art.toml`. The address is never in a theme or in this repository. A
 private overlay can set the variable.

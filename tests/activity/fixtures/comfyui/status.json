@@ -1,0 +1,30 @@
+{
+ "_about": "Recorded: what a stranger's socket got for 25 s while another client's prompt ran (ComfyUI 0.45.2): the queue's size only, and a monitor extension's readings (left out)",
+ "frames": [
+  {
+   "text": {
+    "type": "status",
+    "data": {
+     "status": {
+      "exec_info": {
+       "queue_remaining": 1
+      }
+     },
+     "sid": "c988d64db4744e1db8afa04ebeef046f"
+    }
+   }
+  },
+  {
+   "text": {
+    "type": "status",
+    "data": {
+     "status": {
+      "exec_info": {
+       "queue_remaining": 2
+      }
+     }
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,2612 @@
+{
+ "813d2a38-e3ae-412e-80b7-9cb0d53ea1ae": {
+  "prompt": [
+   0,
+   "813d2a38-e3ae-412e-80b7-9cb0d53ea1ae",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate square and round exhaust vents and louvred air vent boxes for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 766,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-vent"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794511772880
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-vent_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "813d2a38-e3ae-412e-80b7-9cb0d53ea1ae",
+      "timestamp": 1794511772880
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "813d2a38-e3ae-412e-80b7-9cb0d53ea1ae",
+      "timestamp": 1794511772882
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "813d2a38-e3ae-412e-80b7-9cb0d53ea1ae",
+      "timestamp": 1794511866677
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "58391b48-1440-488f-98d5-3842b7eea347": {
+  "prompt": [
+   1,
+   "58391b48-1440-488f-98d5-3842b7eea347",
+   {
+    "1": {
+     "class_type": "LoadImage",
+     "inputs": {
+      "image": "my-pipeline/d1da1cc7-pad-wick-sprawl-cut.png"
+     }
+    },
+    "2": {
+     "class_type": "LoadBackgroundRemovalModel",
+     "inputs": {
+      "bg_removal_name": "lucida_v7.safetensors"
+     }
+    },
+    "3": {
+     "class_type": "RemoveBackground",
+     "inputs": {
+      "bg_removal_model": [
+       "2",
+       0
+      ],
+      "image": [
+       "1",
+       0
+      ]
+     }
+    },
+    "4": {
+     "class_type": "InvertMask",
+     "inputs": {
+      "mask": [
+       "3",
+       0
+      ]
+     }
+    },
+    "5": {
+     "class_type": "JoinImageWithAlpha",
+     "inputs": {
+      "image": [
+       "1",
+       0
+      ],
+      "alpha": [
+       "4",
+       0
+      ]
+     }
+    },
+    "6": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "5",
+       0
+      ],
+      "filename_prefix": "my-pipeline/cut"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-1af5bfc6",
+    "create_time": 1794511773693
+   },
+   [
+    "6"
+   ]
+  ],
+  "outputs": {
+   "6": {
+    "images": [
+     {
+      "filename": "cut_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 2354,
+       "height": 1816
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "58391b48-1440-488f-98d5-3842b7eea347",
+      "timestamp": 1794511866697
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "58391b48-1440-488f-98d5-3842b7eea347",
+      "timestamp": 1794511866712
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "58391b48-1440-488f-98d5-3842b7eea347",
+      "timestamp": 1794511868208
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "6": {
+    "node_id": "6",
+    "display_node": "6",
+    "parent_node": null,
+    "real_node_id": "6"
+   }
+  }
+ },
+ "abeac0f8-6f2f-4aee-8cbb-92d28d8d79d1": {
+  "prompt": [
+   2,
+   "abeac0f8-6f2f-4aee-8cbb-92d28d8d79d1",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate small antenna dishes and parabolic communication dishes on short mounts for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 946,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-dish"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794511870103
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-dish_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "abeac0f8-6f2f-4aee-8cbb-92d28d8d79d1",
+      "timestamp": 1794511870103
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "abeac0f8-6f2f-4aee-8cbb-92d28d8d79d1",
+      "timestamp": 1794511870104
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "abeac0f8-6f2f-4aee-8cbb-92d28d8d79d1",
+      "timestamp": 1794511964289
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "8502cdd0-19ce-4f88-9696-b3f8d8fb9402": {
+  "prompt": [
+   3,
+   "8502cdd0-19ce-4f88-9696-b3f8d8fb9402",
+   {
+    "1": {
+     "class_type": "LoadImage",
+     "inputs": {
+      "image": "my-pipeline/30567e96-pad-sheets-vent-0-cut.png"
+     }
+    },
+    "2": {
+     "class_type": "LoadBackgroundRemovalModel",
+     "inputs": {
+      "bg_removal_name": "lucida_v7.safetensors"
+     }
+    },
+    "3": {
+     "class_type": "RemoveBackground",
+     "inputs": {
+      "bg_removal_model": [
+       "2",
+       0
+      ],
+      "image": [
+       "1",
+       0
+      ]
+     }
+    },
+    "4": {
+     "class_type": "InvertMask",
+     "inputs": {
+      "mask": [
+       "3",
+       0
+      ]
+     }
+    },
+    "5": {
+     "class_type": "JoinImageWithAlpha",
+     "inputs": {
+      "image": [
+       "1",
+       0
+      ],
+      "alpha": [
+       "4",
+       0
+      ]
+     }
+    },
+    "6": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "5",
+       0
+      ],
+      "filename_prefix": "my-pipeline/cut"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-3285c53a",
+    "create_time": 1794511940009
+   },
+   [
+    "6"
+   ]
+  ],
+  "outputs": {
+   "6": {
+    "images": [
+     {
+      "filename": "cut_00002_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 2124,
+       "height": 2124
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "8502cdd0-19ce-4f88-9696-b3f8d8fb9402",
+      "timestamp": 1794511964314
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "8502cdd0-19ce-4f88-9696-b3f8d8fb9402",
+      "timestamp": 1794511964318
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "8502cdd0-19ce-4f88-9696-b3f8d8fb9402",
+      "timestamp": 1794511965723
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "6": {
+    "node_id": "6",
+    "display_node": "6",
+    "parent_node": null,
+    "real_node_id": "6"
+   }
+  }
+ },
+ "c29ee9c2-ca32-4af7-b7af-4b253dd83fc1": {
+  "prompt": [
+   4,
+   "c29ee9c2-ca32-4af7-b7af-4b253dd83fc1",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate bent pipe runs with flanges, valves and brackets for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 20,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-pipe"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794511967303
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-pipe_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "c29ee9c2-ca32-4af7-b7af-4b253dd83fc1",
+      "timestamp": 1794511967303
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "c29ee9c2-ca32-4af7-b7af-4b253dd83fc1",
+      "timestamp": 1794511967304
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "c29ee9c2-ca32-4af7-b7af-4b253dd83fc1",
+      "timestamp": 1794512061717
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "acec3191-3c17-4add-881f-36585ee09e40": {
+  "prompt": [
+   5,
+   "acec3191-3c17-4add-881f-36585ee09e40",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate pressure tanks and cylindrical fuel tanks with straps and fittings for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 188,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-tank"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794512064496
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-tank_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "acec3191-3c17-4add-881f-36585ee09e40",
+      "timestamp": 1794512064497
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [
+       "1",
+       "2",
+       "3",
+       "4",
+       "6",
+       "7"
+      ],
+      "prompt_id": "acec3191-3c17-4add-881f-36585ee09e40",
+      "timestamp": 1794512064498
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "acec3191-3c17-4add-881f-36585ee09e40",
+      "timestamp": 1794512152405
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "87042cc2-0217-4703-990a-f30483a6fd47": {
+  "prompt": [
+   6,
+   "87042cc2-0217-4703-990a-f30483a6fd47",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate small manoeuvring thrusters and rocket nozzle clusters for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 848,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-thruster"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794512153781
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-thruster_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "87042cc2-0217-4703-990a-f30483a6fd47",
+      "timestamp": 1794512153781
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [
+       "1",
+       "2",
+       "3",
+       "4",
+       "6",
+       "7"
+      ],
+      "prompt_id": "87042cc2-0217-4703-990a-f30483a6fd47",
+      "timestamp": 1794512153782
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "87042cc2-0217-4703-990a-f30483a6fd47",
+      "timestamp": 1794512241975
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "a2107011-556b-4cd8-81e6-04356dd9800d": {
+  "prompt": [
+   7,
+   "a2107011-556b-4cd8-81e6-04356dd9800d",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate round and square airlock hatches and access panels with hinges and handles for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 665,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-hatch"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794512242921
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-hatch_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "a2107011-556b-4cd8-81e6-04356dd9800d",
+      "timestamp": 1794512242922
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [
+       "1",
+       "2",
+       "3",
+       "4",
+       "6",
+       "7"
+      ],
+      "prompt_id": "a2107011-556b-4cd8-81e6-04356dd9800d",
+      "timestamp": 1794512242923
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "a2107011-556b-4cd8-81e6-04356dd9800d",
+      "timestamp": 1794512330934
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "a9338f47-fbc8-44bf-b350-b30b661d804b": {
+  "prompt": [
+   9,
+   "a9338f47-fbc8-44bf-b350-b30b661d804b",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "20",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "360 degree panorama with equirectangular projection, equirectangular 360 image. Inside a cramped radio den in an old relay space station: a bank of mismatched old CRT monitors with scope traces and static, radio and test gear with analogue meters, a steel mug, an empty worn chair turned away from the desk, a big scarred window onto an uncharted rose and teal gas giant and a field of wrecked stations. Seen from the middle of the room at standing eye level, the floor all round below and the ceiling above. The room is empty: no people, no robots, no animals. Cinematic photograph of a huge, highly detailed practical film set in the style of late-1970s space films: kitbashed from old parts, used and lived-in, grime, oil streaks, scorch marks, hand-painted markings, real photographic textures, film grain. No text, no logos, no words."
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲。，木星，大红斑，土星，土星环，地球，月球，火星，海王星，卫星天线，Jupiter, Great Red Spot, Saturn, planetary rings, Earth, the Moon, Mars, Neptune, real satellites, text, watermark"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 2048,
+      "height": 1024,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 360,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-scenes/pano-int-wick-comms"
+     }
+    },
+    "20": {
+     "class_type": "LoraLoaderModelOnly",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "lora_name": "qwen-360-diffusion-2512-int8-bf16-v2.safetensors",
+      "strength_model": 1.0
+     }
+    }
+   },
+   {
+    "client_id": "my-scenes",
+    "create_time": 1794512331397
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "pano-int-wick-comms_00001_.png",
+      "subfolder": "my-scenes",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 2048,
+       "height": 1024
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "a9338f47-fbc8-44bf-b350-b30b661d804b",
+      "timestamp": 1794512331398
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [
+       "1",
+       "3",
+       "4"
+      ],
+      "prompt_id": "a9338f47-fbc8-44bf-b350-b30b661d804b",
+      "timestamp": 1794512331399
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "a9338f47-fbc8-44bf-b350-b30b661d804b",
+      "timestamp": 1794512449093
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "c52b8008-7548-4efd-bf49-62edc75d45ad": {
+  "prompt": [
+   11,
+   "c52b8008-7548-4efd-bf49-62edc75d45ad",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_edit_2511_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CFGNorm",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "strength": 1.0
+     }
+    },
+    "4": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "5": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "l1": {
+     "class_type": "LoadImage",
+     "inputs": {
+      "image": "my-pipeline/73db8e1a-pad-canvas.png"
+     }
+    },
+    "s1": {
+     "class_type": "ImageScaleToTotalPixels",
+     "inputs": {
+      "image": [
+       "l1",
+       0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 1.6,
+      "resolution_steps": 16
+     }
+    },
+    "6": {
+     "class_type": "TextEncodeQwenImageEditPlus",
+     "inputs": {
+      "clip": [
+       "4",
+       0
+      ],
+      "prompt": "Outpainting. The flat grey border around the picture is empty canvas. Paint it so the picture continues seamlessly past its old edges: complete a sprawling ring-shaped space station built from salvaged modules, patched hull plates in faded colours, a tall antenna mast at the centre wherever the frame cut it off, so the whole object is visible and surrounded by dark empty space, with the same camera, perspective, lighting, colours, wear and level of detail. Keep everything inside the original picture exactly as it is. No text, no new logos, no planets.",
+      "vae": [
+       "5",
+       0
+      ],
+      "image1": [
+       "s1",
+       0
+      ]
+     }
+    },
+    "7": {
+     "class_type": "TextEncodeQwenImageEditPlus",
+     "inputs": {
+      "clip": [
+       "4",
+       0
+      ],
+      "prompt": "",
+      "vae": [
+       "5",
+       0
+      ],
+      "image1": [
+       "s1",
+       0
+      ]
+     }
+    },
+    "13": {
+     "class_type": "FluxKontextMultiReferenceLatentMethod",
+     "inputs": {
+      "conditioning": [
+       "6",
+       0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+     }
+    },
+    "14": {
+     "class_type": "FluxKontextMultiReferenceLatentMethod",
+     "inputs": {
+      "conditioning": [
+       "7",
+       0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+     }
+    },
+    "16": {
+     "class_type": "VAEEncode",
+     "inputs": {
+      "pixels": [
+       "s1",
+       0
+      ],
+      "vae": [
+       "5",
+       0
+      ]
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "3",
+       0
+      ],
+      "positive": [
+       "13",
+       0
+      ],
+      "negative": [
+       "14",
+       0
+      ],
+      "latent_image": [
+       "16",
+       0
+      ],
+      "seed": 1,
+      "steps": 40,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "5",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/pad-wick-sprawl"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-a00c5636",
+    "create_time": 1794512451439
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "pad-wick-sprawl_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1584,
+       "height": 1072
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "c52b8008-7548-4efd-bf49-62edc75d45ad",
+      "timestamp": 1794512451440
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [
+       "4",
+       "5"
+      ],
+      "prompt_id": "c52b8008-7548-4efd-bf49-62edc75d45ad",
+      "timestamp": 1794512451448
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "c52b8008-7548-4efd-bf49-62edc75d45ad",
+      "timestamp": 1794512539504
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "fcfdfa68-1d80-474f-9f16-ad34694a74bd": {
+  "prompt": [
+   12,
+   "fcfdfa68-1d80-474f-9f16-ad34694a74bd",
+   {
+    "1": {
+     "class_type": "LoadImage",
+     "inputs": {
+      "image": "my-pipeline/f5e50f17-vent-0-1.png"
+     }
+    },
+    "2": {
+     "class_type": "InvertMask",
+     "inputs": {
+      "mask": [
+       "1",
+       1
+      ]
+     }
+    },
+    "3": {
+     "class_type": "ImageCropToMask",
+     "inputs": {
+      "images": [
+       "1",
+       0
+      ],
+      "masks": [
+       "2",
+       0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.1,
+      "grow_mask": 0,
+      "background": "#000000"
+     }
+    },
+    "8": {
+     "class_type": "CLIPVisionLoader",
+     "inputs": {
+      "clip_name": "dino_v3_L_naf_fp32.safetensors"
+     }
+    },
+    "10": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "pixal3d_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "11": {
+     "class_type": "CFGOverride",
+     "inputs": {
+      "model": [
+       "10",
+       0
+      ],
+      "cfg": 1.0,
+      "start_percent": 0.667,
+      "end_percent": 1.0
+     }
+    },
+    "12": {
+     "class_type": "RescaleCFG",
+     "inputs": {
+      "model": [
+       "11",
+       0
+      ],
+      "multiplier": 0.7
+     }
+    },
+    "13": {
+     "class_type": "ModelSamplingSD3",
+     "inputs": {
+      "model": [
+       "12",
+       0
+      ],
+      "shift": 5.0
+     }
+    },
+    "14": {
+     "class_type": "EmptyTrellis2LatentStructure",
+     "inputs": {
+      "batch_size": 1
+     }
+    },
+    "16": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "trellis_2_shape_vae_bf16.safetensors"
+     }
+    },
+    "19": {
+     "class_type": "CFGOverride",
+     "inputs": {
+      "model": [
+       "10",
+       0
+      ],
+      "cfg": 1.0,
+      "start_percent": 0.769,
+      "end_percent": 1.0
+     }
+    },
+    "20": {
+     "class_type": "RescaleCFG",
+     "inputs": {
+      "model": [
+       "19",
+       0
+      ],
+      "multiplier": 0.5
+     }
+    },
+    "5": {
+     "class_type": "LoadMoGeModel",
+     "inputs": {
+      "model_name": "moge_2_vitl_normal_fp16.safetensors"
+     }
+    },
+    "6": {
+     "class_type": "MoGeInference",
+     "inputs": {
+      "moge_model": [
+       "5",
+       0
+      ],
+      "image": [
+       "3",
+       0
+      ],
+      "resolution_level": 9,
+      "fov_x_degrees": 0.0,
+      "batch_size": 4,
+      "force_projection": true,
+      "apply_mask": true,
+      "refine_steps": 3
+     }
+    },
+    "7": {
+     "class_type": "MoGeGeometryToFOV",
+     "inputs": {
+      "moge_geometry": [
+       "6",
+       0
+      ],
+      "axis": "horizontal",
+      "unit": "degrees"
+     }
+    },
+    "9": {
+     "class_type": "Pixal3DConditioning",
+     "inputs": {
+      "clip_vision_model": [
+       "8",
+       0
+      ],
+      "image": [
+       "3",
+       0
+      ],
+      "camera_angle_x": [
+       "7",
+       0
+      ]
+     }
+    },
+    "15": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "13",
+       0
+      ],
+      "seed": 1,
+      "steps": 12,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+       "9",
+       0
+      ],
+      "negative": [
+       "9",
+       1
+      ],
+      "latent_image": [
+       "14",
+       0
+      ],
+      "denoise": 1.0
+     }
+    },
+    "17": {
+     "class_type": "VaeDecodeStructureTrellis2",
+     "inputs": {
+      "samples": [
+       "15",
+       0
+      ],
+      "vae": [
+       "16",
+       0
+      ],
+      "resolution": "32"
+     }
+    },
+    "18": {
+     "class_type": "Trellis2ShapeStage",
+     "inputs": {
+      "positive": [
+       "9",
+       0
+      ],
+      "negative": [
+       "9",
+       1
+      ],
+      "voxel": [
+       "17",
+       0
+      ]
+     }
+    },
+    "21": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "20",
+       0
+      ],
+      "seed": 1,
+      "steps": 20,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+       "18",
+       0
+      ],
+      "negative": [
+       "18",
+       1
+      ],
+      "latent_image": [
+       "18",
+       2
+      ],
+      "denoise": 1.0
+     }
+    },
+    "22": {
+     "class_type": "Trellis2UpsampleStage",
+     "inputs": {
+      "positive": [
+       "18",
+       0
+      ],
+      "negative": [
+       "18",
+       1
+      ],
+      "shape_latent": [
+       "21",
+       0
+      ],
+      "vae": [
+       "16",
+       0
+      ],
+      "target_resolution": 1024
+     }
+    },
+    "23": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "20",
+       0
+      ],
+      "seed": 1,
+      "steps": 12,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+       "22",
+       0
+      ],
+      "negative": [
+       "22",
+       1
+      ],
+      "latent_image": [
+       "22",
+       2
+      ],
+      "denoise": 1.0
+     }
+    },
+    "24": {
+     "class_type": "VaeDecodeShapeTrellis",
+     "inputs": {
+      "samples": [
+       "23",
+       0
+      ],
+      "vae": [
+       "16",
+       0
+      ]
+     }
+    },
+    "40": {
+     "class_type": "RemeshMesh",
+     "inputs": {
+      "mesh": [
+       "24",
+       0
+      ],
+      "resolution": 512,
+      "sign_mode": "solid",
+      "sign_mode.fill": 20.0,
+      "sign_mode.qef": true,
+      "band": 1.0,
+      "project_back": 0.0,
+      "fix_poles": true,
+      "smooth_iters": 2,
+      "drop_small_components": 0.002,
+      "precluster_max_verts": 20000000
+     }
+    },
+    "41": {
+     "class_type": "DecimateMesh",
+     "inputs": {
+      "mesh": [
+       "40",
+       0
+      ],
+      "target_face_count": 60000,
+      "placement_mode": "qem",
+      "placement_mode.line_quadric_weight": 0.0,
+      "placement_mode.feature_edge_quadric_weight": 1.0,
+      "placement_mode.feature_edge_min_dihedral_deg": 30.0,
+      "placement_mode.clamp_v_to_edge": true
+     }
+    },
+    "45": {
+     "class_type": "SaveGLB",
+     "inputs": {
+      "mesh": [
+       "41",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-vent-0-1-hi"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-823ab498",
+    "create_time": 1794512541959
+   },
+   [
+    "45"
+   ]
+  ],
+  "outputs": {
+   "45": {
+    "3d": [
+     {
+      "filename": "greeble-vent-0-1-hi_00001_.glb",
+      "subfolder": "my-pipeline",
+      "type": "output"
+     }
+    ],
+    "camera_info": [
+     null
+    ],
+    "model_3d_info": []
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "fcfdfa68-1d80-474f-9f16-ad34694a74bd",
+      "timestamp": 1794512541960
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "fcfdfa68-1d80-474f-9f16-ad34694a74bd",
+      "timestamp": 1794512541977
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "fcfdfa68-1d80-474f-9f16-ad34694a74bd",
+      "timestamp": 1794512571470
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "45": {
+    "node_id": "45",
+    "display_node": "45",
+    "parent_node": null,
+    "real_node_id": "45"
+   }
+  }
+ },
+ "27ac1a74-50df-4988-bf29-e4c5deb2495a": {
+  "prompt": [
+   13,
+   "27ac1a74-50df-4988-bf29-e4c5deb2495a",
+   {
+    "1": {
+     "class_type": "LoadImage",
+     "inputs": {
+      "image": "my-pipeline/bb89d4c3-pad-wick-sprawl-padded-cut.png"
+     }
+    },
+    "2": {
+     "class_type": "LoadBackgroundRemovalModel",
+     "inputs": {
+      "bg_removal_name": "lucida_v7.safetensors"
+     }
+    },
+    "3": {
+     "class_type": "RemoveBackground",
+     "inputs": {
+      "bg_removal_model": [
+       "2",
+       0
+      ],
+      "image": [
+       "1",
+       0
+      ]
+     }
+    },
+    "4": {
+     "class_type": "InvertMask",
+     "inputs": {
+      "mask": [
+       "3",
+       0
+      ]
+     }
+    },
+    "5": {
+     "class_type": "JoinImageWithAlpha",
+     "inputs": {
+      "image": [
+       "1",
+       0
+      ],
+      "alpha": [
+       "4",
+       0
+      ]
+     }
+    },
+    "6": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "5",
+       0
+      ],
+      "filename_prefix": "my-pipeline/cut"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-f37e290a",
+    "create_time": 1794512545687
+   },
+   [
+    "6"
+   ]
+  ],
+  "outputs": {
+   "6": {
+    "images": [
+     {
+      "filename": "cut_00003_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 3388,
+       "height": 2288
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "27ac1a74-50df-4988-bf29-e4c5deb2495a",
+      "timestamp": 1794512571534
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "27ac1a74-50df-4988-bf29-e4c5deb2495a",
+      "timestamp": 1794512571539
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "27ac1a74-50df-4988-bf29-e4c5deb2495a",
+      "timestamp": 1794512572897
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "6": {
+    "node_id": "6",
+    "display_node": "6",
+    "parent_node": null,
+    "real_node_id": "6"
+   }
+  }
+ },
+ "8f306147-2b69-496b-abc7-334aac8597b6": {
+  "prompt": [
+   14,
+   "8f306147-2b69-496b-abc7-334aac8597b6",
+   {
+    "1": {
+     "class_type": "UNETLoader",
+     "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+     }
+    },
+    "2": {
+     "class_type": "ModelSamplingAuraFlow",
+     "inputs": {
+      "model": [
+       "1",
+       0
+      ],
+      "shift": 3.1
+     }
+    },
+    "3": {
+     "class_type": "CLIPLoader",
+     "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+     }
+    },
+    "4": {
+     "class_type": "VAELoader",
+     "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+     }
+    },
+    "5": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "A clean reference sheet of four separate boxy cargo pods and battered shipping containers with clamps for a spaceship, isolated objects arranged in a 2 by 2 grid with wide empty space between them, each one seen from a three-quarter view from above, on a plain pure white background, photographic studio product shot, used and weathered industrial hardware, chipped paint, grime, scuffed metal, every object different, no text, no labels, no logos, no shadows touching each other"
+     }
+    },
+    "6": {
+     "class_type": "CLIPTextEncode",
+     "inputs": {
+      "clip": [
+       "3",
+       0
+      ],
+      "text": "低分辨率，低画质，画面过饱和，蜡像感，过度光滑，画面具有AI感。构图混乱。文字，标志，水印。"
+     }
+    },
+    "7": {
+     "class_type": "EmptySD3LatentImage",
+     "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+     }
+    },
+    "8": {
+     "class_type": "KSampler",
+     "inputs": {
+      "model": [
+       "2",
+       0
+      ],
+      "positive": [
+       "5",
+       0
+      ],
+      "negative": [
+       "6",
+       0
+      ],
+      "latent_image": [
+       "7",
+       0
+      ],
+      "seed": 955,
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+     }
+    },
+    "9": {
+     "class_type": "VAEDecode",
+     "inputs": {
+      "samples": [
+       "8",
+       0
+      ],
+      "vae": [
+       "4",
+       0
+      ]
+     }
+    },
+    "10": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "9",
+       0
+      ],
+      "filename_prefix": "my-pipeline/greeble-sheet-pod"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-21f40621",
+    "create_time": 1794512572972
+   },
+   [
+    "10"
+   ]
+  ],
+  "outputs": {
+   "10": {
+    "images": [
+     {
+      "filename": "greeble-sheet-pod_00001_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 1328,
+       "height": 1328
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "8f306147-2b69-496b-abc7-334aac8597b6",
+      "timestamp": 1794512572972
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "8f306147-2b69-496b-abc7-334aac8597b6",
+      "timestamp": 1794512572973
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "8f306147-2b69-496b-abc7-334aac8597b6",
+      "timestamp": 1794512668917
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "10": {
+    "node_id": "10",
+    "display_node": "10",
+    "parent_node": null,
+    "real_node_id": "10"
+   }
+  }
+ },
+ "bc43c5f0-4146-4a39-90ee-9dfedfd9dee6": {
+  "prompt": [
+   15,
+   "bc43c5f0-4146-4a39-90ee-9dfedfd9dee6",
+   {
+    "1": {
+     "class_type": "LoadImage",
+     "inputs": {
+      "image": "my-pipeline/d8b07110-pad-wick-spine-cut.png"
+     }
+    },
+    "2": {
+     "class_type": "LoadBackgroundRemovalModel",
+     "inputs": {
+      "bg_removal_name": "lucida_v7.safetensors"
+     }
+    },
+    "3": {
+     "class_type": "RemoveBackground",
+     "inputs": {
+      "bg_removal_model": [
+       "2",
+       0
+      ],
+      "image": [
+       "1",
+       0
+      ]
+     }
+    },
+    "4": {
+     "class_type": "InvertMask",
+     "inputs": {
+      "mask": [
+       "3",
+       0
+      ]
+     }
+    },
+    "5": {
+     "class_type": "JoinImageWithAlpha",
+     "inputs": {
+      "image": [
+       "1",
+       0
+      ],
+      "alpha": [
+       "4",
+       0
+      ]
+     }
+    },
+    "6": {
+     "class_type": "SaveImage",
+     "inputs": {
+      "images": [
+       "5",
+       0
+      ],
+      "filename_prefix": "my-pipeline/cut"
+     }
+    }
+   },
+   {
+    "client_id": "my-pipeline-7a407d45",
+    "create_time": 1794512578597
+   },
+   [
+    "6"
+   ]
+  ],
+  "outputs": {
+   "6": {
+    "images": [
+     {
+      "filename": "cut_00004_.png",
+      "subfolder": "my-pipeline",
+      "type": "output",
+      "metadata": {
+       "kind": "image",
+       "width": 2354,
+       "height": 1816
+      }
+     }
+    ]
+   }
+  },
+  "status": {
+   "status_str": "success",
+   "completed": true,
+   "messages": [
+    [
+     "execution_start",
+     {
+      "prompt_id": "bc43c5f0-4146-4a39-90ee-9dfedfd9dee6",
+      "timestamp": 1794512668956
+     }
+    ],
+    [
+     "execution_cached",
+     {
+      "nodes": [],
+      "prompt_id": "bc43c5f0-4146-4a39-90ee-9dfedfd9dee6",
+      "timestamp": 1794512668961
+     }
+    ],
+    [
+     "execution_success",
+     {
+      "prompt_id": "bc43c5f0-4146-4a39-90ee-9dfedfd9dee6",
+      "timestamp": 1794512670706
+     }
+    ]
+   ]
+  },
+  "meta": {
+   "6": {
+    "node_id": "6",
+    "display_node": "6",
+    "parent_node": null,
+    "real_node_id": "6"
+   }
+  }
+ }
+}

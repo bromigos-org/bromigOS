@@ -7,6 +7,8 @@ on:
   pull_request:
     paths:
       - "lib/bromigos_activity.py"
+      - "lib/bromigos_labjobs.py"
+      - "core/crates/bromigos-art/comfyui-relay/**"
       - "lib/bromigos_alerts.py"
       - "lib/bromigos_alerts_checks.py"
       - "bin/bromigos-activity"
@@ -35,7 +37,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: tools
-        run: pacman -Syu --noconfirm --needed git python >/dev/null
+        run: pacman -Syu --noconfirm --needed git python python-pillow >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
         # as a normal user, like makepkg's check(): a stand-in root and a stand-in systemd-run

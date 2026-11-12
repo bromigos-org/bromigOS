@@ -33,6 +33,10 @@ Run `bromigos update` to get them. The next release notes will include these hig
   before it's used, and upgrades keep the model they replace for 14 days. Tick it in the
   Server installer, Add it on the Lab board, or see
   [The Creation studio](lab.md#the-creation-studio).
+- `bromigos activity` shows what your lab's ComfyUI is making, beside the computer's own
+  jobs: each generation with its workflow, its stage and the queue behind it, and the runs of
+  tools that make assets in several steps. `bromigos activity watch` follows them live, with
+  the picture as it's made in kitty.
 
 ### Fixed
 

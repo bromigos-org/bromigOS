@@ -52,6 +52,29 @@ bromigos activity show backup
 The last lines it printed can hold details about your system, so only an administrator may
 read them. `sudo bromigos activity show` shows them.
 
+## Watch the lab make things
+
+The pictures, clips and 3D models your lab's ComfyUI makes are jobs too, and so are the runs
+of tools that make assets in several steps. They show in the same list:
+
+```bash
+bromigos activity watch
+```
+
+That follows every job live in your terminal: how far each one is, the stage it's at, the
+queue behind it, and what just finished. In the kitty terminal it also shows the picture as
+it's being made. Press Ctrl+C to stop watching; the jobs carry on.
+
+To take a generation out of the queue, or stop one that's running, give its name:
+
+```bash
+bromigos activity cancel comfy-studio-a92f
+```
+
+`bromigos activity --lab` lists the lab's jobs only. Which ComfyUIs are followed, and how a
+tool of your own can show its steps, are in
+[the activity reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/activity.md#lab-jobs).
+
 ## When a job needs you
 
 Some jobs can't finish without you. Replacing a drive is one: the server gets ready, then
