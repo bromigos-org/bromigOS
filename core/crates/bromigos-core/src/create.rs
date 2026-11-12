@@ -307,6 +307,63 @@ pub struct CreateAnswer {
     /// token is copied, never printed, to the file bromigos art reads
     /// (`$XDG_DATA_HOME/bromigos/nolgia-token`, mode 0600).
     pub nolgia_token_file: Option<String>,
+    /// Set up the Creation studio on this machine: ComfyUI with the models that fit its card
+    /// (`bromigos lab apps add comfyui`; docs/lab.md, "The Creation studio").
+    pub studio: bool,
+    /// Creative apps to install from Arch's repositories: ids of [`CREATIVE_APPS`].
+    pub apps: Vec<String>,
+}
+
+/// The creative apps setup offers on a desktop: (id, the Arch package, what it's for in plain
+/// words). Both are in Arch's own repositories and update with the system.
+pub const CREATIVE_APPS: &[(&str, &str, &str)] = &[
+    (
+        "blender",
+        "blender",
+        "Blender: 3D modelling, sculpting, animation and rendering (it opens the GLB models the studio makes)",
+    ),
+    (
+        "godot",
+        "godot",
+        "Godot: a game engine, for making your own games and interactive scenes",
+    ),
+];
+
+/// How setup installs creative apps: pacman through sudo. A terminal lets sudo and pacman ask;
+/// unattended, sudo never asks (`-n`) and pacman takes the defaults.
+pub fn creative_install_argv(pkgs: &[&str], interactive: bool) -> Vec<String> {
+    let mut a: Vec<String> = if interactive {
+        vec!["sudo".into(), "pacman".into(), "-S".into(), "--needed".into()]
+    } else {
+        vec!["sudo".into(), "-n".into(), "pacman".into(), "-S".into(), "--needed".into(), "--noconfirm".into()]
+    };
+    a.extend(pkgs.iter().map(|p| p.to_string()));
+    a
+}
+
+/// How setup sets up the Creation studio: the lab's app manager adds the catalogue item
+/// `comfyui` as a job of its own, which asks for root with sudo or pkexec, starts ComfyUI and
+/// fetches the models that fit this card (docs/lab.md, "The Creation studio").
+pub fn studio_argv() -> Vec<String> {
+    ["bromigos", "lab", "apps", "add", "comfyui"].iter().map(|s| s.to_string()).collect()
+}
+
+/// The Arch packages for creative app ids, or the first id that isn't one.
+pub fn creative_packages(ids: &[String]) -> Result<Vec<&'static str>, String> {
+    ids.iter()
+        .map(|id| {
+            CREATIVE_APPS
+                .iter()
+                .find(|(i, _, _)| *i == id.as_str())
+                .map(|(_, pkg, _)| *pkg)
+                .ok_or_else(|| {
+                    format!(
+                        "unknown creative app {id:?} ({})",
+                        CREATIVE_APPS.iter().map(|(i, _, _)| *i).collect::<Vec<_>>().join(", ")
+                    )
+                })
+        })
+        .collect()
 }
 
 pub fn create_toml(paths: &Paths) -> PathBuf {
@@ -316,6 +373,7 @@ pub fn create_toml(paths: &Paths) -> PathBuf {
 /// Checks a choice: known capabilities and providers, ComfyUI instances that answered
 /// and have that capability's workflow.
 pub fn validate(a: &CreateAnswer, servers: &[Server]) -> Result<(), String> {
+    creative_packages(&a.apps)?;
     for (cap, provs) in &a.providers {
         if !CAPABILITIES.contains(&cap.as_str()) {
             return Err(format!(
@@ -479,6 +537,7 @@ pub fn pinned_choice(servers: &[Server], nolgia: bool) -> CreateAnswer {
         providers,
         nolgia_login: false,
         nolgia_token_file: None,
+        ..Default::default()
     }
 }
 

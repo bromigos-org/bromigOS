@@ -474,6 +474,7 @@ fn create_toml_is_format_1_and_keeps_the_users_keys() {
         .into(),
         nolgia_login: false,
         nolgia_token_file: None,
+        ..Default::default()
     };
     assert!(create::validate(&a, std::slice::from_ref(&srv)).is_ok());
     let existing = "# mine\n[comfyui.homelab]\ntimeout_s = 900\n";
@@ -508,6 +509,7 @@ fn create_toml_is_format_1_and_keeps_the_users_keys() {
         .into(),
         nolgia_login: false,
         nolgia_token_file: None,
+        ..Default::default()
     };
     assert!(
         create::validate(&bad, &[srv]).is_err(),
@@ -754,4 +756,37 @@ fn answers_install_an_extension_in_a_folder_of_its_repository() {
     let bad: Result<bromigos_core::setup::ExtensionsAnswer, _> =
         toml::from_str("install = [{ path = \"x\" }]\n");
     assert!(bad.is_err());
+}
+
+#[test]
+fn creative_apps_are_arch_packages_and_unknown_ones_are_refused() {
+    assert_eq!(
+        create::creative_packages(&["blender".into(), "godot".into()]).unwrap(),
+        ["blender", "godot"]
+    );
+    assert!(create::creative_packages(&["photoshop".into()]).is_err());
+    let a = create::CreateAnswer {
+        apps: vec!["krita9".into()],
+        ..Default::default()
+    };
+    assert!(create::validate(&a, &[]).unwrap_err().contains("unknown creative app"));
+    // a terminal lets sudo ask; unattended it never does
+    assert_eq!(
+        create::creative_install_argv(&["blender"], true),
+        ["sudo", "pacman", "-S", "--needed", "blender"]
+    );
+    assert_eq!(
+        create::creative_install_argv(&["godot"], false),
+        ["sudo", "-n", "pacman", "-S", "--needed", "--noconfirm", "godot"]
+    );
+    assert_eq!(create::studio_argv(), ["bromigos", "lab", "apps", "add", "comfyui"]);
+}
+
+#[test]
+fn an_answers_file_can_ask_for_the_studio_and_the_apps() {
+    let a: bromigos_core::setup::Answers =
+        toml::from_str("[create]\nstudio = true\napps = [\"blender\"]\n").unwrap();
+    let c = a.create.unwrap();
+    assert!(c.studio);
+    assert_eq!(c.apps, ["blender"]);
 }
