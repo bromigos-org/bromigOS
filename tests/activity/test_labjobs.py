@@ -239,7 +239,7 @@ class Live(unittest.TestCase):
         self.assertTrue(rec["lab"]["live"])
         # load 10 + prompt 5 done, sample 70 at 37/50, of 98
         self.assertEqual(rec["pct"], int((15 + 70 * 37 / 50) * 100 / 98))
-        self.assertEqual(rec["lab"]["ran_at"], 1794513000000, "execution_start says when it began")
+        self.assertEqual(rec["lab"]["ran_at"], LAST_END + 10_000, "execution_start says when it began")
 
     def test_a_preview_with_metadata_names_its_prompt(self):
         frame = next(f for f in WS["frames"] if f.get("binary") and "METADATA" in f.get("about", ""))
