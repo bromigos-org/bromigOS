@@ -696,7 +696,9 @@ field notes and a clock, all in the theme's colours.
   ComfyUI or a job feed is set up.
   - The pictures come from `bromigos-labjobs.service`, a user service that follows the lab
     (`bromigos activity follow`). The snapshot starts it when a ComfyUI is set. It looks
-    every 2 seconds while something runs or waits, and every 30 seconds otherwise.
+    every 2 seconds while something runs or waits, and every 30 seconds otherwise. It runs
+    boxed in: it writes only `$XDG_RUNTIME_DIR/bromigos-labjobs` and
+    `~/.cache/bromigos/labjobs`, reads the rest of your home folder, and gets 512 MB of memory.
   - The snapshot copies the pictures into the page folder's `lab/`, so they refresh every
     minute with the rest. For the live view, use `bromigos activity watch` or the Lab
     board.

@@ -15,3 +15,21 @@ Nice=10
 IOSchedulingClass=idle
 Restart=on-failure
 RestartSec=30
+# It reads what other machines send (ComfyUI's answers, its pictures), so it runs boxed in: it
+# writes only its two folders, reads the home folder, gains no privilege, and is bounded
+RuntimeDirectory=bromigos-labjobs
+RuntimeDirectoryPreserve=yes
+CacheDirectory=bromigos/labjobs
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+MemoryMax=512M
+TasksMax=32
