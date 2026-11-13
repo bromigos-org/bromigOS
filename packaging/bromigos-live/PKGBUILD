@@ -25,7 +25,9 @@ optdepends=('nvidia-utils: GPU readings on NVIDIA')
 makedepends=('git' 'python')
 # the tests check() runs: a pixbuf's rows at any width (tests/test_pixbuf.py)
 checkdepends=('python-numpy' 'python-gobject' 'gdk-pixbuf2' 'desktop-file-utils'
-              'python-opengl' 'python-cairo' 'python-pillow' 'gtk3' 'mpv' 'ffmpeg')
+              'python-opengl' 'python-cairo' 'python-pillow' 'gtk3' 'mpv' 'ffmpeg'
+              # the den TV's full-screen tests: mpv as users run it, with its yt-dlp hook (a depends)
+              'yt-dlp' 'deno' 'python-mpv')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
