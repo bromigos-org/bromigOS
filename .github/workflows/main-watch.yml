@@ -1,0 +1,60 @@
+# Keeps one issue, labelled main-broken, open while any workflow's latest run on the default
+# branch has failed, and closes it when they all pass again. A failed package build publishes
+# nothing and says nothing: this is where it shows.
+name: main watch
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: main-watch
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    name: The default branch's workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Open, update or close the main-broken issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SELF: ${{ github.workflow }}
+        run: |
+          set -euo pipefail
+          branch=$(gh api "repos/$REPO" -q .default_branch)
+          broken=""
+          while IFS=$'\t' read -r id name; do
+            [ "$name" = "$SELF" ] && continue
+            line=$(gh api "repos/$REPO/actions/workflows/$id/runs?branch=$branch&status=completed&per_page=1" \
+              -q '.workflow_runs[0] | select(. != null) | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") | "\(.created_at)\t\(.html_url)"' || true)
+            [ -z "$line" ] && continue
+            when=${line%%$'\t'*}; url=${line#*$'\t'}
+            since=$(gh api "repos/$REPO/actions/workflows/$id/runs?branch=$branch&status=success&per_page=1" \
+              -q '.workflow_runs[0].created_at // "never"' || echo unknown)
+            broken+="- **$name**: failed $when ([run]($url)); last passed: $since"$'\n'
+          done < <(gh api --paginate "repos/$REPO/actions/workflows" -q '.workflows[] | select(.state == "active") | "\(.id)\t\(.name)"')
+
+          gh label create main-broken --repo "$REPO" --color B60205 \
+            --description "A workflow's latest run on the default branch failed" --force >/dev/null
+          issue=$(gh issue list --repo "$REPO" --label main-broken --state open --json number -q '.[0].number // empty')
+          if [ -n "$broken" ]; then
+            body="The latest run of these workflows on \`$branch\` failed. Until they pass, what they build or publish is stale."$'\n\n'"$broken"$'\n'"This issue is kept by the \`main watch\` workflow and closes itself when they all pass."
+            if [ -z "$issue" ]; then
+              gh issue create --repo "$REPO" --label main-broken --title "$branch is broken: a workflow's latest run failed" --body "$body"
+            elif [ "$(gh issue view "$issue" --repo "$REPO" --json body -q .body)" != "$body" ]; then
+              gh issue edit "$issue" --repo "$REPO" --body "$body" >/dev/null
+            fi
+            echo "$broken"
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --repo "$REPO" --comment "Every workflow's latest run on \`$branch\` passes again."
+          else
+            echo "all pass"
+          fi
