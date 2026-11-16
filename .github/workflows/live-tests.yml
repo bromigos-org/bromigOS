@@ -26,10 +26,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: tools
-        # bromigos-live's makedepends and checkdepends (packaging/bromigos-live/PKGBUILD)
+        # bromigos-live's makedepends and checkdepends (packaging/bromigos-live/PKGBUILD).
+        # yt-dlp, deno and python-mpv were missing here: the den TV's full-screen tests run
+        # mpv as users do, with its yt-dlp hook, and since mpv 0.42 a refused file no longer
+        # ends in an error while that hook can't find yt-dlp (two tests timed out).
         run: >-
           pacman -Syu --noconfirm --needed git python python-numpy python-gobject gdk-pixbuf2
-          desktop-file-utils python-opengl python-cairo python-pillow gtk3 mpv ffmpeg >/dev/null
+          desktop-file-utils python-opengl python-cairo python-pillow gtk3 mpv ffmpeg
+          yt-dlp deno python-mpv >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
         # as a normal user, like makepkg's check()
