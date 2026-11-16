@@ -225,7 +225,9 @@ starts it again, or stops when no Wayland session is left.
   - a fill from the trade feed, in amber.
 - **Data:** CPU as above. Notification bursts come from `App.on_notify`. Homelab alerts
   (`cluster_alert`) and fills come from `App.on_data_event`.
-- **Code:** `rain()` in `shaders/rain.glsl`, shared with the overlays.
+- **Code:** `rain()` in `shaders/rain.glsl`, shared with the overlays; `rain_glyph()` picks
+  each cell's glyph. The hashes fold their input (`hwrap()`), so the glyphs stay varied
+  however long the wallpaper has been up (`tests/offscreen_uptime.py`).
   `Background.burst(kind, x, strength)` fills one of six slots (`u_burst[6]`: x, start
   time, strength, colour). Uniforms: `u_rain_rect`, `u_rain`.
 - **Config:** `[rain]`: `enabled`, `region` (x, y, w, h; default 0, 30, 2390, 600),

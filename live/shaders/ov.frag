@@ -94,9 +94,9 @@ void main() {
             tuv += normalize(cpx + 1e-3) * vec2(1.0, -1.0) * w * u_tear * 0.014 * exp(-d / (u_res.y * 0.9));
             crest = pow(max(w, 0.0), 12.0) * u_tear * exp(-d / (u_res.y * 0.7));
         } else if (u_tear > 0.0) {
-            float band = floor(px.y / (6.0 + 28.0 * hash1(floor(px.y / 37.0) + floor(u_time * 24.0))));
-            float shift = (hash1(band * 1.7 + floor(u_time * 30.0)) - 0.5) * 2.0;
-            shift *= step(0.45, hash1(band * 3.1 + floor(u_time * 18.0)));
+            float band = floor(px.y / (6.0 + 28.0 * hash1(floor(px.y / 37.0) + hwrap(floor(u_time * 24.0)))));
+            float shift = (hash1(band * 1.7 + hwrap(floor(u_time * 30.0))) - 0.5) * 2.0;
+            shift *= step(0.45, hash1(band * 3.1 + hwrap(floor(u_time * 18.0))));
             tuv.x += shift * u_tear * 0.06;
         }
         vec3 f = texture(u_frozen, tuv).rgb;
@@ -105,7 +105,7 @@ void main() {
             vec3 green = l * TEAR;
             f = mix(f, green, clamp(u_tear * 1.4, 0.0, 1.0));
             if (u_tear_style > 0.5) f += PHOS * 0.35 * crest;
-            else f += PHOS * 0.08 * u_tear * step(0.97, hash1(floor(px.y / 2.0) + floor(u_time * 40.0)));
+            else f += PHOS * 0.08 * u_tear * step(0.97, hash1(floor(px.y / 2.0) + hwrap(floor(u_time * 40.0))));
         }
         c = mix(c, f, u_frozen_amt);
         a = max(a, u_frozen_amt);
@@ -113,7 +113,7 @@ void main() {
     if (u_tear_band.z > 0.5 && px.y > u_tear_band.x && px.y < u_tear_band.y) {
         // a local interference band (notifications): bright slipped bars
         float row = floor(px.y / 3.0);
-        float n = hash1(row + floor(u_time * 45.0));
+        float n = hash1(row + hwrap(floor(u_time * 45.0)));
         float bar = step(0.82, n) * u_tear;
         float edge = smoothstep(u_tear_band.x, u_tear_band.x + 30.0, px.y) * smoothstep(u_tear_band.y, u_tear_band.y - 30.0, px.y);
         vec3 bc = mix(SOFT, DANGER, step(0.5, hash1(row * 7.0))) * bar * edge * 0.55;

@@ -9,8 +9,17 @@ const vec3 DIM = THEME_DIM;
 const vec3 AMBER = THEME_WARN;
 const vec3 DANGER = THEME_DANGER;
 
-float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
-float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// The sine hashes only work on small numbers. A graphics card's sin() has no phase left
+// once its argument passes a few tens of millions: it returns 0 for everything, the hash is
+// 0 for everything, and every cell picks the same glyph (glyph 0, which reads as a T).
+// Anything hashed with the time in it gets there after a few days of uptime. hwrap() folds
+// the input back into +-1024 first, where sin() is exact enough; inside that range it
+// changes nothing. A count of time steps is folded where it is made (hwrap(floor(u_time *
+// rate))), before it is added to a cell: a float can't hold both once the count is large.
+float hwrap(float n) { return n - 1024.0 * trunc(n / 1024.0); }
+vec2 hwrap(vec2 p) { return p - 1024.0 * trunc(p / 1024.0); }
+float hash1(float n) { return fract(sin(hwrap(n) * 127.1) * 43758.5453); }
+float hash2(vec2 p) { return fract(sin(dot(hwrap(p), vec2(127.1, 311.7))) * 43758.5453); }
 
 // ---- Drift script: an original glyph set built from relay-mast strokes.
 // 24 glyphs x 4 segments (x0,y0,x1,y1) in a 0..1 box; (-1) = unused.
@@ -59,6 +68,13 @@ float glyph_dist(int g, vec2 p, vec2 box) {
     return d;
 }
 
+// The glyph in rain cell ci now. Each cell changes glyph at its own pace (every 0.5 to
+// 1.7 s); under reduced motion (u_calm) it keeps the one it has.
+int rain_glyph(vec2 ci) {
+    float mut = floor(u_time * (1.0 - u_calm) * (0.6 + hash2(ci) * 1.4) + hash2(ci.yx) * 9.0);
+    return int(hash2(ci + hwrap(mut) * 0.731) * 24.0) % 24;
+}
+
 vec3 burst_col(float k) { return k < 0.5 ? SOFT : (k < 1.5 ? AMBER : DANGER); }
 
 vec3 rain(vec2 px, float lum_mask) {
@@ -95,8 +111,7 @@ vec3 rain(vec2 px, float lum_mask) {
         float d = head - ci.y;
         if (d < 0.0 || d > len) continue;
         float b = pow(1.0 - d / len, 1.7);
-        float mut = floor(u_time * (1.0 - u_calm) * (0.6 + hash2(ci) * 1.4) + hash2(ci.yx) * 9.0);
-        int g = int(hash2(ci + mut * 0.731) * 24.0) % 24;
+        int g = rain_glyph(ci);
         vec2 box = vec2(8.0, 15.0);
         vec2 gp = lp - vec2(3.5, 4.5);
         float dist = glyph_dist(g, gp, box);

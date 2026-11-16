@@ -113,7 +113,7 @@ float glass(vec2 px, vec4 rect, out vec2 uv, out vec3 base) {
     vec2 q = uv * 2.0 - 1.0;
     float v = clamp(1.0 - dot(q * q, vec2(0.45, 0.55)), 0.0, 1.0);
     base = GLASS + GLASS_LIT * v * v;
-    base *= 0.9 + 0.1 * hash2(floor(px * 0.5) + floor(u_time * 20.0) * (1.0 - u_calm));   // calm: still grain
+    base *= 0.9 + 0.1 * hash2(floor(px * 0.5) + hwrap(floor(u_time * 20.0)) * (1.0 - u_calm));   // calm: still grain
     return smoothstep(2.0, -4.0, d);
 }
 
@@ -131,7 +131,7 @@ vec3 tv_picture(vec2 px, vec2 uv, vec3 g, vec4 tv, sampler2D tex) {
         v = texture(tex, clamp(t, 0.0, 1.0)).rgb * inside;
         v += textureLod(tex, clamp(t, 0.0, 1.0), 3.0).rgb * 0.16 * inside;
     } else {
-        v = vec3(hash2(floor(px * 0.7) + floor(u_time * 24.0) * (1.0 - u_calm)) * 0.32);
+        v = vec3(hash2(floor(px * 0.7) + hwrap(floor(u_time * 24.0)) * (1.0 - u_calm)) * 0.32);
     }
     float l = dot(v, vec3(0.3, 0.59, 0.11));
     v = mix(v, PHOS * l * 1.15, tv.w);
@@ -143,7 +143,7 @@ vec3 tv_picture(vec2 px, vec2 uv, vec3 g, vec4 tv, sampler2D tex) {
 // Over a screen while its channel changes: static, then the OSD.
 vec3 tv_osd(vec2 px, vec2 uv, vec3 sc, vec4 tune, sampler2D osd) {
     if (tune.x > 0.0) {
-        float n = hash2(floor(px * vec2(0.6, 1.0)) + floor(u_time * 30.0) * 7.0);
+        float n = hash2(floor(px * vec2(0.6, 1.0)) + hwrap(floor(u_time * 30.0)) * 7.0);
         sc = mix(sc, PHOS * (0.15 + n * 0.85) * 0.8, tune.x);
     }
     if (tune.y > 0.5) {
@@ -186,7 +186,7 @@ vec3 den(vec2 px, vec3 c) {
         vec4 ring = length(rp) < 0.5 ? texture(u_ring, rp + 0.5) : vec4(0.0);
         vec4 fl = (abs(p.x) < 0.5 && abs(p.y) < 0.5) ? texture(u_flame, p + 0.5) : vec4(0.0);
         vec4 e = fl + ring * (1.0 - fl.a);
-        float flick = mix(0.9 + 0.1 * sin(u_time * 61.0) * hash1(floor(u_time * 9.0)), 0.95, u_calm);
+        float flick = mix(0.9 + 0.1 * sin(u_time * 61.0) * hash1(hwrap(floor(u_time * 9.0))), 0.95, u_calm);
         float nz = hash2(floor(px * vec2(0.7, 1.0)) + fract(u_time) * 97.0 * (1.0 - u_calm));
         vec3 sc = g * (1.0 - e.a) + e.rgb * 0.85 * flick;
         sc += PHOS * nz * (0.05 + u_den.z * 0.5);
