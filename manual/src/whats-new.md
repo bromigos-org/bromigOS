@@ -39,14 +39,18 @@ Run `bromigos update` to get them. The next release notes will include these hig
   the picture as it's made in kitty.
 - `bromigos lab connectors` lists outside services an agent in your lab could use, and what
   each one needs: 74 with a server of their own, such as Stripe, Notion and GitHub, and 38
-  reached with an API key, such as Etsy, Printify and Shopify. It's a catalogue: it doesn't
-  connect anything yet. See
+  reached with an API key, such as Etsy, Printify and Shopify. See
   [Services your agents could use](lab.md#services-your-agents-could-use).
 - `bromigos activity` and the Lab board say which AI agent asked for a job, when one did:
   "by agent ledger". A tool names its agent as it starts the job, with
   `bromigos activity run --agent <name>`. `<name>` is the agent's short name, such as
   `ledger`. See
   [the activity reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/activity.md#make-a-script-a-job).
+- Hermes Agent and OpenClaw can use services from that catalogue: the ones with a server
+  of their own that need nothing or an API key, such as Context7 and Tavily. Name them with
+  `--connectors` when you set the agent up. A service that can spend money or contact
+  people, such as Zapier, is refused until you allow it by name. See
+  [Give an agent a service](lab.md#give-an-agent-a-service).
 
 ### Fixed
 

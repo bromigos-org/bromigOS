@@ -166,7 +166,8 @@ HEADER = """\
 # reach. A [[connector]] is a remote MCP server ("one-click": an address, and at most a sign-in
 # or a key). A [[platform]] has no such server: an agent reaches its REST API with a key ("paste
 # a key"). `bromigos lab connectors` lists, searches and shows them (bromigos_homelab.connectors).
-# It's a catalogue only: nothing here connects, signs in or keeps a key yet.
+# The file is a catalogue: nothing in it connects, signs in or keeps a key. `bromigos lab provision`
+# gives an agent the connectors you choose from it (docs/lab-agents.md).
 #
 # Made by tools/lab/connectors-import.py from tools/lab/connectors/: change those, never this
 # file. The rows are derived from StarNet's catalogue (https://github.com/androoAGI/starnet),

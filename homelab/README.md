@@ -41,7 +41,8 @@ How it works, how to connect a homelab and how to write an adapter:
   [Agent installer notes](../docs/lab-agents.md) explain configuration, credentials,
   tool restrictions and the remaining limits.
 - `connectors.toml` is the connector catalogue: outside services an agent could reach, and
-  what each needs ([docs/lab-connectors.md](../docs/lab-connectors.md)). Its rows are
+  what each needs ([docs/lab-connectors.md](../docs/lab-connectors.md)). The provisioner
+  gives Hermes and OpenClaw the connectors you choose from it. Its rows are
   derived from StarNet's catalogue, under MIT. `LICENSE-starnet` beside it is that notice.
 
 ## The data layer
@@ -59,7 +60,7 @@ The main modules in `lib/bromigos_homelab/`:
 | `doctor.py` | the lab console's checks |
 | `jobs.py`, `jobqueue.py` | the job kinds, and the queue `bromigos-lab.service` runs |
 | `labmodels.py` | what's installed and loaded on the lab's servers; load and unload |
-| `connectors.py` | the connector catalogue and `bromigos lab connectors`: load, check, list, search and show ([docs/lab-connectors.md](../docs/lab-connectors.md)) |
+| `connectors.py` | the connector catalogue and `bromigos lab connectors`: load, check, list, search and show, and which connectors an agent may be given ([docs/lab-connectors.md](../docs/lab-connectors.md)) |
 | `catalog*.py` | the model catalog: picking, planning, serving, upgrades, the refresh and the bench |
 | `provision.py`, `agentprovision.py` | generate a lab repository, apply its reviewed plan and check service health |
 | `findlab.py` | Find my lab: devices this computer and the lab already know, merged per host and checked |

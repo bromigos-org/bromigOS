@@ -1109,10 +1109,10 @@ bromigos lab provision --services hermes openclaw --ssh <user>@<host> \
   --repo <folder> --age-recipient <age-public-key> --llm-url <model-url>
 ```
 
-The prompts let you choose a model, profile, memory tools and messaging channels. Enter
-the model ID served by your endpoint. API keys and bot tokens use hidden prompts.
-Telegram and Discord are off unless you choose them. Each needs numeric allowed user
-IDs. Shell and file tools stay disabled.
+The prompts let you choose a model, profile, memory tools, messaging channels and
+connectors. Enter the model ID served by your endpoint. API keys and bot tokens use hidden
+prompts. Telegram and Discord are off unless you choose them. Each needs numeric allowed
+user IDs. Shell and file tools stay disabled.
 
 Review and commit the generated repository, then apply it:
 
@@ -1123,8 +1123,8 @@ bromigos lab provision apply --repo <folder>
 Apply installs containers, keeps their memory and session disks, stores credentials in
 Vault when present, and checks their health. Without Vault, credentials stay encrypted
 with sops and age in your repository. The Agents card in `bromigos lab` shows health,
-model, gateways and activity metadata. It never shows message text or tokens. Host API
-ports bind to loopback. Cluster services stay inside the cluster.
+model, gateways, connectors and activity metadata. It never shows message text or tokens.
+Host API ports bind to loopback. Cluster services stay inside the cluster.
 
 NVIDIA NemoClaw has an experimental host plan in the picker. It creates an OpenClaw sandbox on a Linux Docker
 host through NVIDIA OpenShell. This slice keeps its messaging off and refuses a
@@ -1155,8 +1155,41 @@ documentation, and notes on using it.
 `bromigos lab connectors list --all` adds the services bromigOS can't offer yet, and says
 why. Each command takes `--json`.
 
-> **Planned.** Connecting a service to an agent isn't built yet. The catalogue never asks
-> for a key and never keeps one.
-
 The file's format and how it's made are in
 [the connector catalogue](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-connectors.md).
+
+### Give an agent a service
+
+Hermes Agent and OpenClaw can use the one-click connectors that need nothing or an API
+key. Name them when you set the agent up, by the ids `bromigos lab connectors` prints:
+
+```bash
+bromigos lab provision --services hermes --ssh <user>@<host> \
+  --repo <folder> --age-recipient <age-public-key> --llm-url <model-url> \
+  --connectors context7 tavily
+```
+
+If you leave `--connectors` out, the prompts ask for them. For a connector that needs a
+key, a hidden prompt asks for the key. It's encrypted with your other credentials and
+reaches the agent the same way. Then review, commit and apply as above.
+
+The agent gets those services' tools and nothing else new. `bromigos lab connectors show
+<id>` says whether an agent can be given a service, and whether your lab's plan already
+gives it to one. You can choose up to eight.
+
+Some services can spend money or contact people. Zapier and Composio can send email and
+messages from the apps you connect to them. Planning refuses such a service and says what
+it can do. To give it to the agent anyway, name it again:
+
+```bash
+bromigos lab provision … --connectors zapier --allow-acting zapier
+```
+
+To change an agent's services later, plan again with a new `--connectors` list. To take
+them all away, pass `--connectors` with nothing after it.
+
+> **Planned.** Services that need a sign-in in your browser, and services reached with
+> an API key alone, can't be given to an agent yet. NVIDIA NemoClaw is given none.
+
+What the agent's settings get, and where a key is kept, are in the
+[agent installer notes](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-agents.md#connectors).

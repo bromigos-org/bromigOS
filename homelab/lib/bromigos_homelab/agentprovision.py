@@ -16,6 +16,51 @@ SAFE_HERMES = ('memory', 'session_search', 'todo')
 DENIED_HERMES = ('terminal', 'file', 'browser', 'code_execution', 'delegation', 'skills', 'web', 'cronjob')
 
 
+def server_name(connector):
+    """A connector's name in an agent's settings. The prefix keeps it clear of an agent's own toolset names."""
+    return 'connector_' + connector.replace('-', '_')
+
+
+def key_variable(connector):
+    """The environment variable a connector's key reaches the agent in."""
+    return 'CONNECTOR_' + connector.upper().replace('-', '_') + '_KEY'
+
+
+def connector_rows(options, picked=()):
+    """The catalogue rows for the connectors a plan gives its agents ([]: none), checked on every call."""
+    from .provision import ProvisionError
+    from . import connectors as C
+    lists = [options.get(k) or [] for k in ('connectors', 'allow_acting', 'allow_unanswered')]
+    if any(not isinstance(v, list) or not all(isinstance(i, str) for i in v) for v in lists):
+        raise ProvisionError('Connectors are a list of ids from bromigos lab connectors')
+    if not any(lists):
+        return []
+    if 'nemoclaw' in picked:
+        raise ProvisionError('NemoClaw is given no connectors; choose them for Hermes or OpenClaw alone')
+    try:
+        return C.chosen(C.load(), *lists)
+    except (C.CatalogueError, C.Refused) as error:
+        raise ProvisionError(str(error)) from None
+
+
+def connector_servers(agent, options):
+    """The chosen connectors as remote MCP servers, in the agent's own format. A key is a reference to
+    the agent's environment, never a value."""
+    servers = {}
+    for row in connector_rows(options):
+        server = {'url': row['url']}
+        if row['auth'] == 'key':
+            reference = '${' + key_variable(row['id']) + '}'
+            server['headers'] = {row['key_header']: reference} if row.get('key_header') else {'Authorization': 'Bearer ' + reference}
+        if agent == 'hermes':
+            # The server gets its tools and nothing more: it may not ask the agent's model or the person for anything.
+            server.update(sampling={'enabled': False}, elicitation={'enabled': False})
+        else:
+            server['transport'] = 'streamable-http'
+        servers[server_name(row['id'])] = server
+    return servers
+
+
 def validate(options, picked, target):
     from .provision import ProvisionError
     if not any(s in picked for s in AGENTS):
@@ -36,6 +81,7 @@ def validate(options, picked, target):
         raise ProvisionError('Agent tool choice must be none or memory; shell and file tools stay disabled')
     if not re.fullmatch(r'[a-z][a-z0-9-]{0,31}', options.get('profile', 'assistant')):
         raise ProvisionError('Use a short lower-case profile name')
+    connector_rows(options, picked)
     channels = options.get('gateways', [])
     if set(channels) - {'telegram', 'discord'}:
         raise ProvisionError('Choose Telegram or Discord')
@@ -80,17 +126,25 @@ def configure(picked, options, saved=None):
         options['gateways'] = [] if not choice or choice == 'none' else choice.split()
     if not options.get('profile'):
         options['profile'] = input('Profile name [assistant]: ').strip() or 'assistant'
-    if not options.get('tools'):
+    asked_tools = not options.get('tools')
+    if asked_tools:
         options['tools'] = input('Allowed tools: none or memory [memory]; shell and file tools are disabled: ').strip() or 'memory'
     for channel in options['gateways']:
         if not options.get(channel + '_users'):
             options[channel + '_users'] = [v.strip() for v in input(channel + ' allowed numeric user IDs, separated by commas: ').strip().split(',')]
+    if 'connectors' not in options:
+        # Connectors go with the tools question. A plan that had answered it already keeps none.
+        choice = input('Connectors by id, separated by spaces; bromigos lab connectors lists them [none]: ').replace(',', ' ').split() if asked_tools else []
+        options['connectors'] = [] if choice == ['none'] else choice
+    keyed = [row for row in connector_rows(options, picked) if row['auth'] == 'key']
     credentials = dict(saved or {})
+    # One key serves every agent in the plan. A connector no longer chosen loses its key.
+    keys = {k: v for a in AGENTS for k, v in credentials.get(a + '-env', {}).items() if k.startswith('CONNECTOR_') and v}
     for agent in picked:
         if agent not in AGENTS:
             continue
         name = agent + '-env'
-        env = dict(credentials.get(name, {}))
+        env = {k: v for k, v in credentials.get(name, {}).items() if not k.startswith('CONNECTOR_')}
         if not env.get('LLM_API_KEY'):
             env['LLM_API_KEY'] = getpass.getpass(agent + ' LLM API key (blank only for an unauthenticated endpoint): ') or 'no-key-required'
         env.setdefault('AGENT_API_KEY', secrets.token_urlsafe(32))
@@ -101,6 +155,14 @@ def configure(picked, options, saved=None):
                 if not env[variable]:
                     from .provision import ProvisionError
                     raise ProvisionError('The selected messaging gateway needs a token')
+        for row in keyed:
+            variable = key_variable(row['id'])
+            if not keys.get(variable):
+                keys[variable] = getpass.getpass(row['name'] + ' API key, for the ' + row['id'] + ' connector: ')
+                if not keys[variable]:
+                    from .provision import ProvisionError
+                    raise ProvisionError('The ' + row['id'] + ' connector needs its key')
+            env[variable] = keys[variable]
         credentials[name] = env
     return options, credentials
 
@@ -108,9 +170,12 @@ def configure(picked, options, saved=None):
 def configuration(agent, options):
     model, endpoint = options['model'], options['endpoint']
     gateways = options.get('gateways', [])
+    servers = connector_servers(agent, options)
     if agent == 'hermes':
-        tools = list(SAFE_HERMES) if options.get('tools', 'memory') == 'memory' else []
-        return {'model': {'provider': 'custom', 'default': model, 'base_url': endpoint, 'api_mode': 'chat_completions'},
+        # Naming a server here is upstream's allowlist: these surfaces get these servers and no others.
+        tools = (list(SAFE_HERMES) if options.get('tools', 'memory') == 'memory' else []) + list(servers)
+        return {**({'mcp_servers': servers} if servers else {}),
+                'model': {'provider': 'custom', 'default': model, 'base_url': endpoint, 'api_mode': 'chat_completions'},
                 'auxiliary': {k: {'provider': 'main', 'model': model} for k in ('compression', 'vision', 'web_extract')},
                 'memory': {'memory_enabled': 'memory' in tools, 'user_profile_enabled': 'memory' in tools},
                 'agent': {'disabled_toolsets': list(DENIED_HERMES)},
@@ -120,12 +185,14 @@ def configuration(agent, options):
                 'platforms': {'api_server': {'enabled': True, 'extra': {'host': '0.0.0.0', 'port': 8642}},
                               **{k: {'enabled': k in gateways} for k in ('telegram', 'discord')}}}
     tools = ['session_status', 'memory_get'] if options.get('tools', 'memory') == 'memory' else ['session_status']
+    tools += [name + '__*' for name in servers]             # upstream names a server's tools <server>__<tool>
     channels = {}
     for channel in gateways:
         cfg = {'enabled': True, 'dmPolicy': 'allowlist', 'allowFrom': options[channel + '_users'], 'groupPolicy': 'disabled'}
         cfg['botToken' if channel == 'telegram' else 'token'] = '${' + channel.upper() + '_BOT_TOKEN}'
         channels[channel] = cfg
-    return {'gateway': {'mode': 'local', 'bind': 'lan', 'port': 18789, 'auth': {'mode': 'token', 'token': '${AGENT_API_KEY}'},
+    return {**({'mcp': {'servers': servers}} if servers else {}),
+            'gateway': {'mode': 'local', 'bind': 'lan', 'port': 18789, 'auth': {'mode': 'token', 'token': '${AGENT_API_KEY}'},
                         'controlUi': {'enabled': False}, 'http': {'endpoints': {'chatCompletions': {'enabled': True}}}},
             'models': {'mode': 'merge', 'providers': {'lab': {'baseUrl': endpoint, 'apiKey': '${LLM_API_KEY}', 'api': 'openai-completions',
                                                             'models': [{'id': model, 'name': model}]}}},
@@ -263,6 +330,9 @@ def runtime_secrets(state, values):
         credentials = values.get(agent + '-env')
         if not isinstance(credentials, dict) or not credentials.get('LLM_API_KEY') or not credentials.get('AGENT_API_KEY'):
             raise P.ProvisionError('Agent credentials are missing; run plan with your age identity available')
+        for row in connector_rows(opts, chosen):
+            if row['auth'] == 'key' and not credentials.get(key_variable(row['id'])):
+                raise P.ProvisionError('The key for the ' + row['id'] + ' connector is missing; run plan with your age identity available')
         env = environment(agent, opts, credentials)
         if agent == 'nemoclaw':
             env = {'COMPATIBLE_API_KEY': credentials['LLM_API_KEY']}
@@ -284,12 +354,27 @@ home = Path(os.environ.get("HERMES_HOME", "/opt/data"))
 config = json.loads((home / "config.yaml").read_text())
 status = json.loads((home / "gateway_state.json").read_text())
 urllib.request.urlopen("http://127.0.0.1:8642/health", timeout=5).read()
-print(json.dumps({"status": "running", "model": config.get("model", {}).get("default", "unknown"), "gateways": ", ".join(k + ": " + str(v.get("state", "unknown")) for k,v in status.get("platforms", {}).items() if k in ("telegram", "discord", "api_server")), "activity": str(status.get("active_agents", 0)) + " active; heartbeat " + str(status.get("updated_at", "unknown"))}))
+print(json.dumps({"status": "running", "connectors": sorted(config.get("mcp_servers") or {}), "model": config.get("model", {}).get("default", "unknown"), "gateways": ", ".join(k + ": " + str(v.get("state", "unknown")) for k,v in status.get("platforms", {}).items() if k in ("telegram", "discord", "api_server")), "activity": str(status.get("active_agents", 0)) + " active; heartbeat " + str(status.get("updated_at", "unknown"))}))
 '''
 OPENCLAW_METADATA = '''const fs = require('fs');
 const c = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json', 'utf8'));
-fetch('http://127.0.0.1:18789/healthz').then(r => {if(!r.ok) process.exit(1); const p='/home/node/.openclaw/agents'; let last=0; function visit(d) {if(!fs.existsSync(d)) return; for(const e of fs.readdirSync(d,{withFileTypes:true})){const q=d+'/'+e.name;if(e.isDirectory())visit(q);else if(e.name==='sessions.json')last=Math.max(last,fs.statSync(q).mtimeMs);}} visit(p); console.log(JSON.stringify({status:'running',model:c.agents.defaults.model.primary,gateways:Object.keys(c.channels||{}).map(k=>k+': configured (connection unknown)').join(', ') || 'none',activity:last ? 'session metadata updated '+new Date(last).toISOString() : 'no recorded sessions'}));}).catch(()=>process.exit(1));
+fetch('http://127.0.0.1:18789/healthz').then(r => {if(!r.ok) process.exit(1); const p='/home/node/.openclaw/agents'; let last=0; function visit(d) {if(!fs.existsSync(d)) return; for(const e of fs.readdirSync(d,{withFileTypes:true})){const q=d+'/'+e.name;if(e.isDirectory())visit(q);else if(e.name==='sessions.json')last=Math.max(last,fs.statSync(q).mtimeMs);}} visit(p); console.log(JSON.stringify({status:'running',connectors:Object.keys((c.mcp||{}).servers||{}),model:c.agents.defaults.model.primary,gateways:Object.keys(c.channels||{}).map(k=>k+': configured (connection unknown)').join(', ') || 'none',activity:last ? 'session metadata updated '+new Date(last).toISOString() : 'no recorded sessions'}));}).catch(()=>process.exit(1));
 '''
+
+
+def connectors_given(state, servers):
+    """The plan's connectors that the running agent has a server for, as "id (Name)" words. Only ids
+    from the plan and names from the catalogue get through: nothing the agent reports is copied."""
+    from . import connectors as C
+    chosen = (state.get('agents') or {}).get('connectors') or []
+    if not isinstance(servers, list):
+        return 'unknown'
+    try:
+        names = {row['id']: row['name'] for row in C.load()['rows'] if row['kind'] == 'one-click'}
+    except C.CatalogueError:
+        names = {}
+    given = [c for c in chosen if isinstance(c, str) and C.ID.fullmatch(c) and server_name(c) in servers]
+    return ', '.join(c + (' (' + names[c] + ')' if c in names else '') for c in given) or 'none'
 
 
 def metadata(state, agent):
@@ -300,7 +385,7 @@ def metadata(state, agent):
         # exec selects the owning gateway. The inner HTTP check makes no model call.
         argv = ['/root/.local/bin/nemoclaw', 'lab-assistant', 'exec', '--', 'node', '-e', OPENCLAW_METADATA.replace('/home/node', '/sandbox')]
         raw = json.loads(P.run(P.ssh_args(target) + ['sudo -n ' + shlex.join(argv)]))
-        return {'name': agent, **{k: raw.get(k, 'unknown') for k in ('status', 'model', 'gateways', 'activity')}}
+        return {'name': agent, **{k: raw.get(k, 'unknown') for k in ('status', 'model', 'gateways', 'activity')}, 'connectors': 'none'}
     argv = ['python3', '-c', HERMES_METADATA] if agent == 'hermes' else ['node', '-e', OPENCLAW_METADATA]
     if target['kind'] == 'ssh':
         command = 'sudo -n docker exec $(sudo -n docker ps -q --filter label=com.docker.compose.project=bromigos-agents --filter label=com.docker.compose.service=' + agent + ') ' + shlex.join(argv)
@@ -308,7 +393,8 @@ def metadata(state, agent):
     else:
         result = P.kubectl(target, ['-n', 'lab-agents', 'exec', 'deployment/' + agent, '--'] + argv)
     raw = json.loads(result)
-    return {'name': agent, **{k: raw.get(k, 'unknown') for k in ('status', 'model', 'gateways', 'activity')}}
+    return {'name': agent, **{k: raw.get(k, 'unknown') for k in ('status', 'model', 'gateways', 'activity')},
+            'connectors': connectors_given(state, raw.get('connectors'))}
 
 
 def verify(state):

@@ -13,9 +13,12 @@ sign-in or a key. A "key" platform has no such server: an agent reaches its REST
     C.find(cat, "stripe")                   # every row of that id: the connector and the platform
     C.state(row)                            # "offered" | "listed only" | "no address" | "no answer"
     C.needs(row)                            # "An API key from Tavily, sent as a Bearer token."
+    C.chosen(cat, ["context7", "tavily"])   # the rows an agent may be given; Refused says why not
+    C.in_use()                              # {"tavily": ["hermes"]}: what the lab's saved plan gives
 
-A row is the file's own table plus `kind`. This is a catalogue only: nothing here connects to a
-service, signs in, or reads, asks for or keeps a key. The file is data from somewhere else
+A row is the file's own table plus `kind`. Nothing here connects to a service, signs in, or reads,
+asks for or keeps a key: `bromigos lab provision` gives an agent the connectors chosen() passes
+(agentprovision.py; docs/lab-agents.md). The file is data from somewhere else
 (tools/lab/connectors-import.py), so load() refuses what it doesn't expect: an unknown key, an
 address that isn't https, text with a control character in it.
 """
@@ -53,10 +56,15 @@ PLATFORM_KEYS = {"id": str, "name": str, "category": str, "env": str, "docs": st
 CONNECTOR_NEEDS = ("id", "name", "category", "auth", "official", "homepage", "summary")
 PLATFORM_NEEDS = ("id", "name", "category", "env", "docs", "api_base", "summary")
 _SHAPES = {str: "words", bool: "true or false", list: "a list of words"}
+MOST = 8                                 # the most connectors one plan gives its agents
 
 
 class CatalogueError(ValueError):
     """The catalogue can't be used: no file, or a file with problems (each said in plain words)."""
+
+
+class Refused(ValueError):
+    """A choice of connectors an agent can't be given, and why (in plain words)."""
 
 
 def paths():
@@ -267,6 +275,82 @@ def needs(row):
     return f"A sign-in to {row['name']} in your browser (OAuth)."
 
 
+def why_not(row):
+    """Why an agent can't be given this row yet, as the end of a sentence (None: it can). A row
+    that acts, or whose address didn't answer, can: chosen() asks for it to be named twice."""
+    if row["kind"] == "key":
+        return "it's a key platform, not a connector, and key platforms come in a later change"
+    if row.get("listed_only"):
+        return "it's listed only. " + row["listed_only"].rstrip(".")
+    if not row.get("url"):
+        return f"it has no address of its own: it's reached through the {row['via']} connector"
+    if row.get("local"):
+        return "its server runs on your own machine, where an agent in your lab can't reach it"
+    if row["auth"] == "sign-in":
+        return "it needs a sign-in in a browser, and sign-in connectors come in a later change"
+    return None
+
+
+def chosen(cat, ids, allow_acting=(), allow_unanswered=()):
+    """The rows for the connector ids an agent is to be given, in the order asked for, each once.
+    Raises Refused for an id nothing has, a row why_not() names, more than MOST, a row whose
+    address didn't answer (unless allow_unanswered names it) and a row that acts (unless
+    allow_acting names it). The two allow lists are `bromigos lab provision`'s options."""
+    ids, allow_acting, allow_unanswered = ([str(i).casefold().strip() for i in dict.fromkeys(some)]
+                                           for some in (ids, allow_acting, allow_unanswered))
+    for option, named in (("--allow-acting", allow_acting), ("--allow-unanswered", allow_unanswered)):
+        stray = [i for i in named if i not in ids]
+        if stray:
+            raise Refused(f"{option} names {', '.join(stray)}, which isn't among the connectors chosen.")
+    if len(ids) > MOST:
+        raise Refused(f"An agent is given at most {MOST} connectors, and {len(ids)} were chosen.")
+    out = []
+    for rid in ids:
+        found = find(cat, rid, "one-click") or find(cat, rid)
+        if not found:
+            close = list(dict.fromkeys(r["id"] for r in search(cat, rid, "one-click")))[:5]
+            raise Refused(f"No connector has the id {rid!r}. "
+                          + (f"Close: {', '.join(close)}." if close else
+                             "bromigos lab connectors search WORDS finds one by name."))
+        row = found[0]
+        named = f"{row['name']} ({rid})"
+        why = why_not(row)
+        if why:
+            raise Refused(f"{named} can't be given to an agent: {why}.")
+        if row.get("answered") is False and rid not in allow_unanswered:
+            raise Refused(f"{named} didn't answer when its address was checked on {cat['checked']} "
+                          f"({row['answer']}). To choose it anyway, add --allow-unanswered {rid}.")
+        if row.get("acts") and rid not in allow_acting:
+            raise Refused(f"{named} can act for you. {row['acts']} To give it to an agent anyway, "
+                          f"add --allow-acting {rid}.")
+        out.append(row)
+    return out
+
+
+def plans():
+    """The saved lab plans this computer's console reads (homelab.toml's `provisioned` sources)."""
+    from . import config
+    return [s["plan"] for s in config.load().get("sources", [])
+            if s.get("type") == "provisioned" and isinstance(s.get("plan"), str)]
+
+
+def in_use(paths=None):
+    """{connector id: [agent, …]}: the connectors the lab's saved plan gives its agents ({}: no
+    plan, or one that can't be read). The plan is what was chosen: it isn't asked of the agent."""
+    out = {}
+    try:
+        for path in plans() if paths is None else paths:
+            with open(path, encoding="utf-8") as f:
+                state = json.load(f)
+            agents = [a for a in ("hermes", "openclaw") if a in state.get("selected", [])]
+            for rid in (state.get("agents") or {}).get("connectors") or []:
+                if isinstance(rid, str) and agents:
+                    out[rid] = sorted(set(out.get(rid, []) + agents))
+    except Exception:                                              # noqa: BLE001  a plan never stops the catalogue
+        return {}
+    return out
+
+
 def category_named(cat, kind, name):
     """A category by its name or a part of it, whatever the case (None: no such, or several)."""
     names = [c for k in ([kind] if kind else KINDS) for c in cat["categories"][k]]
@@ -307,13 +391,19 @@ def search(cat, words, kind=None):
     return [r for *_, r in sorted(out, key=lambda x: x[:3])]
 
 
-def describe(row):
-    """A row for --json: the row, its state and what it needs."""
-    return dict(row, state=state(row), needs=needs(row))
+def describe(row, used=None):
+    """A row for --json: the row, its state and what it needs; `in_use` names the agents the
+    lab's saved plan gives it to, when there are any."""
+    out = dict(row, state=state(row), needs=needs(row))
+    if row["kind"] == "one-click" and (used or {}).get(row["id"]):
+        out["in_use"] = used[row["id"]]
+    return out
 
 
 # ------------------------------------------------------------------ bromigos lab connectors
-PLANNED = "This is the catalogue only: connecting one to an agent isn't built yet (docs/lab-connectors.md)."
+GIVE = ("To give an agent connectors that need nothing or a key: bromigos lab provision … --connectors ID … "
+        "(docs/lab-agents.md).")
+NOT_YET = "Sign-in connectors and key platforms can't be given to an agent yet."
 MARKS = {"listed only": "listed only: it needs a sign-in or code of our own",
          "no address": "no address of its own", "no answer": "didn't answer when last checked"}
 
@@ -330,7 +420,7 @@ def _row_line(r):
     return f"  {r['id']:<20} {_short(r['name'], 24):<24} {what:<{wide}} {_short(tail, room)}".rstrip()
 
 
-def print_list(cat, shown, kind, every):
+def print_list(cat, shown, kind, every, used=None):
     for k in [kind] if kind else KINDS:
         mine = [r for r in shown if r["kind"] == k]
         total = [r for r in cat["rows"] if r["kind"] == k]
@@ -354,7 +444,10 @@ def print_list(cat, shown, kind, every):
         print(f"{len(left)} more aren't on offer (--all lists them): "
               + ", ".join(f"{n} {MARKS[s].split(':')[0]}" for s, n in counts.items() if n) + ".")
     print(f"Addresses last checked {cat['checked']}. bromigos lab connectors show ID says what one needs.")
-    print(PLANNED)
+    if used:
+        print("In your lab's plan: " + ", ".join(f"{rid} ({' and '.join(used[rid])})" for rid in sorted(used)) + ".")
+    print(GIVE)
+    print(NOT_YET)
 
 
 def _field(label, text):
@@ -364,7 +457,7 @@ def _field(label, text):
         print(f"  {'':<12} {more}")
 
 
-def print_show(cat, r):
+def print_show(cat, r, used=None):
     print(f"{r['name']} ({KIND_WORDS[r['kind']]}) · {r['category']}")
     for line in textwrap.wrap(r["summary"], 98):
         print(line)
@@ -395,12 +488,22 @@ def print_show(cat, r):
         _field("Homepage", r["homepage"])
     if r.get("aliases"):
         _field("Also called", ", ".join(r["aliases"]))
+    why = why_not(r)
+    if why:
+        _field("Agents", f"Can't be given to an agent yet: {why}.")
+    else:
+        extra = (f" --allow-acting {r['id']}" if r.get("acts") else "") + \
+                (f" --allow-unanswered {r['id']}" if r.get("answered") is False else "")
+        _field("Agents", f"bromigos lab provision … --connectors {r['id']}{extra} gives it to an agent.")
+        if (used or {}).get(r["id"]):
+            _field("In use", f"Your lab's plan gives it to {' and '.join(used[r['id']])}.")
 
 
 def parser():
     p = argparse.ArgumentParser(prog="bromigos lab connectors",
                                 description="The lab's connector catalogue: services an agent could reach, and "
-                                            "what each needs. Nothing here connects or keeps a key.")
+                                            "what each needs. Nothing here connects or keeps a key: "
+                                            "bromigos lab provision gives an agent the ones you choose.")
     p.add_argument("verb", nargs="?", choices=["list", "search", "show"], default="list")
     p.add_argument("words", nargs="*", help="search: what to look for; show: the id")
     p.add_argument("--kind", choices=KINDS, help="one-click (remote MCP servers) or key (REST APIs with a key)")
@@ -421,6 +524,7 @@ def main(argv=None):
             print(json.dumps({"error": str(e)}))
         print(f"{say}: {e}", file=sys.stderr)
         return 4
+    used = in_use()
     if a.verb == "list":
         if a.words:
             print(f"{say} list takes no words: {say} search {' '.join(a.words)}", file=sys.stderr)
@@ -435,9 +539,9 @@ def main(argv=None):
                 return 3
         shown = rows(cat, a.kind, cname, a.all)
         if a.json:
-            print(json.dumps({"checked": cat["checked"], "rows": [describe(r) for r in shown]}, indent=1))
+            print(json.dumps({"checked": cat["checked"], "rows": [describe(r, used) for r in shown]}, indent=1))
         else:
-            print_list(cat, shown, a.kind, a.all)
+            print_list(cat, shown, a.kind, a.all, used)
         return 0
     if not a.words:
         print(f"{say} {a.verb} " + ("WORDS" if a.verb == "search" else "ID"), file=sys.stderr)
@@ -446,7 +550,7 @@ def main(argv=None):
         found = search(cat, a.words, a.kind)
         if a.json:
             print(json.dumps({"query": " ".join(a.words), "checked": cat["checked"],
-                              "rows": [describe(r) for r in found]}, indent=1))
+                              "rows": [describe(r, used) for r in found]}, indent=1))
         elif not found:
             print(f"Nothing in the catalogue is called {' '.join(a.words)!r}.")
         else:
@@ -464,14 +568,12 @@ def main(argv=None):
               file=sys.stderr)
         return 3
     if a.json:
-        print(json.dumps({"checked": cat["checked"], "rows": [describe(r) for r in found]}, indent=1))
+        print(json.dumps({"checked": cat["checked"], "rows": [describe(r, used) for r in found]}, indent=1))
         return 0
     for n, r in enumerate(found):
         if n:
             print()
-        print_show(cat, r)
-    print()
-    print(PLANNED)
+        print_show(cat, r, used)
     return 0
 
 

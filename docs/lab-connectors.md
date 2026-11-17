@@ -9,9 +9,13 @@ This page explains the catalogue's data, its command and how it's made, for some
 extending it. An *agent* here is a program that works through a task by calling tools,
 such as the ones in [Agents in your lab](lab-agents.md).
 
-> **Planned.** Connecting an entry to a running agent isn't built yet. Today the catalogue
-> only tells you what exists and what each entry needs. Nothing here signs in to a
-> service, asks for a key, keeps a key or sends anything to a service.
+The catalogue itself never signs in to a service, asks for a key, keeps a key or sends
+anything to a service. `bromigos lab provision` gives an agent the connectors you choose
+from it: the one-click entries that need nothing or an API key. See
+[Connectors](lab-agents.md#connectors).
+
+> **Planned.** One-click entries that need a sign-in, and key platforms, can't be given
+> to an agent yet.
 
 ## Two kinds of entry
 
@@ -49,7 +53,8 @@ it's the environment variable its key goes in.
 | `bromigos lab connectors show <id>` | Show one entry in full. `--kind` picks one of two. |
 
 Every command takes `--json`. The JSON has a `rows` list. Each row is the entry's own
-keys, plus `kind`, `state` and `needs`, a sentence that says what the entry needs.
+keys, plus `kind`, `state` and `needs`, a sentence that says what the entry needs. A
+connector in your lab's saved plan also has `in_use`, the agents it's given to.
 
 `show` prints these for a key platform:
 
@@ -59,6 +64,12 @@ keys, plus `kind`, `state` and `needs`, a sentence that says what the entry need
 
 For a one-click connector it prints the address, the kind of sign-in, and whether the
 address answered when it was last checked.
+
+`show` also has an `Agents` line. It gives the option that hands the entry to an agent, or
+says why an agent can't be given it yet. When your lab's saved plan gives the connector to
+an agent, an `In use` line names the agents, and `list` ends with a line of every
+connector in the plan. The saved plan is the `plan` file of the `provisioned` source in
+your `homelab.toml`. It says what you chose. The command doesn't ask the agent.
 
 `search` looks at ids, names and aliases only. An *alias* is another word people type
 for a service, such as `jira` for the Jira & Confluence entry. The closest match comes
@@ -85,8 +96,9 @@ with its state.
 | `no address` | It has no server of its own. Another connector reaches it. | 1 connector |
 | `no answer` | Its address didn't answer when it was last checked. | 1 connector |
 
-"On offer" doesn't mean connected. It means nothing stands in the way once connecting is
-built.
+"On offer" doesn't mean an agent can be given it. Today an agent can be given an offered
+one-click entry that needs nothing or a key, and whose server doesn't run on your own
+machine. The rest wait for sign-ins and key platforms to be built.
 
 The nine `listed only` entries are these:
 
@@ -123,6 +135,10 @@ entry can do. `show` prints it as `Can act`.
 The marks are bromigOS's own, and the list is short on purpose. An entry without a mark
 isn't promised to be harmless: read what a service's tools can do before you give it to an
 agent.
+
+`bromigos lab provision` refuses a marked connector unless you name it a second time, with
+`--allow-acting <id>`. Of the seven, only Composio and Zapier can be given to an agent
+today. Adspirer and Markifact need a sign-in, and the other three are key platforms.
 
 ## The liveness check
 
@@ -227,6 +243,9 @@ it. The command is its `main`.
 | `load()` | Read and check the file. Raise `CatalogueError` when it has problems. |
 | `validate()` | Return the problems as a list. An empty list means none. |
 | `rows(cat, kind, category, every)` | The entries on offer, or all of them with `every=True`. |
+| `chosen(cat, ids, allow_acting, allow_unanswered)` | The entries an agent may be given. Raise `Refused` with the reason. |
+| `why_not(row)` | Why an agent can't be given the entry yet, or `None`. |
+| `in_use()` | The connectors in the lab's saved plan, and the agents they're given to. |
 | `search(cat, words, kind)` | The entries that match, the closest first. |
 | `find(cat, id, kind)` | Every entry with that id. |
 | `state(row)` | `offered`, `listed only`, `no address` or `no answer`. |
