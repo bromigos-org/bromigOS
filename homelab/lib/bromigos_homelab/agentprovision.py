@@ -236,7 +236,11 @@ def plan(files, state, roles):
         files[f'helm/{agent}/values.yaml'] = P.dump({agent: {'image': IMAGES[agent]}})
         command = ['hermes', '-p', 'default', 'gateway', 'run'] if agent == 'hermes' else ['node', 'openclaw.mjs', 'gateway', '--allow-unconfigured']
         home = '/opt/data/' + opts.get('profile', 'assistant') if agent == 'hermes' else '/home/node/.openclaw'
-        cfg = {'image': IMAGES[agent], 'restart': 'unless-stopped', 'command': command,
+        # An agent reads its settings and its credentials when it starts. Changed settings change this
+        # mark, which restarts it: a dropped connector's server and key then leave the running agent
+        # too. The hash is of the settings file, which holds no credential.
+        settings = hashlib.sha256(P.dump(config).encode()).hexdigest()
+        cfg = {'image': IMAGES[agent], 'restart': 'unless-stopped', 'command': command, 'labels': {'org.bromigos.lab.settings-sha256': settings},
                'ports': [f'127.0.0.1:{PORTS[agent]}:{PORTS[agent]}'], 'env_file': [f'./{agent}.env'],
                'volumes': [f'{agent}-data:{home}', f'./{agent}/{name}:{home}/{name}:ro'],
                'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'], 'extra_hosts': ['lab-model-host:host-gateway']}
@@ -254,7 +258,7 @@ def plan(files, state, roles):
                       {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': agent + '-config'}, 'data': {name: P.dump(config)}},
                       {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'metadata': {'name': agent},
                        'spec': {'replicas': 1, 'strategy': {'type': 'Recreate'}, 'selector': {'matchLabels': labels},
-                                'template': {'metadata': {'labels': labels}, 'spec': {'automountServiceAccountToken': False,
+                                'template': {'metadata': {'labels': labels, 'annotations': {'bromigos.org/settings-sha256': settings}}, 'spec': {'automountServiceAccountToken': False,
                                     'containers': [{'name': agent, 'image': '{{ .Values.' + agent + '.image }}', 'command': command,
                                         'envFrom': [{'secretRef': {'name': agent + '-env'}}],
                                         'env': [{'name': 'HERMES_SKIP_CONFIG_MIGRATION', 'value': '1'}, {'name': 'HERMES_HOME', 'value': home}] if agent == 'hermes' else [],

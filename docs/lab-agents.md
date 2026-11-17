@@ -240,6 +240,10 @@ encrypted key.
 When you stop choosing a connector, its key goes too. The next plan drops it from the
 encrypted credentials. The next apply writes the box's env file whole, without it, and
 replaces the Kubernetes Secret whole instead of merging it, so the old entry doesn't stay.
+An agent reads its settings and credentials when it starts, so apply restarts an agent
+whose settings changed. The container or pod carries a hash of its settings file, and a
+new hash makes Docker Compose or Kubernetes start it again. The first apply after this
+change restarts each agent once.
 Vault keeps a secret's earlier versions, and your repository's history keeps the earlier
 ciphertext. Revoke a key at its service when you no longer want it to work.
 

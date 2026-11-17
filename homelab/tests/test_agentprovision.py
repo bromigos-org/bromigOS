@@ -241,7 +241,7 @@ class AgentConnectors(unittest.TestCase):
 
     def test_goldens(self):
         self.assertEqual([], C.validate())
-        for name, target, moved in (('agents-connectors-host', TARGET, {'plan.json', 'agents/hermes/config.yaml', 'agents/openclaw/openclaw.json'}),
+        for name, target, moved in (('agents-connectors-host', TARGET, {'plan.json', 'agents/compose.yaml', 'agents/hermes/config.yaml', 'agents/openclaw/openclaw.json'}),
                                     ('agents-connectors-cluster', CLUSTER, {'plan.json', 'agents/hermes/config.yaml', 'agents/openclaw/openclaw.json', 'helm/agents/templates/agents.yaml'})):
             with self.subTest(name=name):
                 files, _ = P.plan_files(target, ['hermes', 'openclaw'], FACTS, age_recipient='age1example', agents=CONNECTED)
@@ -250,7 +250,7 @@ class AgentConnectors(unittest.TestCase):
                 for word in ('stringData', 'hostPath', 'NetworkPolicy', KEY):
                     self.assertNotIn(word, text)
                 self.assertEqual(['docs', 'web-search'], json.loads(files['plan.json'])['agents']['connectors'])
-                # Next to the plan without connectors, only the plan and the agents' own settings differ.
+                # Next to the plan without connectors, only the plan, the agents' own settings and their hash differ.
                 plain = self.golden(name.replace('-connectors', ''))
                 self.assertEqual(set(files), set(plain))
                 self.assertEqual(moved, {k for k in files if files[k] != plain[k]})
@@ -434,6 +434,28 @@ class AgentConnectors(unittest.TestCase):
         with mock.patch.object(P, 'run'), self.assertRaises(P.ProvisionError) as error:
             A.runtime_secrets(dict(state, selected=['hermes']), {'hermes-env': env})
         self.assertIn('The key for the web-search connector is missing', str(error.exception))
+
+    def test_changed_settings_restart_the_agent(self):
+        import hashlib
+
+        def marks(target, options):
+            files, _ = P.plan_files(target, ['hermes', 'openclaw'], FACTS, age_recipient='age1example', agents=options)
+            if target is TARGET:
+                services = json.loads(files['agents/compose.yaml'])['services']
+                found = {agent: services[agent]['labels']['org.bromigos.lab.settings-sha256'] for agent in services}
+            else:
+                docs = [json.loads(doc) for doc in files['helm/agents/templates/agents.yaml'].split('---\n')]
+                found = {d['metadata']['name']: d['spec']['template']['metadata']['annotations']['bromigos.org/settings-sha256'] for d in docs if d['kind'] == 'Deployment'}
+            # The mark is the settings file's hash, and that file holds no credential.
+            self.assertEqual(found, {'hermes': hashlib.sha256(files['agents/hermes/config.yaml'].encode()).hexdigest(),
+                                     'openclaw': hashlib.sha256(files['agents/openclaw/openclaw.json'].encode()).hexdigest()})
+            return found
+        for target in (TARGET, CLUSTER):
+            with self.subTest(target=target['kind']):
+                with_two, with_one, plain = marks(target, CONNECTED), marks(target, dict(OPTIONS, connectors=['docs'])), marks(target, OPTIONS)
+                self.assertEqual(with_two, marks(target, dict(CONNECTED)))              # the same plan: no restart
+                for agent in ('hermes', 'openclaw'):
+                    self.assertEqual(3, len({with_two[agent], with_one[agent], plain[agent]}))
 
     def test_a_dropped_connector_leaves_no_key_behind(self):
         env = {'LLM_API_KEY': 'test-secret-value', 'AGENT_API_KEY': 'test-api-key', 'TELEGRAM_BOT_TOKEN': 'fake-bot', 'DISCORD_BOT_TOKEN': 'fake-discord'}
