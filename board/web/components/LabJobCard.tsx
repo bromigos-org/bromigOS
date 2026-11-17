@@ -15,7 +15,7 @@ import { ModelHolo } from "@/components/ModelHolo";
 import { Icon, IconButton } from "@/components/ui";
 import { ApiError } from "@/lib/api/errors";
 import type { JobRecord, LabMedia } from "@/lib/api/types";
-import { isOpen, jobIcon, STATE_CHIP, STATE_HINT, STATE_WORD, STEP } from "@/lib/jobs";
+import { byAgent, isOpen, jobIcon, STATE_CHIP, STATE_HINT, STATE_WORD, STEP } from "@/lib/jobs";
 import { useLab } from "@/lib/lab";
 import { ago, when } from "@/lib/time";
 
@@ -95,6 +95,7 @@ export function LabJobCard({ job, queue = [], full = false, hero = false, big = 
     lab.workflow && lab.source === "comfyui" ? lab.workflow : null,
     where,
     lab.client ? `from ${lab.client}` : null,
+    byAgent(job),
     `queued ${when(job.started_at, t)}`,
   ].filter(Boolean);
   const time = [

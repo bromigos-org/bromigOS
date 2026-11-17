@@ -12,7 +12,7 @@ import { LabJobCard } from "@/components/LabJobCard";
 import { Icon, IconButton, Planned } from "@/components/ui";
 import { ApiError, cleanCode } from "@/lib/api/errors";
 import type { JobRecord, JobVerb } from "@/lib/api/types";
-import { isOpen, jobIcon, progressWords, STATE_CHIP, STATE_HINT, STATE_WORD, STEP, waitWord } from "@/lib/jobs";
+import { byAgent, isOpen, jobIcon, progressWords, STATE_CHIP, STATE_HINT, STATE_WORD, STEP, waitWord } from "@/lib/jobs";
 import { useLab } from "@/lib/lab";
 import { clock, took, when } from "@/lib/time";
 
@@ -122,6 +122,7 @@ function ServerJobCard({ job, children = [], full = false }: { job: JobRecord; c
     waitWord(job),
     job.kind,
     `started ${when(job.started_at, t)}`,
+    byAgent(job),
     VIA[job.via] ?? "",
     children.length ? `${children.filter((c) => c.state === "succeeded").length} of ${children.length} done` : "",
     job.ended_at ? `after ${took(job.ended_at - job.started_at)}` : "",
