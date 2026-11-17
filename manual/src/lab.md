@@ -1177,9 +1177,10 @@ The agent gets those services' tools and nothing else new. `bromigos lab connect
 <id>` says whether an agent can be given a service, and whether your lab's plan already
 gives it to one. You can choose up to eight.
 
-Some services can spend money or contact people. Zapier and Composio can send email and
-messages from the apps you connect to them. Planning refuses such a service and says what
-it can do. To give it to the agent anyway, name it again:
+Some services can spend money or contact people. Stripe can take payments and issue
+refunds. Zapier and Composio can send email and messages from the apps you connect to
+them. Planning refuses such a service and says what it can do. To give it to the agent
+anyway, name it again:
 
 ```bash
 bromigos lab provision … --connectors zapier --allow-acting zapier

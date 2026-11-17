@@ -458,7 +458,8 @@ class ShippedConnectors(unittest.TestCase):
 
     def test_what_the_shipped_catalogue_gives_and_refuses(self):
         A.validate(dict(OPTIONS, connectors=['context7', 'tavily']), ['hermes', 'openclaw'], TARGET)
-        for rid, why in (('zapier', 'add --allow-acting zapier'), ('composio', 'add --allow-acting composio'), ('adspirer', 'needs a sign-in'), ('markifact', 'needs a sign-in'),
+        for rid, why in (('zapier', 'add --allow-acting zapier'), ('composio', 'add --allow-acting composio'), ('stripe', 'move money, within what its key allows. To give it to an agent anyway, add --allow-acting stripe'),
+                         ('paypal', 'needs a sign-in'), ('square', 'needs a sign-in'), ('ramp', 'needs a sign-in'), ('adspirer', 'needs a sign-in'), ('markifact', 'needs a sign-in'),
                          ('lob', 'key platform'), ('bland', 'key platform'), ('vapi', 'key platform'), ('github', 'listed only'), ('replaid', 'needs a sign-in'),
                          ('unreal-engine', 'your own machine'), ('atlassian', 'no address of its own')):
             with self.subTest(connector=rid):

@@ -29,7 +29,7 @@
 #   aliases                other words people type for it (search matches them)
 #   summary                one or two sentences on what it does
 #   listed_only            why bromigOS can't offer it yet: it needs a sign-in or code of our own
-#   acts                   what it can do that spends money or contacts people (absent: no mark)
+#   acts                   what it can do that spends or moves money, or contacts people (absent: no mark)
 #   answered               whether the address answered on `checked` (absent: never asked)
 #   answer                 the HTTP status it gave, or why there was none
 #
@@ -954,6 +954,7 @@ url = "https://mcp.paypal.com/mcp"
 official = true
 homepage = "https://paypal.com"
 summary = "Create invoices and query PayPal orders and payments. Needs PayPal sign-in (OAuth)."
+acts = "It can create invoices and act on payments in your PayPal account, within what your sign-in allows."
 answered = true
 answer = "401"
 
@@ -967,6 +968,7 @@ official = true
 homepage = "https://ramp.com"
 aliases = ["ramp", "corporate cards", "expenses", "spend"]
 summary = "Query Ramp transactions, cards, and spend programs. Needs Ramp sign-in (OAuth)."
+acts = "It can approve and edit spending in your Ramp account, within what your sign-in allows."
 answered = true
 answer = "401"
 
@@ -979,6 +981,7 @@ url = "https://mcp.squareup.com/mcp"
 official = true
 homepage = "https://squareup.com"
 summary = "Payments, catalog, and orders on Square. Needs Square sign-in (OAuth)."
+acts = "It can take payments and create orders on Square, within what your sign-in allows."
 answered = true
 answer = "401"
 
@@ -991,6 +994,7 @@ url = "https://mcp.stripe.com/"
 official = true
 homepage = "https://stripe.com"
 summary = "Query customers, payments, invoices, and subscriptions with a restricted Stripe API key."
+acts = "It can take payments, issue refunds and move money, within what its key allows."
 answered = true
 answer = "401"
 
@@ -1327,6 +1331,7 @@ auth_header = "Authorization: Bearer ${STRIPE_API_KEY}"
 summary = "Payments, customers, invoices, subscriptions."
 note = """Prefer a restricted key. Stripe is also a one-click connector: use that for tools instead of raw \
 REST."""
+acts = "It can take payments, issue refunds and move money, within what its key allows."
 
 # ---- platforms: Email & Messaging
 

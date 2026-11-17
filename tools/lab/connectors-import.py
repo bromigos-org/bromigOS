@@ -27,8 +27,8 @@ What the import changes. Fields get plain names. What only StarNet's interface o
 uses is dropped. A row that works only through StarNet's own code, or through a sign-in client
 StarNet registered, is kept and marked `listed_only` with the reason (LISTED_ONLY). Wording that
 names StarNet's own screens and tools is reworded (REWORDED): each old text must still be there,
-so an upstream edit stops the import instead of slipping past. A row that can spend money or
-contact people is marked `acts` with what it can do (ACTS): the mark is ours, not the source's.
+so an upstream edit stops the import instead of slipping past. A row that can spend or move
+money, or contact people, is marked `acts` with what it can do (ACTS): the mark is ours.
 
 --probe is the only part that uses the network: one GET per address, a generic User-Agent, no
 credentials, redirects not followed, nothing read but the status. A row on your own machine
@@ -89,17 +89,24 @@ LISTED_ONLY = (
      "registers. It isn't set up."),
 )
 
-# (table, id, what it can do): the rows that can spend money or contact people, beyond reading and
-# changing data in an account. An agent is given one only when you name it a second time
-# (docs/lab-agents.md). The list is ours and short on purpose: a row with no mark isn't promised
-# to be harmless. Each row must still be in the source, so a renamed one stops the import.
+# (table, id, what it can do): the rows that can spend or move money, or contact people. An agent
+# is given one only when you name it a second time (docs/lab-agents.md). Many other rows can change
+# data in the service they reach (a CRM's records, a database): those aren't marked. The list is
+# ours: a row with no mark isn't promised to be harmless. Each row must still be in the source, so
+# a renamed one stops the import.
 ACTS = (
     ("connector", "adspirer", "It can create ad campaigns that spend real ad budget."),
     ("connector", "markifact", "It can edit live ad campaigns."),
     ("connector", "composio", "It acts in the apps you connect to it, which can send email and messages."),
     ("connector", "zapier", "It acts in the apps you connect to it, which can send email and messages."),
+    ("connector", "paypal", "It can create invoices and act on payments in your PayPal account, within what your "
+                            "sign-in allows."),
+    ("connector", "ramp", "It can approve and edit spending in your Ramp account, within what your sign-in allows."),
+    ("connector", "square", "It can take payments and create orders on Square, within what your sign-in allows."),
+    ("connector", "stripe", "It can take payments, issue refunds and move money, within what its key allows."),
     ("platform", "bland", "It can place calls to real phones."),
     ("platform", "lob", "It can send real postcards, letters and cheques by post."),
+    ("platform", "stripe", "It can take payments, issue refunds and move money, within what its key allows."),
     ("platform", "vapi", "It can place calls to real phones."),
 )
 
@@ -193,7 +200,7 @@ HEADER = """\
 #   aliases                other words people type for it (search matches them)
 #   summary                one or two sentences on what it does
 #   listed_only            why bromigOS can't offer it yet: it needs a sign-in or code of our own
-#   acts                   what it can do that spends money or contacts people (absent: no mark)
+#   acts                   what it can do that spends or moves money, or contacts people (absent: no mark)
 #   answered               whether the address answered on `checked` (absent: never asked)
 #   answer                 the HTTP status it gave, or why there was none
 #

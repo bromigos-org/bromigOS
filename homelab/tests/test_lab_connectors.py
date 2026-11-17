@@ -34,7 +34,10 @@ LISTED_ONLY = {"github", "gmail", "gmail-app-password", "gmail-send", "google-ca
                "google-drive", "google-files", "google-sheets"}
 # the rows marked as able to spend money or contact people (tools/lab/connectors-import.py: ACTS)
 ACTS = {("one-click", "adspirer"), ("one-click", "composio"), ("one-click", "markifact"), ("one-click", "zapier"),
-        ("key", "bland"), ("key", "lob"), ("key", "vapi")}
+        ("one-click", "paypal"), ("one-click", "ramp"), ("one-click", "square"), ("one-click", "stripe"),
+        ("key", "bland"), ("key", "lob"), ("key", "stripe"), ("key", "vapi")}
+# rows that change data in the service they reach, and no more: never marked
+DATA_ONLY = ("hubspot", "airtable", "prisma", "apify")
 
 GOOD = """
 format = 1
@@ -161,6 +164,11 @@ class ShippedTest(unittest.TestCase):
         self.assertIn("spend real ad budget", C.find(self.cat, "adspirer")[0]["acts"])
         self.assertIn("calls to real phones", C.find(self.cat, "bland", "key")[0]["acts"])
         self.assertNotIn("acts", C.find(self.cat, "tavily")[0])
+        for rid in DATA_ONLY:
+            self.assertNotIn("acts", C.find(self.cat, rid, "one-click")[0], rid)
+        for row in C.find(self.cat, "stripe"):
+            self.assertEqual(row["acts"], "It can take payments, issue refunds and move money, within what its key "
+                                          "allows.")
         self.assertEqual(C.describe(C.find(self.cat, "zapier")[0])["acts"], C.find(self.cat, "zapier")[0]["acts"])
 
     def test_api_notes_are_kept(self):
@@ -334,7 +342,8 @@ class ChosenTest(unittest.TestCase):
         self.assertEqual([r["id"] for r in rows], ["tavily", "context7"])
         self.assertEqual([r["auth"] for r in rows], ["key", "none"])
         self.assertEqual(C.chosen(self.cat, []), [])
-        self.assertEqual(C.chosen(self.cat, ["stripe"])[0]["kind"], "one-click")     # the connector, not the platform
+        self.assertEqual(C.chosen(self.cat, ["airtable"])[0]["kind"], "one-click")   # the connector, not the platform
+        self.assertEqual([r["id"] for r in C.chosen(self.cat, list(DATA_ONLY))], list(DATA_ONLY))
 
     def test_an_id_nothing_has(self):
         self.assertEqual(self.refused(["tavilly"]), "No connector has the id 'tavilly'. bromigos lab connectors "
@@ -361,6 +370,12 @@ class ChosenTest(unittest.TestCase):
                          ["tavily", "zapier"])
         self.assertEqual(self.refused(["tavily"], allow_acting=["zapier"]),
                          "--allow-acting names zapier, which isn't among the connectors chosen.")
+        self.assertEqual(self.refused(["stripe"]),
+                         "Stripe (stripe) can act for you. It can take payments, issue refunds and move money, within "
+                         "what its key allows. To give it to an agent anyway, add --allow-acting stripe.")
+        self.assertEqual(C.chosen(self.cat, ["stripe"], allow_acting=["stripe"])[0]["kind"], "one-click")
+        for rid in ("paypal", "square", "ramp"):                    # a sign-in comes first, whatever is allowed
+            self.assertIn("it needs a sign-in in a browser", self.refused([rid], allow_acting=[rid]))
 
     def test_a_row_whose_address_did_not_answer_is_named_a_second_time(self):
         cat = copy.deepcopy(self.cat)
