@@ -360,6 +360,8 @@ export interface JobRecord {
   updated_at: number;
   ended_at: number | null;
   via: string;
+  /** The AI agent that asked for it, by its name (ledger); null when none did. */
+  agent: string | null;
   result: { ok: boolean; summary: string } | null;
   error: { step: string | null; words: string; fix: string | null } | null;
   parent: string | null;

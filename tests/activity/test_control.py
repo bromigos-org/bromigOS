@@ -435,6 +435,14 @@ class Retry(Control):
         self.assertEqual([n["words"] for n in new["notes"]], [f"Started again from {old['id']}."])
         self.assertEqual(self.m.on_disk()[old["id"]]["state"], "failed")          # the old record stays what it was
         self.assertEqual(self.m.cli("retry", old["id"], "--json")[0], 0)          # as often as it takes
+        # the agent that asks for it again is the new job's; a name that isn't one starts nothing
+        again = json.loads(self.m.cli("retry", old["id"], "--via", "vector", "--agent", "ledger", "--json")[1])["job"]
+        self.assertEqual(again["requested_by"], {"via": "vector", "device": None, "agent": "ledger"})
+        self.assertEqual(json.loads(self.m.cli("retry", old["id"], "--json")[1])["job"]["requested_by"], {"via": "cli", "device": None})
+        count = len(self.m.listed())
+        code, out, err = self.m.cli("retry", old["id"], "--agent", "The Ledger")
+        self.assertEqual((code, out, len(self.m.listed())), (1, "", count))
+        self.assertIn("an agent's name is short lower-case words", err)
         doc = json.loads(self.m.cli("retry", new["id"], "--json")[1])              # but not one that ended well
         self.assertEqual((doc["ok"], doc["refused"]), (False, "not-retryable"))
         self.assertIn("nothing to try again", doc["words"])

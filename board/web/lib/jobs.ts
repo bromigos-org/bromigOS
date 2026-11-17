@@ -74,6 +74,9 @@ export const STATE_CHIP: Record<JobState, string> = {
 export const waitWord = (j: JobRecord) =>
   j.state === "waiting" && j.waiting_for ? `waiting for ${j.waiting_for === "you" ? "you" : j.waiting_for === "another job" ? "another job" : `the ${j.waiting_for}`}` : STATE_WORD[j.state];
 
+/** "by agent ledger" for a job an AI agent asked for, as `bromigos activity` says it; "" for every other. */
+export const byAgent = (j: JobRecord) => (j.agent ? `by agent ${j.agent}` : "");
+
 /** A step's class in ol.steps and its shape. */
 export const STEP: Record<StepState, { cls: string; icon: string; word: string }> = {
   todo: { cls: "todo", icon: "s-todo", word: "todo" },

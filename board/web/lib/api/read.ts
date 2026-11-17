@@ -394,6 +394,9 @@ export function readLabStatus(doc: unknown): LabStatus {
   };
 }
 
+// An AI agent's name by the record's own rule (lib/bromigos_activity.py, AGENT_OK): anything else is no name.
+const agentName = (v: unknown): string | null => (typeof v === "string" && v.length <= 64 && /^[a-z0-9][a-z0-9.-]*$/.test(v) ? v : null);
+
 export function readJob(v: unknown): JobRecord | null {
   const o = obj(v);
   const id = str(o?.id);
@@ -413,6 +416,7 @@ export function readJob(v: unknown): JobRecord | null {
     pct: num(o.pct), stage: strOrNull(o.stage),
     started_at: started, updated_at: num(o.updated_at) ?? started, ended_at: num(o.ended_at),
     via: str(obj(o.requested_by)?.via, "cli"),
+    agent: agentName(obj(o.requested_by)?.agent),
     result: result ? { ok: bool(result.ok), summary: str(result.summary) } : null,
     error: error && str(error.words) ? { step: strOrNull(error.step), words: str(error.words), fix: strOrNull(obj(error.fix)?.label) } : null,
     parent: strOrNull(o.parent), children: strs(o.children),

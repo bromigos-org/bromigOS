@@ -2,7 +2,7 @@
 // groups, each job with its steps, what it asks, how it ended and the command that looks
 // closer. Read-only: no control answers, stops or restarts a job, and nothing but GETs is sent.
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { open } from "./helpers";
 import { Answer, copy, live, openReal, real, Service, whole } from "./service";
 
@@ -51,6 +51,31 @@ test("a running job: how far, that stopping is safe, and its end when it comes",
   await expect(going).toContainText(`Stopping it now is safe: sudo bromigos activity cancel ${id}`);
   await expect(group(page, "ENDED · 2")).toContainText("Backed up: the copy checks out.", { timeout: 10_000 });
   await expect(group(page, "GOING · 0")).toBeVisible();
+});
+
+/** Fixture `name` with `requested_by.agent` set on these jobs, in its list and in what its stream sends after. */
+const withAgents = (page: Page, name: string, agents: Record<string, unknown>) =>
+  page.route(`**/fixtures/${name}.json`, async (route) => {
+    const doc = await (await route.fetch()).json();
+    const sent = (doc.stream ?? []).filter((e: { event: string }) => e.event === "job").map((e: { data: unknown }) => e.data);
+    for (const j of [...doc.activity, ...sent]) if (j.id in agents) j.requested_by = { ...j.requested_by, agent: agents[j.id] };
+    await route.fulfill({ json: doc });
+  });
+
+test("a job an AI agent asked for names the agent, and a name that isn't one is left out", async ({ page }) => {
+  const jobs = fixture("needs-you").activity as { id: string; state: string }[];
+  const by = (state: string) => jobs.find((j) => j.state === state)!.id;
+  const sub = (id: string) => page.locator(`.job[data-job="${id}"] .head .sub`);
+  await withAgents(page, "needs-you", { [by("succeeded")]: "ledger", [by("rolled-back")]: "The Ledger <b>" });
+  await open(page, "needs-you", "activity");
+  await expect(sub(by("succeeded"))).toContainText(" · by agent ledger · via timer");
+  await expect(sub(by("rolled-back"))).toContainText("via timer");
+  await expect(sub(by("rolled-back"))).not.toContainText("agent");
+  await expect(sub(by("needs-you"))).not.toContainText("agent"); // the record has no such key: nothing is said
+  // a job feed's run says it in the same words
+  await withAgents(page, "making", { "feed-ships-20261110": "ledger" });
+  await open(page, "making", "activity");
+  await expect(page.locator('.job[data-job="feed-ships-20261110"] .sub').first()).toContainText("a job feed · by agent ledger · ");
 });
 
 test("one job by its address, and a job the server no longer lists", async ({ page }) => {

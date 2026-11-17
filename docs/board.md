@@ -19,8 +19,10 @@ gathers the readings, the Caddy site, and what the page never shows.
 - **Activity.** Every job the page knows, from the live stream and from the list the board
   read: the ones that ask, the ones that run or wait, and the ones that ended. Each shows
   its steps, what it asks, how it ended, and the command that looks closer
-  (`bromigos activity show ID`). `#job/ID` opens one job. A job's answers, Stop and Start
-  again are controls on a server that lets the page: see
+  (`bromigos activity show ID`). A job that an AI agent asked for says which one, as "by
+  agent ledger", from the record's `requested_by.agent`
+  ([activity.md](activity.md#the-record)). `#job/ID` opens one job. A job's answers, Stop
+  and Start again are controls on a server that lets the page: see
   [What the page may do](#what-the-page-may-do). The lab's creation jobs show here too:
   see [The lab's jobs](#the-labs-jobs).
 - **The door and signing in.** Signed out, every address shows the door: the ways in and
@@ -435,7 +437,8 @@ Content-Security-Policy.
   - A hidden tab asks nothing. A browser clock that is wrong changes nothing.
   - Unsafe addresses never become links. A part that throws costs that part only.
 - **Activity** (`tests/activity.spec.ts`): the three groups and what each job says; a job
-  that runs and ends; one job by its address; the stream's and the board's lists joined;
+  that runs and ends; a job that names the AI agent that asked for it, and a name that
+  isn't one left out; one job by its address; the stream's and the board's lists joined;
   the jobs unread; and that nothing but a GET is sent.
 - **A job's controls** (`tests/jobs.spec.ts`): the answers, Stop and Start again as
   controls with the server's word and the job's, and the commands without; a choice that

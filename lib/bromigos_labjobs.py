@@ -29,7 +29,7 @@ from how long the same workflow took before.
 The feed format, one JSON object per line, appended (each line whole, under 4096 bytes):
 
   {"v": 1, "at": MS, "start": {"title": WORDS, "kind": "lab.pipeline", "subject": "TYPE:ID[:NAME]",
-                               "pid": N, "boot_id": "…"}}
+                               "pid": N, "boot_id": "…", "agent": NAME}}
   {"at": MS, "line": "::step cutout running Cutting out ship-a"}
   {"at": MS, "media": {"path": "out/ship-a/cut.png", "step": "cutout", "role": "preview"}}
   {"at": MS, "media": {"path": "out/ship-a/ship-a.glb", "role": "output"}}
@@ -945,7 +945,7 @@ class _MemoryEnv:
         return None
 
 
-def _job_in_memory(env, job_id, kind, title, subject, started):
+def _job_in_memory(env, job_id, kind, title, subject, started, agent=None):
     """A bromigos_activity.Job that never touches a file: a feed's lines go through the same
     record a job run under `bromigos activity run` keeps."""
     A = _activity()
@@ -953,8 +953,9 @@ def _job_in_memory(env, job_id, kind, title, subject, started):
     clock.now = started
     j = A.Job.__new__(A.Job)
     j.env, j.id, j.path = clock, job_id, None
-    j.rec = A.new_record(clock, job_id, kind if A.KIND_OK.match(kind or "") else "lab.pipeline", title, subject)
-    j.rec["log"], j.rec["requested_by"] = None, {"via": "lab", "device": None}
+    j.rec = A.new_record(clock, job_id, kind if A.KIND_OK.match(kind or "") else "lab.pipeline", title, subject,
+                         agent=agent)
+    j.rec["log"], j.rec["requested_by"] = None, dict(j.rec["requested_by"], via="lab", device=None)
     j.errors, j.sticky, j.offline, j.last_line = [], set(), set(), ""
     j._wrote, j._dirty, j._lock, j.retry, j._cancel_safe = 0.0, False, None, None, False
     j._held, j._answers, j._kids_read, j._told = [], None, 0, None
@@ -1034,8 +1035,12 @@ def feed_record(env, path, now=None):
     if isinstance(first.get("subject"), str):
         with contextlib.suppress(A.ActivityError):
             subject = A.parse_subject(first["subject"])
+    agent = None                                    # a name that isn't one is left out, as a bad subject is
+    if isinstance(first.get("agent"), str):
+        with contextlib.suppress(A.ActivityError):
+            agent = A.check_agent(first["agent"])
     title = _cut(first.get("title") or run, A.MAX_TITLE) or run
-    j, clock = _job_in_memory(env, f"feed-{run}", str(first.get("kind") or "lab.pipeline"), title, subject, at0)
+    j, clock = _job_in_memory(env, f"feed-{run}", str(first.get("kind") or "lab.pipeline"), title, subject, at0, agent)
     j.set_state("running")
     media, last, ended = [], at0, None
     folder = os.path.dirname(path)
@@ -1133,15 +1138,18 @@ class Feed:
             feed.output("out/ship-a/ship-a.glb")       # a result
 
     Leaving the `with` ends the run: succeeded, or failed with the exception's words. A line
-    that can't be written is dropped: a feed never stops the tool that writes it."""
+    that can't be written is dropped: a feed never stops the tool that writes it. `agent` names
+    the AI agent that asked for the run (ledger), when one did."""
 
-    def __init__(self, run, title, kind="lab.pipeline", subject=None, folder=None, env=None, resume=False, pid=-1):
+    def __init__(self, run, title, kind="lab.pipeline", subject=None, folder=None, env=None, resume=False, pid=-1,
+                 agent=None):
         A = _activity()
         run = str(run).lower()
         if not RUN_OK.match(run):
             raise A.ActivityError(f"a feed's run is short lower-case words, digits, dots and dashes (ships-20261112), not {run!r}")
         if not A.KIND_OK.match(kind or "") or not str(kind).startswith("lab."):
             raise A.ActivityError(f"a feed's kind starts with lab. (lab.pipeline), not {kind!r}")
+        agent = A.check_agent(agent)
         self.env = env or A.Env()
         self.folder = folder or Where(self.env).write_feed()
         self.path = os.path.join(self.folder, run + ".jsonl")
@@ -1158,6 +1166,8 @@ class Feed:
                 start.update(pid=pid, boot_id=self.env.boot_id())
             if subject:
                 start["subject"] = subject
+            if agent:
+                start["agent"] = agent
             self._write({"v": SCHEMA, "start": start})
 
     def _write(self, doc):
