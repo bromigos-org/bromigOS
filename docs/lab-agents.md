@@ -101,6 +101,14 @@ tool set by default. The provisioner refuses messaging selections rather than al
 those tools to reach a bot. Cluster-only NemoClaw installation is also refused. Its
 upstream managed Docker/OpenShell gateway is not an ordinary application Helm chart.
 
+## Outside services
+
+The [connector catalogue](lab-connectors.md) lists outside services an agent could use,
+such as Stripe or Notion, and what each one needs. `bromigos lab connectors` browses it.
+
+> **Planned.** Connecting a catalogue entry to Hermes, OpenClaw or NemoClaw isn't built
+> yet. The provisioner doesn't read the catalogue.
+
 ## Read-only console
 
 The Agents card shows the selected agent's health, model and gateway metadata. Hermes

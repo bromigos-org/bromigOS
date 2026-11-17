@@ -1596,7 +1596,7 @@ From the `bromigos-desktop` package.
 Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard).
 
 ```text
-bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | studio [status | plan | apply | rollback [CAPABILITY] | upgrade [--apply]] [--licence L] [--json] | apps [list [--all] | show ID | add ID… [--plan] | remove ID [--delete-data] [--plan] | restart ID | logs ID [-f] | budget [ID…]] [--json] | deploy ID | restart ID | logs ID | backups [list | show [ID] [PATH] | restore [ID] [PATH…] [--to DIR | --in-place [--apply]] | test [--all] | run | check | go-bag [status | drives | setup [DRIVE] [--erase] | run | forget] | copy-databases | holds [PATH…] | job PATH…] [--from go-bag] [--json] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
+bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | studio [status | plan | apply | rollback [CAPABILITY] | upgrade [--apply]] [--licence L] [--json] | apps [list [--all] | show ID | add ID… [--plan] | remove ID [--delete-data] [--plan] | restart ID | logs ID [-f] | budget [ID…]] [--json] | deploy ID | restart ID | logs ID | backups [list | show [ID] [PATH] | restore [ID] [PATH…] [--to DIR | --in-place [--apply]] | test [--all] | run | check | go-bag [status | drives | setup [DRIVE] [--erase] | run | forget] | copy-databases | holds [PATH…] | job PATH…] [--from go-bag] [--json] | connectors [list [--kind one-click|key] [--category NAME] [--all] | search WORDS | show ID] [--json] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
 ```
 
 For example:
@@ -1618,6 +1618,7 @@ sudo bromigos lab apps add photos
 sudo bromigos lab apps remove photos
 bromigos lab backups
 bromigos lab backups restore /etc/fstab
+bromigos lab connectors search stripe
 bromigos lab link
 ```
 

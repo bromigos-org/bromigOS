@@ -1,0 +1,294 @@
+{
+ "checked": "2026-11-17",
+ "how": "one GET per address, User-Agent liveness-check/1.0, no credentials, redirects not followed, 8 s",
+ "results": {
+  "adspirer": {
+   "answered": true,
+   "answer": "401"
+  },
+  "airtable": {
+   "answered": true,
+   "answer": "405"
+  },
+  "algolia": {
+   "answered": true,
+   "answer": "405"
+  },
+  "apify": {
+   "answered": true,
+   "answer": "401"
+  },
+  "asana": {
+   "answered": true,
+   "answer": "401"
+  },
+  "aws-knowledge": {
+   "answered": true,
+   "answer": "302"
+  },
+  "buildkite": {
+   "answered": true,
+   "answer": "401"
+  },
+  "cal-com": {
+   "answered": true,
+   "answer": "401"
+  },
+  "canva": {
+   "answered": true,
+   "answer": "401"
+  },
+  "clickup": {
+   "answered": true,
+   "answer": "401"
+  },
+  "close-crm": {
+   "answered": true,
+   "answer": "302"
+  },
+  "cloudflare-bindings": {
+   "answered": true,
+   "answer": "401"
+  },
+  "cloudflare-docs": {
+   "answered": true,
+   "answer": "405"
+  },
+  "composio": {
+   "answered": true,
+   "answer": "401"
+  },
+  "context7": {
+   "answered": true,
+   "answer": "405"
+  },
+  "corpus-law": {
+   "answered": true,
+   "answer": "405"
+  },
+  "datadog": {
+   "answered": true,
+   "answer": "401"
+  },
+  "deepwiki": {
+   "answered": true,
+   "answer": "405"
+  },
+  "exa": {
+   "answered": true,
+   "answer": "405"
+  },
+  "financial-datasets": {
+   "answered": true,
+   "answer": "401"
+  },
+  "fireflies": {
+   "answered": true,
+   "answer": "401"
+  },
+  "github": {
+   "answered": true,
+   "answer": "401"
+  },
+  "gitlab": {
+   "answered": true,
+   "answer": "401"
+  },
+  "gitmcp": {
+   "answered": true,
+   "answer": "200"
+  },
+  "globalping": {
+   "answered": true,
+   "answer": "401"
+  },
+  "gmail": {
+   "answered": false,
+   "answer": "404"
+  },
+  "gmail-app-password": {
+   "answered": false,
+   "answer": "no connection"
+  },
+  "gmail-send": {
+   "answered": false,
+   "answer": "404"
+  },
+  "google-calendar": {
+   "answered": false,
+   "answer": "404"
+  },
+  "google-docs": {
+   "answered": true,
+   "answer": "400"
+  },
+  "google-drive": {
+   "answered": false,
+   "answer": "404"
+  },
+  "google-files": {
+   "answered": false,
+   "answer": "404"
+  },
+  "google-sheets": {
+   "answered": true,
+   "answer": "400"
+  },
+  "grafana": {
+   "answered": true,
+   "answer": "401"
+  },
+  "higgsfield": {
+   "answered": true,
+   "answer": "401"
+  },
+  "honeybadger": {
+   "answered": true,
+   "answer": "401"
+  },
+  "hubspot": {
+   "answered": true,
+   "answer": "401"
+  },
+  "huggingface": {
+   "answered": true,
+   "answer": "200"
+  },
+  "intercom": {
+   "answered": true,
+   "answer": "401"
+  },
+  "jam": {
+   "answered": true,
+   "answer": "401"
+  },
+  "linear": {
+   "answered": true,
+   "answer": "401"
+  },
+  "markifact": {
+   "answered": true,
+   "answer": "405"
+  },
+  "microsoft-learn": {
+   "answered": true,
+   "answer": "405"
+  },
+  "monday": {
+   "answered": true,
+   "answer": "401"
+  },
+  "neon": {
+   "answered": true,
+   "answer": "401"
+  },
+  "netlify": {
+   "answered": true,
+   "answer": "401"
+  },
+  "notion": {
+   "answered": true,
+   "answer": "401"
+  },
+  "openai-devdocs": {
+   "answered": true,
+   "answer": "405"
+  },
+  "parallel-search": {
+   "answered": true,
+   "answer": "405"
+  },
+  "paypal": {
+   "answered": true,
+   "answer": "401"
+  },
+  "posthog": {
+   "answered": true,
+   "answer": "401"
+  },
+  "prisma": {
+   "answered": true,
+   "answer": "401"
+  },
+  "railway": {
+   "answered": true,
+   "answer": "401"
+  },
+  "ramp": {
+   "answered": true,
+   "answer": "401"
+  },
+  "replaid": {
+   "answered": false,
+   "answer": "TLS error"
+  },
+  "sanity": {
+   "answered": true,
+   "answer": "405"
+  },
+  "semgrep": {
+   "answered": true,
+   "answer": "401"
+  },
+  "sentry": {
+   "answered": true,
+   "answer": "401"
+  },
+  "square": {
+   "answered": true,
+   "answer": "401"
+  },
+  "stripe": {
+   "answered": true,
+   "answer": "401"
+  },
+  "supabase": {
+   "answered": true,
+   "answer": "401"
+  },
+  "tavily": {
+   "answered": true,
+   "answer": "405"
+  },
+  "todoist": {
+   "answered": true,
+   "answer": "401"
+  },
+  "vercel": {
+   "answered": true,
+   "answer": "401"
+  },
+  "webflow": {
+   "answered": true,
+   "answer": "401"
+  },
+  "wix": {
+   "answered": true,
+   "answer": "401"
+  },
+  "wolfram": {
+   "answered": true,
+   "answer": "405"
+  },
+  "x-twitter": {
+   "answered": true,
+   "answer": "401"
+  },
+  "xmemo": {
+   "answered": true,
+   "answer": "401"
+  },
+  "youcom": {
+   "answered": true,
+   "answer": "405"
+  },
+  "zapier": {
+   "answered": true,
+   "answer": "401"
+  },
+  "zernio": {
+   "answered": true,
+   "answer": "405"
+  }
+ }
+}

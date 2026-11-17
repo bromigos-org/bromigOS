@@ -34,6 +34,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab apps`, `show`, `add`, `remove`, `restart`, `logs`, `budget` | On bromigOS Server: the apps it runs, each one's state, memory, data and page; add and remove them ([below](#apps-on-a-server)). |
 | `bromigos lab backups`, `list`, `show`, `restore`, `test` | On bromigOS Server: whether its backups are healthy, what's in them, getting files back, and a test restore ([server.md](server.md#backups)). |
 | `bromigos lab backups go-bag`, `drives`, `setup`, `run`, `forget` | On bromigOS Server: the Go Bag, a copy of the backup on a USB drive you carry away ([server.md](server.md#the-go-bag)). |
+| `bromigos lab connectors`, `list`, `search`, `show` | Browse the connector catalogue: outside services an agent could reach, and what each needs ([lab-connectors.md](lab-connectors.md)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab link` | Link this computer to your Bromigos account as a lab, from bromigos.org/link ([below](#link-this-computer-to-your-account)). |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |

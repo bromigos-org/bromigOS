@@ -37,6 +37,11 @@ Run `bromigos update` to get them. The next release notes will include these hig
   jobs: each generation with its workflow, its stage and the queue behind it, and the runs of
   tools that make assets in several steps. `bromigos activity watch` follows them live, with
   the picture as it's made in kitty.
+- `bromigos lab connectors` lists outside services an agent in your lab could use, and what
+  each one needs: 74 with a server of their own, such as Stripe, Notion and GitHub, and 38
+  reached with an API key, such as Etsy, Printify and Shopify. It's a catalogue: it doesn't
+  connect anything yet. See
+  [Services your agents could use](lab.md#services-your-agents-could-use).
 
 ### Fixed
 
