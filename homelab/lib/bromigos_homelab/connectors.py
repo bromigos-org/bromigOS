@@ -291,14 +291,17 @@ def why_not(row):
     return None
 
 
-def chosen(cat, ids, allow_acting=(), allow_unanswered=()):
+def chosen(cat, ids, allow_acting=(), allow_unanswered=(), trusted=()):
     """The rows for the connector ids an agent is to be given, in the order asked for, each once.
     Raises Refused for an id nothing has, a row why_not() names, more than MOST, a row whose
     address didn't answer (unless allow_unanswered names it) and a row that acts (unless
-    allow_acting names it). The two allow lists are `bromigos lab provision`'s options."""
-    ids, allow_acting, allow_unanswered = ([str(i).casefold().strip() for i in dict.fromkeys(some)]
-                                           for some in (ids, allow_acting, allow_unanswered))
-    for option, named in (("--allow-acting", allow_acting), ("--allow-unanswered", allow_unanswered)):
+    allow_acting names it). `trusted` are the ids whose write calls needn't ask first: each is
+    one of `ids`, so a row that acts is trusted only when allow_acting names it too. The three
+    lists are `bromigos lab provision`'s options."""
+    ids, allow_acting, allow_unanswered, trusted = ([str(i).casefold().strip() for i in dict.fromkeys(some)]
+                                                    for some in (ids, allow_acting, allow_unanswered, trusted))
+    for option, named in (("--allow-acting", allow_acting), ("--allow-unanswered", allow_unanswered),
+                          ("--trust-connector", trusted)):
         stray = [i for i in named if i not in ids]
         if stray:
             raise Refused(f"{option} names {', '.join(stray)}, which isn't among the connectors chosen.")

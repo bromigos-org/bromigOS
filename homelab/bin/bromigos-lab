@@ -121,7 +121,9 @@
       --connectors ID…              give Hermes and OpenClaw connectors from the catalogue: the ones
                                     that need nothing or a key (--allow-acting ID for one that can
                                     spend money or contact people; --allow-unanswered ID for one
-                                    whose address didn't answer when it was checked)
+                                    whose address didn't answer when it was checked). Hermes asks
+                                    you before a connector's write calls: --trust-connector ID
+                                    lets one run them without asking
   bromigos lab provision cluster --spec FILE --repo PATH
                                     plan VMs or existing nodes, storage and mandatory monitoring
   bromigos lab provision add-node --node-spec FILE --role worker|gpu --on PROVIDER --repo PATH

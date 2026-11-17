@@ -416,8 +416,10 @@ def summary(cat, resolved, facts, repo, agents=None, backup_path=""):
     if agents:
         print("  Agent model: " + agents["model"] + " at " + agents["endpoint"])
         print("  Profile: " + agents.get("profile", "assistant") + "; gateways: " + (", ".join(agents.get("gateways", [])) or "none") + "; tools: " + agents.get("tools", "memory"))
+        trusted = {c.casefold().strip() for c in agents.get("trust_connectors") or []}
         for row in A.connector_rows(agents):
-            print("  Connector: " + row["name"] + " (" + row["id"] + ") at " + row["url"] + "; " + ("its key comes from the agent's environment" if row["auth"] == "key" else "no key"))
+            print("  Connector: " + row["name"] + " (" + row["id"] + ") at " + row["url"] + "; " + ("its key comes from the agent's environment" if row["auth"] == "key" else "no key")
+                  + ("; trusted: Hermes runs its write calls without asking" if row["id"] in trusted else "; Hermes asks before its write calls"))
             if row.get("acts"):
                 print("    Allowed to act. " + row["acts"])
     lines = H.describe(facts) if facts.get("hardware") or facts.get("distribution") != "cluster" else []
@@ -743,6 +745,7 @@ def main(argv=None):
     parser.add_argument("--connectors", nargs="*", metavar="ID", help="Connectors for Hermes and OpenClaw, from bromigos lab connectors: ones that need nothing or a key. None: --connectors with no ID")
     parser.add_argument("--allow-acting", nargs="+", default=[], metavar="ID", help="Also give a chosen connector that can spend money or contact people")
     parser.add_argument("--allow-unanswered", nargs="+", default=[], metavar="ID", help="Also give a chosen connector whose address didn't answer when the catalogue was checked")
+    parser.add_argument("--trust-connector", nargs="+", default=[], metavar="ID", help="Let Hermes run a chosen connector's write calls without asking you first")
     parser.add_argument("--custom", action="store_true", help="Choose services in a terminal checklist")
     parser.add_argument("--listen-address", default="127.0.0.1", help="Private IPv4 address for Caddy; defaults to loopback")
     parser.add_argument("--domain", default="", help="LAN HTTPS name; Caddy issues a local certificate")
@@ -821,12 +824,12 @@ def connector_options(args, options):
     plan keeps its own choice, and a new one is asked."""
     options = dict(options)
     if args.connectors is not None:
-        options.update(connectors=args.connectors, allow_acting=args.allow_acting, allow_unanswered=args.allow_unanswered)
-        for key in ("allow_acting", "allow_unanswered"):
+        options.update(connectors=args.connectors, allow_acting=args.allow_acting, allow_unanswered=args.allow_unanswered, trust_connectors=args.trust_connector)
+        for key in ("allow_acting", "allow_unanswered", "trust_connectors"):
             if not options[key]:
                 del options[key]
-    elif args.allow_acting or args.allow_unanswered:
-        raise ProvisionError("--allow-acting and --allow-unanswered go with --connectors: name the connectors too")
+    elif args.allow_acting or args.allow_unanswered or args.trust_connector:
+        raise ProvisionError("--allow-acting, --allow-unanswered and --trust-connector go with --connectors: name the connectors too")
     return options
 
 

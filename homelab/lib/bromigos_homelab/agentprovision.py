@@ -30,7 +30,7 @@ def connector_rows(options, picked=()):
     """The catalogue rows for the connectors a plan gives its agents ([]: none), checked on every call."""
     from .provision import ProvisionError
     from . import connectors as C
-    lists = [options.get(k) or [] for k in ('connectors', 'allow_acting', 'allow_unanswered')]
+    lists = [options.get(k) or [] for k in ('connectors', 'allow_acting', 'allow_unanswered', 'trust_connectors')]
     if any(not isinstance(v, list) or not all(isinstance(i, str) for i in v) for v in lists):
         raise ProvisionError('Connectors are a list of ids from bromigos lab connectors')
     if not any(lists):
@@ -47,6 +47,7 @@ def connector_servers(agent, options):
     """The chosen connectors as remote MCP servers, in the agent's own format. A key is a reference to
     the agent's environment, never a value."""
     servers = {}
+    trusted = {c.casefold().strip() for c in options.get('trust_connectors') or []}
     for row in connector_rows(options):
         server = {'url': row['url']}
         if row['auth'] == 'key':
@@ -55,6 +56,9 @@ def connector_servers(agent, options):
         if agent == 'hermes':
             # The server gets its tools and nothing more: it may not ask the agent's model or the person for anything.
             server.update(sampling={'enabled': False}, elicitation={'enabled': False})
+            # Upstream's trust tier. untrusted: a call to a tool the server doesn't mark read-only waits for
+            # the person's approval, and doesn't run when nobody gives it.
+            server['trust'] = 'full' if row['id'] in trusted else 'untrusted'
         else:
             server['transport'] = 'streamable-http'
         servers[server_name(row['id'])] = server

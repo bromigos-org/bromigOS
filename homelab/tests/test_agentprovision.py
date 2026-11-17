@@ -256,7 +256,7 @@ class AgentConnectors(unittest.TestCase):
                 self.assertEqual(moved, {k for k in files if files[k] != plain[k]})
 
     def test_servers_in_each_agents_own_format(self):
-        quiet = {'sampling': {'enabled': False}, 'elicitation': {'enabled': False}}
+        quiet = {'sampling': {'enabled': False}, 'elicitation': {'enabled': False}, 'trust': 'untrusted'}
         self.assertEqual(A.configuration('hermes', CONNECTED)['mcp_servers'], {
             'connector_docs': {'url': 'https://docs.example.org/mcp', **quiet},
             'connector_web_search': {'url': 'https://search.example.org/mcp', 'headers': {'Authorization': 'Bearer ${CONNECTOR_WEB_SEARCH_KEY}'}, **quiet}})
@@ -269,6 +269,27 @@ class AgentConnectors(unittest.TestCase):
         for agent, key in (('hermes', 'mcp_servers'), ('openclaw', 'mcp')):
             self.assertNotIn(key, A.configuration(agent, OPTIONS))
             self.assertNotIn(key, A.configuration(agent, dict(OPTIONS, connectors=[])))
+
+    def test_write_calls_ask_first_unless_a_connector_is_trusted(self):
+        servers = A.configuration('hermes', dict(OPTIONS, connectors=['docs', 'web-search', 'bridge'], allow_acting=['bridge']))['mcp_servers']
+        self.assertEqual({'untrusted'}, {server['trust'] for server in servers.values()})
+        trusted = dict(OPTIONS, connectors=['docs', 'web-search'], trust_connectors=['Web-Search'])
+        servers = A.configuration('hermes', trusted)['mcp_servers']
+        self.assertEqual(('untrusted', 'full'), (servers['connector_docs']['trust'], servers['connector_web_search']['trust']))
+        # OpenClaw has no such setting: its servers are the same either way.
+        self.assertEqual(A.configuration('openclaw', CONNECTED)['mcp'], A.configuration('openclaw', trusted)['mcp'])
+        self.assertIn("--trust-connector names bridge, which isn't among the connectors chosen", self.refused(connectors=['docs'], trust_connectors=['bridge']))
+        # One that acts is trusted only when it's allowed to act, by name.
+        self.assertIn('add --allow-acting bridge', self.refused(connectors=['bridge'], trust_connectors=['bridge']))
+        both = dict(OPTIONS, connectors=['bridge'], allow_acting=['bridge'], trust_connectors=['bridge'])
+        A.validate(both, ['hermes'], TARGET)
+        self.assertEqual('full', A.configuration('hermes', both)['mcp_servers']['connector_bridge']['trust'])
+        self.assertEqual('untrusted', A.configuration('hermes', dict(both, trust_connectors=[]))['mcp_servers']['connector_bridge']['trust'])
+        _, resolved = P.plan_files(TARGET, ['hermes'], FACTS, age_recipient='age1example', agents=trusted)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            P.summary(S.load(), resolved, FACTS, '/tmp/example-repo', trusted)
+        self.assertIn('(docs) at https://docs.example.org/mcp; no key; Hermes asks before its write calls\n', out.getvalue())
+        self.assertIn("its key comes from the agent's environment; trusted: Hermes runs its write calls without asking\n", out.getvalue())
 
     def test_every_existing_restriction_stays(self):
         plain, hermes = A.configuration('hermes', OPTIONS), A.configuration('hermes', CONNECTED)
@@ -372,7 +393,7 @@ class AgentConnectors(unittest.TestCase):
         import argparse
 
         def args(**given):
-            return argparse.Namespace(**{'connectors': None, 'allow_acting': [], 'allow_unanswered': [], **given})
+            return argparse.Namespace(**{'connectors': None, 'allow_acting': [], 'allow_unanswered': [], 'trust_connector': [], **given})
         fresh = {'endpoint': '', 'model': ''}
         self.assertEqual(fresh, P.connector_options(args(), fresh))
         self.assertEqual(dict(fresh, connectors=['docs']), P.connector_options(args(connectors=['docs']), fresh))
@@ -382,8 +403,10 @@ class AgentConnectors(unittest.TestCase):
         saved = dict(OPTIONS, connectors=['bridge'], allow_acting=['bridge'])
         self.assertEqual(saved, P.connector_options(args(), saved))                                   # a saved plan keeps its choice
         self.assertEqual(dict(OPTIONS, connectors=['docs']), P.connector_options(args(connectors=['docs']), saved))
-        with self.assertRaises(P.ProvisionError):
-            P.connector_options(args(allow_acting=['bridge']), fresh)
+        self.assertEqual(dict(fresh, connectors=['docs'], trust_connectors=['docs']), P.connector_options(args(connectors=['docs'], trust_connector=['docs']), fresh))
+        for alone in ({'allow_acting': ['bridge']}, {'allow_unanswered': ['quiet']}, {'trust_connector': ['docs']}):
+            with self.assertRaises(P.ProvisionError):
+                P.connector_options(args(**alone), fresh)
 
     def test_the_key_reaches_the_agent_only_through_stdin(self):
         env = {'LLM_API_KEY': 'test-secret-value', 'AGENT_API_KEY': 'test-api-key', 'TELEGRAM_BOT_TOKEN': 'fake-bot', 'DISCORD_BOT_TOKEN': 'fake-discord'}
@@ -421,8 +444,8 @@ class AgentConnectors(unittest.TestCase):
             self.assertNotIn(KEY, text)
             self.assertNotIn('fake-connector', text)
             self.assertIn('${CONNECTOR_WEB_SEARCH_KEY}', text)
-            self.assertIn('  Connector: Example Docs (docs) at https://docs.example.org/mcp; no key\n', out.getvalue())
-            self.assertIn("  Connector: Example Search (web-search) at https://search.example.org/mcp; its key comes from the agent's environment\n", out.getvalue())
+            self.assertIn('  Connector: Example Docs (docs) at https://docs.example.org/mcp; no key; Hermes asks before its write calls\n', out.getvalue())
+            self.assertIn("  Connector: Example Search (web-search) at https://search.example.org/mcp; its key comes from the agent's environment; Hermes asks before its write calls\n", out.getvalue())
         with contextlib.redirect_stdout(io.StringIO()) as out:
             P.summary(S.load(), resolved, FACTS, '/tmp/example-repo', dict(OPTIONS, connectors=['bridge'], allow_acting=['bridge']))
         self.assertIn('    Allowed to act. It can send email from the accounts you connect to it.\n', out.getvalue())

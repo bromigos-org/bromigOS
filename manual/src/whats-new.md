@@ -49,7 +49,8 @@ Run `bromigos update` to get them. The next release notes will include these hig
 - Hermes Agent and OpenClaw can use services from that catalogue: the ones with a server
   of their own that need nothing or an API key, such as Context7 and Tavily. Name them with
   `--connectors` when you set the agent up. A service that can spend money or contact
-  people, such as Zapier, is refused until you allow it by name. See
+  people, such as Stripe or Zapier, is refused until you allow it by name. Hermes Agent
+  asks you before a service's tool changes anything. See
   [Give an agent a service](lab.md#give-an-agent-a-service).
 
 ### Fixed

@@ -1186,6 +1186,12 @@ anyway, name it again:
 bromigos lab provision … --connectors zapier --allow-acting zapier
 ```
 
+Hermes Agent asks before a service's tool changes anything. In Telegram or Discord, the
+chat gets an approval prompt, and the tool doesn't run if nobody answers within five
+minutes. Tools that only read run without asking. To let one service's tools run without
+asking, add `--trust-connector <id>`. OpenClaw can't ask first: it runs a chosen service's
+tools without asking.
+
 To change an agent's services later, plan again with a new `--connectors` list. To take
 them all away, pass `--connectors` with nothing after it.
 

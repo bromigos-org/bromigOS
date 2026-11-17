@@ -69,10 +69,21 @@ A server may ask the agent's model for text (`sampling`) and ask the person a qu
 and [ACP](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/features/acp.md),
 which states the rule for `platform_toolsets`.
 
+A Hermes server entry also has a `trust` key, `full` or `untrusted`. The default is `full`,
+and any other word counts as `untrusted`. On an `untrusted` server, a call to a tool
+needs the person's approval before it runs, unless the server marks that tool
+`readOnlyHint: true`. The mark is the server's own word. A prompt that gets no answer
+within `approvals.timeout`, 300 seconds by default, is not run. A client of the API
+server's `/v1/runs` gets an `approval.request` event and answers it with
+`POST /v1/runs/{run_id}/approval`. Sources: the MCP configuration reference above,
+[API server](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/features/api-server.md)
+and [security](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/security.md).
+
 OpenClaw reads them from `mcp.servers` in `openclaw.json`. A remote entry has a `url`,
 `transport: "streamable-http"` and optional `headers`. Any string in the file may name an
 environment variable as `${VAR}`. A server's tools are named `<server>__<tool>`, and the
-tool allowlist takes `*` wildcards. Sources:
+tool allowlist takes `*` wildcards. Its tool policy has no approval step for an MCP
+server's tools: a tool is allowed or it isn't. Sources:
 [MCP transports](https://github.com/openclaw/openclaw/blob/v2026.9.9/docs/cli/mcp/transports.md),
 [MCP, skills and plugins](https://github.com/openclaw/openclaw/blob/v2026.9.9/docs/gateway/config-extensions.md),
 [environment and secrets](https://github.com/openclaw/openclaw/blob/v2026.9.9/docs/gateway/config-secrets-env.md)
@@ -160,6 +171,7 @@ after it, `--connectors` removes them all.
 | `--connectors <id>…` | Give the agents these connectors. At most eight. |
 | `--allow-acting <id>…` | Also allow a chosen connector that can spend money or contact people. |
 | `--allow-unanswered <id>…` | Also allow a chosen connector whose address didn't answer the catalogue's check. |
+| `--trust-connector <id>…` | Let Hermes run a chosen connector's write calls without asking first. |
 
 The plan's summary lists each connector with its address, at plan and again before apply.
 
@@ -183,6 +195,31 @@ More than eight connectors are refused too. So is any connector for NemoClaw.
 The entries that can spend money or contact people are the ones with an `acts` key. See
 [Entries that can spend money or contact people](lab-connectors.md#entries-that-can-spend-money-or-contact-people).
 A summary line says "Allowed to act" for each one you allowed.
+
+### Write calls ask first
+
+Hermes gets every connector as an `untrusted` server. A *write call* is a call to a tool
+that its server doesn't mark as read-only. Hermes asks before each one, and a read call
+runs without asking. A server that marks none of its tools asks for every call.
+
+| Where the agent is used | What happens to a write call |
+|---|---|
+| Telegram or Discord | The chat that made the request gets an approval prompt. Only your allowed user IDs can use that chat. With no answer in 300 seconds, the call isn't run. |
+| The API server's `/v1/runs` | The run waits. Your client answers the `approval.request` event. |
+| The API server's chat completions | Nobody can be asked, so plan for the call not to run. |
+
+The last row comes from reading Hermes's source, in a checkout a little older than the
+pinned version. Upstream's documentation describes no way to ask on that endpoint. No
+test here has run it.
+
+To let one connector's write calls run without asking, name it with
+`--trust-connector <id>`. Its server entry gets `trust: full`. A connector that can spend
+money or contact people can only be trusted when `--allow-acting` names it too, because
+planning refuses it otherwise. The plan's summary says which connectors are trusted.
+
+OpenClaw has no setting like this. Its documentation gives no approval step for a
+connector's tools, so OpenClaw runs a chosen connector's write calls without asking, and
+`--trust-connector` changes nothing for it. Give OpenClaw only connectors you would trust.
 
 ### Keys
 
@@ -208,7 +245,8 @@ prefix keeps a server's name apart from an agent's own tool groups.
 
 For Hermes, `config.yaml` gets an `mcp_servers` entry for each server: its `url`, and for
 a key an `Authorization: Bearer` header, or the header the catalogue names. Sampling and
-elicitation are off, so a server can't use the agent's model or question the person. Each
+elicitation are off, so a server can't use the agent's model or question the person. Its
+`trust` is `untrusted`, or `full` for a connector you trusted. Each
 surface's `platform_toolsets` list names the servers. Hermes would offer them without
 that, but a list that names servers offers only those.
 
@@ -247,8 +285,9 @@ The doctor checks live agent health along with the other selected services.
 `test_agentprovision.py` checks the catalog and resolver, complete host and cluster plan
 goldens, tool restrictions, sender rules and credential handling. Its metadata test
 ensures extra payload fields cannot enter a console row. For connectors it checks host and
-cluster goldens with two connectors, each refusal, that every other setting stays as it
-was, and that a key appears in no generated file, argument or output.
+cluster goldens with two connectors, each refusal, the `trust` each server gets, that
+every other setting stays as it was, and that a key appears in no generated file, argument
+or output.
 
 `test/vm/lab-agents-e2e.py` boots a fresh Debian guest. It installs real Hermes and
 OpenClaw containers against a local OpenAI-compatible stub, checks health and a real
