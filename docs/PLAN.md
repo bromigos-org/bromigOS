@@ -554,6 +554,8 @@ No decisions are open.
 
 - Part 2 of the lab console: changing the lab through the homelab repository.
 - Part 3 of the lab console: setting up a new lab.
+- Connecting an entry of the connector catalogue to an agent in the lab. The catalogue and
+  `bromigos lab connectors` are built ([lab-connectors.md](lab-connectors.md)).
 - The follow-ups above, none blocking:
   - the fresh-machine VM test and the ISO build in CI, once a runner with KVM is free;
   - a trusted plugin level for VECTOR's homelab act tools;

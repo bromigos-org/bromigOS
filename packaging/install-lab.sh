@@ -27,7 +27,7 @@ trap 'rm -rf "$key_home"' EXIT
 GNUPGHOME="$key_home" gpg --batch --yes --dearmor --output "$dest/usr/share/bromigos-lab/bromigos.gpg" "$root/packaging/keys/bromigos.asc"
 chmod 0644 "$dest/usr/share/bromigos-lab/bromigos.gpg"
 install -Dm0644 "$root/homelab/share/homelab.toml" "$dest/usr/share/bromigos/default/homelab.toml"
-install -Dm0644 -t "$dest/usr/share/doc/bromigos-lab/" "$root"/docs/{homelab,lab,lab-models,lab-provision,lab-infrastructure,lab-network,lab-secrets,salvage}.md
+install -Dm0644 -t "$dest/usr/share/doc/bromigos-lab/" "$root"/docs/{homelab,lab,lab-connectors,lab-models,lab-provision,lab-infrastructure,lab-network,lab-secrets,salvage}.md
 install -Dm0644 -t "$dest/usr/share/licenses/bromigos-lab/" "$root"/LICENSE-{MIT,APACHE}
 # the connector catalogue's rows are derived from StarNet's (MIT): its notice goes with them
 install -Dm0644 -t "$dest/usr/share/licenses/bromigos-lab/" "$root/homelab/share/lab/LICENSE-starnet"

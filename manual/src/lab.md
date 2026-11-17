@@ -1134,3 +1134,29 @@ cluster-only target. It never recreates an existing sandbox. See the
 In the media library, `p` opens **Play on den TV**; `P` changes the quality profile.
 Pick a screen, show, season and episode, a movie or a downloaded YouTube video.
 See [Play something on a den screen](media.md#play-something-on-a-den-screen).
+
+### Services your agents could use
+
+bromigOS comes with a catalogue of outside services an agent could use, such as Stripe,
+Notion or GitHub. It tells you what each one needs before you set anything up.
+
+```bash
+bromigos lab connectors                  # what's on offer, by category
+bromigos lab connectors search stripe    # find a service by name
+bromigos lab connectors show printify    # what one service needs
+```
+
+There are two kinds. A *one-click connector* has a server of its own that an agent
+connects to. `show` prints its address and whether it needs nothing, an API key or a
+sign-in in your browser. A *key platform* is reached through its API with a key you make
+on its site. `show` prints the name of the variable the key goes in, a link to its
+documentation, and notes on using it.
+
+`bromigos lab connectors list --all` adds the services bromigOS can't offer yet, and says
+why. Each command takes `--json`.
+
+> **Planned.** Connecting a service to an agent isn't built yet. The catalogue never asks
+> for a key and never keeps one.
+
+The file's format and how it's made are in
+[the connector catalogue](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-connectors.md).

@@ -43,6 +43,7 @@ names, in backticks, with an explicit decision: **yes** (who, date) or **no**
 | The Bluetooth panel's device holograms (`desktop/lib/bromigos_driftglass.py`) | Drawn in code, at run time | yes | Wireframes in the theme's colours; no image files |
 | The app launcher's icons (`theme/app-icons/`) | Drawn in code by `theme/tools/build-app-icons.py` | yes | Brand style, no generated art |
 | The GPU device table (`core/crates/bromigos-core/data/gpu-ids.tsv`) | Read from NVIDIA's and Mesa's lists by `tools/hw/gpu-tables.py` | yes | Facts only, none of their text |
+| The connector catalogue (`homelab/share/lab/connectors.toml`) and its source rows (`tools/lab/connectors/starnet.json`) | Derived from StarNet's catalogue (github.com/androoAGI/starnet) by `tools/lab/connectors-import.py` | yes | MIT, Copyright (c) 2026 Andrew Sims: keep `LICENSE-starnet` beside each. Data only, no logos or art. StarNet's name is credit, never branding. [lab-connectors.md](lab-connectors.md#where-the-rows-come-from) |
 | Den wallpaper with the chair empty, and its lock twin | Generated with nolgia, 2026-10-04 | **yes** (operator, 2026-10-08) | On bromigos.org |
 | Den wallpaper, masked | Made from the likeness art, burn-in over the face | **yes** (operator, 2026-10-08) | The keeper's face is always under the burn-in |
 | Den wallpaper with the operator's likeness | Personal | **no** | The bare face never ships or goes on the site |

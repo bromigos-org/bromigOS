@@ -28,7 +28,7 @@ How it works, how to connect a homelab and how to write an adapter:
 | `charts/brodec-lab/` | not installed: published as a Helm chart | the optional lab bridge's chart, for Kubernetes ([its README](charts/brodec-lab/README.md)) |
 | `tests/` | not installed | unit tests against recorded API answers, and an end-to-end test |
 
-`share/lab/` holds three data files:
+`share/lab/` holds four data files:
 
 - `models.toml` is the lab model catalog ([docs/lab-models.md](../docs/lab-models.md)). It
   ships in its own package, `bromigos-lab-catalog`, so it can update without a code
@@ -40,6 +40,9 @@ How it works, how to connect a homelab and how to write an adapter:
   containers using an existing model endpoint, and an experimental NemoClaw host plan.
   [Agent installer notes](../docs/lab-agents.md) explain configuration, credentials,
   tool restrictions and the remaining limits.
+- `connectors.toml` is the connector catalogue: outside services an agent could reach, and
+  what each needs ([docs/lab-connectors.md](../docs/lab-connectors.md)). Its rows are
+  derived from StarNet's catalogue, under MIT. `LICENSE-starnet` beside it is that notice.
 
 ## The data layer
 
@@ -56,6 +59,7 @@ The main modules in `lib/bromigos_homelab/`:
 | `doctor.py` | the lab console's checks |
 | `jobs.py`, `jobqueue.py` | the job kinds, and the queue `bromigos-lab.service` runs |
 | `labmodels.py` | what's installed and loaded on the lab's servers; load and unload |
+| `connectors.py` | the connector catalogue and `bromigos lab connectors`: load, check, list, search and show ([docs/lab-connectors.md](../docs/lab-connectors.md)) |
 | `catalog*.py` | the model catalog: picking, planning, serving, upgrades, the refresh and the bench |
 | `provision.py`, `agentprovision.py` | generate a lab repository, apply its reviewed plan and check service health |
 | `findlab.py` | Find my lab: devices this computer and the lab already know, merged per host and checked |
