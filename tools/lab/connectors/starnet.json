@@ -1,0 +1,1884 @@
+{
+ "connectors": [
+  {
+   "id": "deepwiki",
+   "name": "DeepWiki",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://mcp.deepwiki.com/mcp",
+   "official": true,
+   "homepage": "https://deepwiki.com",
+   "blurb": "Ask natural-language questions about any public GitHub repository — indexed docs, structure, and code."
+  },
+  {
+   "id": "context7",
+   "name": "Context7",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://mcp.context7.com/mcp",
+   "official": true,
+   "homepage": "https://context7.com",
+   "blurb": "Pulls up-to-date, version-specific docs and code examples for thousands of libraries and frameworks."
+  },
+  {
+   "id": "huggingface",
+   "name": "Hugging Face",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://hf.co/mcp",
+   "official": true,
+   "homepage": "https://huggingface.co",
+   "blurb": "Search models, datasets, and Spaces on the Hugging Face Hub, and read model cards."
+  },
+  {
+   "id": "aws-knowledge",
+   "name": "AWS Knowledge",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://knowledge-mcp.global.api.aws",
+   "official": true,
+   "homepage": "https://aws.amazon.com",
+   "blurb": "Authoritative AWS documentation, API references, and architectural guidance."
+  },
+  {
+   "id": "gitmcp",
+   "name": "GitMCP",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://gitmcp.io/docs",
+   "official": false,
+   "homepage": "https://gitmcp.io",
+   "blurb": "Turns any GitHub project into a docs assistant the agent can query for accurate, current answers."
+  },
+  {
+   "id": "exa",
+   "name": "Exa Search",
+   "category": "Search & Research",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://mcp.exa.ai/mcp",
+   "official": true,
+   "homepage": "https://exa.ai",
+   "blurb": "Neural web search built for AI — higher-signal results and full-page content extraction."
+  },
+  {
+   "id": "tavily",
+   "name": "Tavily",
+   "category": "Search & Research",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://mcp.tavily.com/mcp",
+   "official": true,
+   "homepage": "https://tavily.com",
+   "blurb": "AI-native web search + page extraction tuned for agents. Paste your Tavily API key."
+  },
+  {
+   "id": "parallel-search",
+   "name": "Parallel Search",
+   "category": "Search & Research",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://search.parallel.ai/mcp",
+   "official": true,
+   "homepage": "https://docs.parallel.ai/integrations/mcp/search-mcp",
+   "aliases": [
+    "parallel",
+    "parallel web search",
+    "parallel web fetch"
+   ],
+   "blurb": "Search and fetch the web through Parallel's official MCP server. Anonymous access works without setup at lower rate limits."
+  },
+  {
+   "id": "wolfram",
+   "name": "Wolfram",
+   "category": "Compute & Data",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://agenttools.wolfram.com/mcp",
+   "official": true,
+   "homepage": "https://wolfram.com",
+   "blurb": "Wolfram|Alpha computation — math, unit conversions, data, and step-by-step answers."
+  },
+  {
+   "id": "zapier",
+   "name": "Zapier",
+   "category": "Automation",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://mcp.zapier.com/api/mcp/mcp",
+   "official": true,
+   "homepage": "https://zapier.com",
+   "aliases": [
+    "google",
+    "google drive",
+    "gdrive",
+    "gmail",
+    "google sheets",
+    "google calendar",
+    "gsuite",
+    "g suite",
+    "automation"
+   ],
+   "blurb": "Bridge to 7,000+ apps — including Gmail, Google Calendar, Drive, Sheets, and Slack — through one key."
+  },
+  {
+   "id": "apify",
+   "name": "Apify",
+   "category": "Automation",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://mcp.apify.com",
+   "official": true,
+   "homepage": "https://apify.com",
+   "blurb": "Run web-scraping and automation Actors, and pull structured data from the web."
+  },
+  {
+   "id": "composio",
+   "name": "Composio",
+   "category": "Automation",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://connect.composio.dev/mcp",
+   "official": true,
+   "homepage": "https://composio.dev",
+   "keyHeader": "x-consumer-api-key",
+   "aliases": [
+    "google",
+    "google drive",
+    "gdrive",
+    "gmail",
+    "outlook",
+    "microsoft outlook",
+    "microsoft 365",
+    "office 365",
+    "email",
+    "twitter",
+    "x",
+    "slack",
+    "notion",
+    "google calendar",
+    "gsuite",
+    "g suite"
+   ],
+   "presets": [
+    "Gmail",
+    "Outlook"
+   ],
+   "blurb": "One key bridges 500+ apps — including managed Gmail and Outlook email connections, plus X, Slack, Google Drive, Notion, GitHub, and more."
+  },
+  {
+   "id": "x-twitter",
+   "name": "X (Twitter)",
+   "category": "Social",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://api.x.com/mcp",
+   "official": true,
+   "homepage": "https://x.com",
+   "blurb": "X's official server — search and read posts, profiles, and timelines with your X API Bearer token. This read-only token connector does not grant posting (that needs X's write OAuth scope)."
+  },
+  {
+   "id": "zernio",
+   "name": "Zernio",
+   "category": "Social",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.zernio.com/mcp",
+   "official": true,
+   "homepage": "https://zernio.com",
+   "aliases": [
+    "zernio",
+    "social media",
+    "social publishing",
+    "instagram",
+    "tiktok",
+    "linkedin",
+    "facebook",
+    "youtube",
+    "threads",
+    "reddit",
+    "pinterest",
+    "bluesky",
+    "whatsapp",
+    "social ads",
+    "social analytics",
+    "direct messages"
+   ],
+   "blurb": "Publish and schedule across 16 social platforms, manage inboxes, ads, automations, and analytics through Zernio. Needs Zernio sign-in (OAuth)."
+  },
+  {
+   "id": "stripe",
+   "name": "Stripe",
+   "category": "Payments & Finance",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://mcp.stripe.com/",
+   "official": true,
+   "homepage": "https://stripe.com",
+   "blurb": "Query customers, payments, invoices, and subscriptions with a restricted Stripe API key."
+  },
+  {
+   "id": "hubspot",
+   "name": "HubSpot",
+   "category": "CRM & Sales",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://app.hubspot.com/mcp/v1/http",
+   "official": true,
+   "homepage": "https://hubspot.com",
+   "blurb": "Read and update CRM contacts, companies, deals, and tickets with a private-app token."
+  },
+  {
+   "id": "google-files",
+   "name": "Selected Google files",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://www.googleapis.com/drive/v3#selected-files",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://drive.google.com",
+   "aliases": [
+    "google",
+    "google docs",
+    "google sheets",
+    "google drive",
+    "selected files"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "https://www.googleapis.com/auth/drive.file"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent",
+     "trigger_onepick": "true",
+     "include_granted_scopes": "false",
+     "allow_multiple": "true",
+     "mimetypes": "application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Choose Google Docs and Sheets in Google’s file picker. Agents can read and edit files you grant to StarNet and create new ones. Other Drive files, Gmail and Calendar are not included."
+  },
+  {
+   "id": "gmail",
+   "name": "Gmail",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://gmail.googleapis.com/gmail/v1/users/me",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://mail.google.com",
+   "aliases": [
+    "google",
+    "gmail",
+    "google mail",
+    "email",
+    "gsuite",
+    "g suite",
+    "google workspace"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "openid",
+     "https://www.googleapis.com/auth/userinfo.email",
+     "https://www.googleapis.com/auth/gmail.readonly",
+     "https://www.googleapis.com/auth/gmail.compose"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent select_account"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Search and read Gmail, create drafts, and send approved drafts. Sign in with Google to connect your account."
+  },
+  {
+   "id": "gmail-send",
+   "name": "Gmail (send only)",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://gmail.googleapis.com/gmail/v1/users/me#send-only",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://mail.google.com",
+   "aliases": [
+    "gmail send",
+    "send email",
+    "email",
+    "gmail"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "openid",
+     "https://www.googleapis.com/auth/userinfo.email",
+     "https://www.googleapis.com/auth/gmail.send"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent select_account"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Send plain-text email from your Gmail account after you approve each message. Cannot read, search, or draft mail. Sign in with Google to connect your account."
+  },
+  {
+   "id": "gmail-app-password",
+   "name": "Gmail (app password)",
+   "category": "Productivity",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://imap.gmail.com/#app-password",
+   "official": false,
+   "appPassword": true,
+   "homepage": "https://myaccount.google.com/apppasswords",
+   "aliases": [
+    "gmail",
+    "google mail",
+    "email",
+    "imap",
+    "smtp",
+    "app password",
+    "gmail app password",
+    "gsuite",
+    "google workspace"
+   ],
+   "blurb": "Search, read, draft and send Gmail with a Google app password. Mail goes between this computer and Gmail directly (IMAP and SMTP); no Google sign-in screen is involved. Needs 2-Step Verification on your Google account."
+  },
+  {
+   "id": "google-drive",
+   "name": "Google Drive",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://www.googleapis.com/drive/v3",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://drive.google.com",
+   "aliases": [
+    "google",
+    "google drive",
+    "gdrive",
+    "drive",
+    "gsuite",
+    "g suite",
+    "google workspace"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "openid",
+     "https://www.googleapis.com/auth/userinfo.email",
+     "https://www.googleapis.com/auth/drive.readonly",
+     "https://www.googleapis.com/auth/drive.file"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent select_account"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Search, read, export, and manage Drive files. Sign in with Google to connect your account."
+  },
+  {
+   "id": "google-calendar",
+   "name": "Google Calendar",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://www.googleapis.com/calendar/v3",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://calendar.google.com",
+   "aliases": [
+    "google",
+    "google calendar",
+    "gcal",
+    "calendar",
+    "gsuite",
+    "g suite",
+    "google workspace"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "openid",
+     "https://www.googleapis.com/auth/userinfo.email",
+     "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+     "https://www.googleapis.com/auth/calendar.events.readonly",
+     "https://www.googleapis.com/auth/calendar.events.freebusy"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent select_account"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Read calendars, events, and availability. Sign in with Google to connect your account."
+  },
+  {
+   "id": "google-docs",
+   "name": "Google Docs",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://docs.googleapis.com/v1/documents",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://docs.google.com",
+   "aliases": [
+    "google",
+    "google docs",
+    "docs",
+    "gsuite",
+    "g suite",
+    "google workspace"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "openid",
+     "https://www.googleapis.com/auth/userinfo.email",
+     "https://www.googleapis.com/auth/documents",
+     "https://www.googleapis.com/auth/drive.file"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent select_account"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Read, create, and edit Google Docs. Sign in with Google to connect your account."
+  },
+  {
+   "id": "google-sheets",
+   "name": "Google Sheets",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://sheets.googleapis.com/v4/spreadsheets",
+   "googleApi": true,
+   "official": false,
+   "homepage": "https://sheets.google.com",
+   "aliases": [
+    "google",
+    "google sheets",
+    "sheets",
+    "spreadsheet",
+    "gsuite",
+    "g suite",
+    "google workspace"
+   ],
+   "staticOauth": {
+    "authorizationServer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "scopes": [
+     "openid",
+     "https://www.googleapis.com/auth/userinfo.email",
+     "https://www.googleapis.com/auth/spreadsheets",
+     "https://www.googleapis.com/auth/drive.file"
+    ],
+    "extraAuthParams": {
+     "access_type": "offline",
+     "prompt": "consent select_account"
+    },
+    "clientSecretRequired": false,
+    "developerPreview": false,
+    "setupUrl": "https://developers.google.com/identity/protocols/oauth2/native-app",
+    "setupName": "StarNet publisher setup",
+    "setupNote": "StarNet supplies the Google application registration. Users only sign in and approve access."
+   },
+   "blurb": "Read, create, and edit Google Sheets. Sign in with Google to connect your account."
+  },
+  {
+   "id": "notion",
+   "name": "Notion",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.notion.com/mcp",
+   "official": true,
+   "homepage": "https://notion.so",
+   "blurb": "Search, read, and create Notion pages and databases. Needs Notion sign-in (OAuth)."
+  },
+  {
+   "id": "linear",
+   "name": "Linear",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.linear.app/mcp",
+   "official": true,
+   "homepage": "https://linear.app",
+   "blurb": "Create, search, and update Linear issues and projects. Needs Linear sign-in (OAuth)."
+  },
+  {
+   "id": "atlassian",
+   "name": "Jira & Confluence",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "",
+   "official": true,
+   "homepage": "https://atlassian.com",
+   "via": "zapier",
+   "aliases": [
+    "atlassian",
+    "jira",
+    "confluence"
+   ],
+   "blurb": "Atlassian Jira issues and Confluence pages. A newer direct OAuth endpoint is under verification; use the proven Zapier route until StarNet completes an authenticated tool call."
+  },
+  {
+   "id": "github",
+   "name": "GitHub",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "deviceFlow": true,
+   "transport": "http",
+   "url": "https://api.githubcopilot.com/mcp",
+   "official": true,
+   "homepage": "https://github.com",
+   "blurb": "Connect repositories, issues, pull requests, and Actions. Sign in with GitHub using a short code — no API key needed."
+  },
+  {
+   "id": "sentry",
+   "name": "Sentry",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.sentry.dev/mcp",
+   "official": true,
+   "homepage": "https://sentry.io",
+   "blurb": "Inspect errors, issues, and releases from your Sentry projects. Needs Sentry sign-in (OAuth)."
+  },
+  {
+   "id": "supabase",
+   "name": "Supabase",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.supabase.com/mcp",
+   "official": true,
+   "homepage": "https://supabase.com",
+   "blurb": "Query your Postgres database and manage Supabase projects. Needs Supabase sign-in (OAuth)."
+  },
+  {
+   "id": "unreal-engine",
+   "name": "Unreal Engine",
+   "category": "Advanced / Developer",
+   "authType": "none",
+   "transport": "http",
+   "url": "http://127.0.0.1:8000/mcp",
+   "official": true,
+   "local": true,
+   "homepage": "https://dev.epicgames.com/documentation/unreal-engine/unreal-mcp-in-unreal-editor",
+   "aliases": [
+    "unreal",
+    "ue",
+    "ue5",
+    "game engine",
+    "unreal editor"
+   ],
+   "blurb": "Control the open Unreal Editor through Epic's experimental local MCP plugin. Enable Unreal MCP and start its loopback server first."
+  },
+  {
+   "id": "cloudflare-docs",
+   "name": "Cloudflare Docs",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://docs.mcp.cloudflare.com/mcp",
+   "official": true,
+   "homepage": "https://developers.cloudflare.com",
+   "blurb": "Search Cloudflare's product documentation and developer guides."
+  },
+  {
+   "id": "microsoft-learn",
+   "name": "Microsoft Learn",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://learn.microsoft.com/api/mcp",
+   "official": true,
+   "homepage": "https://learn.microsoft.com",
+   "blurb": "Search Microsoft Learn docs for Azure, .NET, Microsoft 365, and more."
+  },
+  {
+   "id": "gitlab",
+   "name": "GitLab",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://gitlab.com/api/v4/mcp",
+   "official": true,
+   "homepage": "https://gitlab.com",
+   "blurb": "Issues, merge requests, and pipelines across your GitLab projects. Needs GitLab sign-in (OAuth)."
+  },
+  {
+   "id": "vercel",
+   "name": "Vercel",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.vercel.com/",
+   "official": true,
+   "homepage": "https://vercel.com",
+   "blurb": "Manage Vercel projects, deployments, and logs. Needs Vercel sign-in (OAuth)."
+  },
+  {
+   "id": "netlify",
+   "name": "Netlify",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://netlify-mcp.netlify.app/mcp",
+   "official": true,
+   "homepage": "https://netlify.com",
+   "blurb": "Deploy and manage Netlify sites. Needs Netlify sign-in (OAuth)."
+  },
+  {
+   "id": "neon",
+   "name": "Neon",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.neon.tech/mcp",
+   "official": true,
+   "homepage": "https://neon.tech",
+   "blurb": "Query and manage your Neon serverless Postgres. Needs Neon sign-in (OAuth)."
+  },
+  {
+   "id": "prisma",
+   "name": "Prisma",
+   "category": "Developer Tools",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://mcp.prisma.io/mcp",
+   "official": true,
+   "homepage": "https://prisma.io",
+   "blurb": "Manage Prisma Postgres databases. Paste your Prisma API key."
+  },
+  {
+   "id": "airtable",
+   "name": "Airtable",
+   "category": "Productivity",
+   "authType": "apikey",
+   "transport": "http",
+   "url": "https://mcp.airtable.com/mcp",
+   "official": true,
+   "homepage": "https://airtable.com",
+   "blurb": "Read and write Airtable bases and records. Paste an Airtable personal access token."
+  },
+  {
+   "id": "asana",
+   "name": "Asana",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.asana.com/mcp",
+   "official": true,
+   "homepage": "https://asana.com",
+   "blurb": "Create and track Asana tasks and projects. Needs Asana sign-in (OAuth)."
+  },
+  {
+   "id": "monday",
+   "name": "monday.com",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.monday.com/mcp",
+   "official": true,
+   "homepage": "https://monday.com",
+   "blurb": "Create and update monday.com boards and items. Needs monday.com sign-in (OAuth)."
+  },
+  {
+   "id": "canva",
+   "name": "Canva",
+   "category": "Design",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.canva.com/mcp",
+   "official": true,
+   "homepage": "https://canva.com",
+   "blurb": "Generate and manage Canva designs. Needs Canva sign-in (OAuth)."
+  },
+  {
+   "id": "webflow",
+   "name": "Webflow",
+   "category": "Design",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.webflow.com/mcp",
+   "official": true,
+   "homepage": "https://webflow.com",
+   "blurb": "Manage Webflow sites, CMS collections, and content. Needs Webflow sign-in (OAuth)."
+  },
+  {
+   "id": "wix",
+   "name": "Wix",
+   "category": "Design",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.wix.com/mcp",
+   "official": true,
+   "homepage": "https://wix.com",
+   "blurb": "Manage Wix sites, stores, and bookings. Needs Wix sign-in (OAuth)."
+  },
+  {
+   "id": "higgsfield",
+   "name": "Higgsfield",
+   "category": "Design",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.higgsfield.ai/mcp",
+   "official": true,
+   "homepage": "https://higgsfield.ai",
+   "aliases": [
+    "higgsfield ai",
+    "image generation",
+    "video generation",
+    "sora",
+    "veo",
+    "kling",
+    "soul"
+   ],
+   "blurb": "Generate images and video with Higgsfield's hosted models (Soul, Veo, Kling, Sora, and more). Needs Higgsfield sign-in (OAuth)."
+  },
+  {
+   "id": "paypal",
+   "name": "PayPal",
+   "category": "Payments & Finance",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.paypal.com/mcp",
+   "official": true,
+   "homepage": "https://paypal.com",
+   "blurb": "Create invoices and query PayPal orders and payments. Needs PayPal sign-in (OAuth)."
+  },
+  {
+   "id": "square",
+   "name": "Square",
+   "category": "Payments & Finance",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.squareup.com/mcp",
+   "official": true,
+   "homepage": "https://squareup.com",
+   "blurb": "Payments, catalog, and orders on Square. Needs Square sign-in (OAuth)."
+  },
+  {
+   "id": "intercom",
+   "name": "Intercom",
+   "category": "CRM & Sales",
+   "authType": "oauth",
+   "transport": "http",
+   "keyAuthRetired": true,
+   "url": "https://mcp.intercom.com/mcp",
+   "official": true,
+   "homepage": "https://intercom.com",
+   "blurb": "Search Intercom conversations, contacts, and articles. Needs Intercom sign-in (OAuth)."
+  },
+  {
+   "id": "openai-devdocs",
+   "name": "OpenAI DevDocs",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://developers.openai.com/mcp",
+   "official": true,
+   "homepage": "https://developers.openai.com",
+   "aliases": [
+    "openai",
+    "openai docs",
+    "openai api docs",
+    "gpt docs"
+   ],
+   "blurb": "Search OpenAI's developer documentation — API references, guides, and model docs."
+  },
+  {
+   "id": "todoist",
+   "name": "Todoist",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://ai.todoist.net/mcp",
+   "official": true,
+   "homepage": "https://todoist.com",
+   "aliases": [
+    "todoist",
+    "todo",
+    "task list",
+    "tasks"
+   ],
+   "blurb": "Create, search, and complete Todoist tasks and projects. Needs Todoist sign-in (OAuth)."
+  },
+  {
+   "id": "clickup",
+   "name": "ClickUp",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.clickup.com/mcp",
+   "official": true,
+   "homepage": "https://clickup.com",
+   "aliases": [
+    "clickup",
+    "click up",
+    "tasks",
+    "project management"
+   ],
+   "blurb": "Tasks, docs, and spaces in ClickUp. Needs ClickUp sign-in (OAuth)."
+  },
+  {
+   "id": "railway",
+   "name": "Railway",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.railway.com/mcp",
+   "official": true,
+   "homepage": "https://railway.com",
+   "aliases": [
+    "railway",
+    "deploy",
+    "hosting"
+   ],
+   "blurb": "Manage Railway projects, services, and deployments. Needs Railway sign-in (OAuth)."
+  },
+  {
+   "id": "grafana",
+   "name": "Grafana",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.grafana.com/mcp",
+   "official": true,
+   "homepage": "https://grafana.com",
+   "aliases": [
+    "grafana",
+    "dashboards",
+    "observability",
+    "metrics"
+   ],
+   "blurb": "Query dashboards, metrics, and incidents in Grafana Cloud. Needs Grafana sign-in (OAuth)."
+  },
+  {
+   "id": "posthog",
+   "name": "PostHog",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.posthog.com/mcp",
+   "official": true,
+   "homepage": "https://posthog.com",
+   "aliases": [
+    "posthog",
+    "product analytics",
+    "feature flags",
+    "analytics"
+   ],
+   "blurb": "Product analytics, insights, and feature flags from PostHog. Needs PostHog sign-in (OAuth)."
+  },
+  {
+   "id": "cloudflare-bindings",
+   "name": "Cloudflare",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://bindings.mcp.cloudflare.com/mcp",
+   "official": true,
+   "homepage": "https://cloudflare.com",
+   "aliases": [
+    "cloudflare",
+    "workers",
+    "kv",
+    "r2",
+    "d1"
+   ],
+   "blurb": "Manage Cloudflare Workers, KV, R2, and D1 resources on your account. Needs Cloudflare sign-in (OAuth)."
+  },
+  {
+   "id": "cal-com",
+   "name": "Cal.com",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.cal.com/mcp",
+   "official": true,
+   "homepage": "https://cal.com",
+   "aliases": [
+    "cal",
+    "cal.com",
+    "calendar",
+    "scheduling",
+    "bookings"
+   ],
+   "blurb": "Read and manage your Cal.com bookings and schedules. Needs Cal.com sign-in (OAuth)."
+  },
+  {
+   "id": "fireflies",
+   "name": "Fireflies",
+   "category": "Productivity",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://api.fireflies.ai/mcp",
+   "official": true,
+   "homepage": "https://fireflies.ai",
+   "aliases": [
+    "fireflies",
+    "meeting notes",
+    "transcripts",
+    "meetings"
+   ],
+   "blurb": "Search your Fireflies meeting transcripts, summaries, and action items. Needs Fireflies sign-in (OAuth)."
+  },
+  {
+   "id": "algolia",
+   "name": "Algolia",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.algolia.com/mcp",
+   "official": true,
+   "homepage": "https://algolia.com",
+   "aliases": [
+    "algolia",
+    "search index",
+    "search api"
+   ],
+   "blurb": "Manage Algolia indices, records, and search configuration. Needs Algolia sign-in (OAuth)."
+  },
+  {
+   "id": "buildkite",
+   "name": "Buildkite",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.buildkite.com/mcp",
+   "official": true,
+   "homepage": "https://buildkite.com",
+   "aliases": [
+    "buildkite",
+    "ci",
+    "pipelines",
+    "builds"
+   ],
+   "blurb": "Inspect Buildkite pipelines, builds, and test results. Needs Buildkite sign-in (OAuth)."
+  },
+  {
+   "id": "datadog",
+   "name": "Datadog",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.datadoghq.com/api/unstable/mcp-server/mcp",
+   "official": true,
+   "homepage": "https://datadoghq.com",
+   "aliases": [
+    "datadog",
+    "monitoring",
+    "observability",
+    "apm",
+    "logs"
+   ],
+   "blurb": "Query Datadog monitors, dashboards, logs, and incidents (Datadog Preview endpoint). Needs Datadog sign-in (OAuth)."
+  },
+  {
+   "id": "globalping",
+   "name": "Globalping",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.globalping.dev/mcp",
+   "official": true,
+   "homepage": "https://globalping.io",
+   "aliases": [
+    "globalping",
+    "ping",
+    "traceroute",
+    "network test",
+    "latency"
+   ],
+   "blurb": "Run ping, traceroute, DNS, and HTTP tests from probes around the world. Needs Globalping sign-in (OAuth)."
+  },
+  {
+   "id": "honeybadger",
+   "name": "Honeybadger",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.honeybadger.io/mcp",
+   "official": true,
+   "homepage": "https://honeybadger.io",
+   "aliases": [
+    "honeybadger",
+    "error tracking",
+    "uptime",
+    "exceptions"
+   ],
+   "blurb": "Inspect Honeybadger errors, uptime checks, and projects. Needs Honeybadger sign-in (OAuth)."
+  },
+  {
+   "id": "jam",
+   "name": "Jam",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.jam.dev/mcp",
+   "official": true,
+   "homepage": "https://jam.dev",
+   "aliases": [
+    "jam",
+    "bug reports",
+    "screen recording",
+    "repro"
+   ],
+   "blurb": "Read Jam bug reports — console logs, network requests, and repro steps. Needs Jam sign-in (OAuth)."
+  },
+  {
+   "id": "sanity",
+   "name": "Sanity",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.sanity.io/mcp",
+   "official": true,
+   "homepage": "https://sanity.io",
+   "aliases": [
+    "sanity",
+    "cms",
+    "headless cms",
+    "content"
+   ],
+   "blurb": "Query and edit content in your Sanity datasets. Needs Sanity sign-in (OAuth)."
+  },
+  {
+   "id": "semgrep",
+   "name": "Semgrep",
+   "category": "Developer Tools",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.semgrep.ai/mcp",
+   "official": true,
+   "homepage": "https://semgrep.dev",
+   "aliases": [
+    "semgrep",
+    "security scan",
+    "static analysis",
+    "sast"
+   ],
+   "blurb": "Scan code for security issues with Semgrep rules and review findings. Needs Semgrep sign-in (OAuth)."
+  },
+  {
+   "id": "close-crm",
+   "name": "Close",
+   "category": "CRM & Sales",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.close.com/mcp",
+   "official": true,
+   "homepage": "https://close.com",
+   "aliases": [
+    "close",
+    "close crm",
+    "crm",
+    "leads",
+    "sales"
+   ],
+   "blurb": "Search and update Close CRM leads, contacts, and opportunities. Needs Close sign-in (OAuth)."
+  },
+  {
+   "id": "ramp",
+   "name": "Ramp",
+   "category": "Payments & Finance",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.ramp.com/mcp",
+   "official": true,
+   "homepage": "https://ramp.com",
+   "aliases": [
+    "ramp",
+    "corporate cards",
+    "expenses",
+    "spend"
+   ],
+   "blurb": "Query Ramp transactions, cards, and spend programs. Needs Ramp sign-in (OAuth)."
+  },
+  {
+   "id": "corpus-law",
+   "name": "Corpus (US law)",
+   "category": "Docs & Knowledge",
+   "authType": "none",
+   "transport": "http",
+   "url": "https://corpuslaw.us/api/mcp",
+   "official": true,
+   "homepage": "https://corpuslaw.us",
+   "aliases": [
+    "corpus",
+    "law",
+    "legal",
+    "statutes",
+    "us code",
+    "llc formation"
+   ],
+   "blurb": "Search 571k+ US legal provisions and get LLC / nonprofit formation requirements. No key for search."
+  },
+  {
+   "id": "financial-datasets",
+   "name": "Financial Datasets",
+   "category": "Payments & Finance",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.financialdatasets.ai/mcp",
+   "official": true,
+   "homepage": "https://financialdatasets.ai",
+   "aliases": [
+    "financial datasets",
+    "stocks",
+    "stock market",
+    "sec filings",
+    "financial statements",
+    "earnings"
+   ],
+   "blurb": "Stock prices, financial statements, SEC filings, insider trades, and a screener. Needs Financial Datasets sign-in (OAuth)."
+  },
+  {
+   "id": "youcom",
+   "name": "You.com",
+   "category": "Search & Research",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://api.you.com/mcp",
+   "official": true,
+   "homepage": "https://you.com",
+   "aliases": [
+    "you",
+    "you.com",
+    "web search",
+    "research",
+    "cited research"
+   ],
+   "blurb": "Live web search, page extraction, and cited research from You.com. Needs You.com sign-in (OAuth)."
+  },
+  {
+   "id": "xmemo",
+   "name": "XMemo",
+   "category": "Docs & Knowledge",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://xmemo.dev/mcp",
+   "official": true,
+   "homepage": "https://xmemo.dev",
+   "aliases": [
+    "xmemo",
+    "cloud memory",
+    "memory",
+    "long term memory"
+   ],
+   "blurb": "Cloud memory with semantic search across sessions. Whatever the agent saves is sent to xmemo.dev. Needs XMemo sign-in (OAuth)."
+  },
+  {
+   "id": "replaid",
+   "name": "Replaid",
+   "category": "Social",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.replaid.pro",
+   "official": true,
+   "homepage": "https://replaid.pro",
+   "aliases": [
+    "replaid",
+    "social inbox",
+    "dms",
+    "comments",
+    "replies"
+   ],
+   "blurb": "Read, triage, and draft replies in your social inbox. Needs Replaid sign-in (OAuth)."
+  },
+  {
+   "id": "markifact",
+   "name": "Markifact",
+   "category": "Marketing",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://api.markifact.com/mcp",
+   "official": true,
+   "homepage": "https://markifact.com",
+   "aliases": [
+    "markifact",
+    "google ads",
+    "meta ads",
+    "ga4",
+    "ads reporting",
+    "marketing"
+   ],
+   "blurb": "Google Ads, Meta Ads, GA4, Shopify, HubSpot and 50+ marketing platforms. Can edit LIVE campaigns. Needs Markifact sign-in (OAuth)."
+  },
+  {
+   "id": "adspirer",
+   "name": "Adspirer",
+   "category": "Marketing",
+   "authType": "oauth",
+   "transport": "http",
+   "url": "https://mcp.adspirer.com/mcp",
+   "official": true,
+   "homepage": "https://adspirer.com",
+   "aliases": [
+    "adspirer",
+    "ad campaigns",
+    "google ads",
+    "meta ads",
+    "tiktok ads",
+    "paid media"
+   ],
+   "blurb": "Create and optimize ad campaigns across Google, Meta, TikTok, LinkedIn and Amazon. Spends REAL ad budget. Needs Adspirer sign-in (OAuth)."
+  }
+ ],
+ "order": [
+  "Docs & Knowledge",
+  "Search & Research",
+  "Compute & Data",
+  "Developer Tools",
+  "Advanced / Developer",
+  "Automation",
+  "Social",
+  "Productivity",
+  "Design",
+  "Payments & Finance",
+  "CRM & Sales",
+  "Marketing"
+ ],
+ "platforms": [
+  {
+   "id": "printify",
+   "name": "Printify",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "PRINTIFY_API_KEY",
+   "docsUrl": "https://developers.printify.com/",
+   "apiBase": "https://api.printify.com/v1",
+   "authHint": "Authorization: Bearer ${PRINTIFY_API_KEY}",
+   "aliases": [
+    "pod",
+    "print on demand",
+    "merch",
+    "marketplace products"
+   ],
+   "blurb": "Print-on-demand: shops, blueprints, products, orders, publishing.",
+   "note": "Create a personal access token under Printify → Settings → API.",
+   "apiNotes": "Mockups are read-only and have no endpoint of their own: they are the images[] (src, variant_ids, position, is_default) of GET /v1/shops/{shop_id}/products/{product_id}.json. Upload artwork with POST /v1/uploads/images.json and {\"file_name\":\"art.png\",\"url\":\"https://...\"} or {\"file_name\":\"art.png\",\"contents\":\"${file:path/art.png}\"}; read it back with GET /v1/uploads/{image_id}.json. Update with PUT /v1/shops/{shop_id}/products/{product_id}.json: a partial document is accepted, but if you send variants, EVERY variant of the product must be in the request. A product is locked while publishing (is_locked); POST .../products/{product_id}/publishing_succeeded.json or publishing_failed.json unlocks it. Variant catalog: GET /v1/catalog/blueprints/{blueprint_id}/print_providers/{print_provider_id}/variants.json (?show-out-of-stock=1 includes out-of-stock). Ids are opaque strings (e.g. 5de6593ebff03b5313567d22): copy them exactly from a response, never retype or shorten them. Limits: 600 requests/min, catalog 100/min, publishing 200 per 30 min. Product documents are large: pass web_request select, e.g. [\"id\",\"variants[].id\",\"variants[].is_enabled\",\"variants[].price\",\"print_areas\",\"images[].src\"]."
+  },
+  {
+   "id": "printful",
+   "name": "Printful",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "PRINTFUL_API_KEY",
+   "docsUrl": "https://developers.printful.com/",
+   "apiBase": "https://api.printful.com",
+   "authHint": "Authorization: Bearer ${PRINTFUL_API_KEY}",
+   "aliases": [
+    "pod",
+    "print on demand",
+    "merch",
+    "marketplace products"
+   ],
+   "blurb": "Print-on-demand fulfilment: catalog, orders, mockups, shipping rates."
+  },
+  {
+   "id": "gelato",
+   "name": "Gelato",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "GELATO_API_KEY",
+   "docsUrl": "https://dashboard.gelato.com/docs/",
+   "apiBase": "https://order.gelatoapis.com",
+   "authHint": "X-API-KEY: ${GELATO_API_KEY}",
+   "aliases": [
+    "pod",
+    "print on demand",
+    "merch",
+    "marketplace products"
+   ],
+   "blurb": "Print-on-demand products and fulfilment: templates, store publishing, quotes, orders.",
+   "note": "Create an API key in Gelato’s API Portal. Product publishing starts from a Gelato template and connected store."
+  },
+  {
+   "id": "prodigi",
+   "name": "Prodigi",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "PRODIGI_API_KEY",
+   "docsUrl": "https://www.prodigi.com/print-api/docs/reference/",
+   "apiBase": "https://api.prodigi.com/v4.0",
+   "authHint": "X-API-Key: ${PRODIGI_API_KEY}",
+   "aliases": [
+    "pod",
+    "print on demand",
+    "merch",
+    "marketplace products"
+   ],
+   "blurb": "Print-on-demand fulfilment: product details, quotes, orders, shipping and status.",
+   "note": "Use Prodigi’s sandbox API and sandbox key while testing; live API orders can enter fulfilment."
+  },
+  {
+   "id": "shopify",
+   "name": "Shopify",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "SHOPIFY_API_KEY",
+   "docsUrl": "https://shopify.dev/docs/api/admin-rest",
+   "apiBase": "https://{your-store}.myshopify.com/admin/api",
+   "authHint": "X-Shopify-Access-Token: ${SHOPIFY_API_KEY}",
+   "blurb": "Storefront admin: products, orders, customers, inventory.",
+   "note": "The host is YOUR store (your-store.myshopify.com), so tell the agent which store it is working on."
+  },
+  {
+   "id": "etsy",
+   "name": "Etsy",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "ETSY_API_KEY",
+   "docsUrl": "https://developers.etsy.com/documentation/",
+   "apiBase": "https://openapi.etsy.com/v3",
+   "blurb": "Public/manual API work only — persistent shop automation is not connected.",
+   "unattendedSupported": false,
+   "unattendedReason": "StarNet does not yet manage Etsy OAuth consent or refresh its one-hour access tokens.",
+   "note": "MANUAL OAUTH ONLY: Etsy private/write endpoints need OAuth 2.0; access tokens expire after one hour. StarNet does not refresh them yet, so this key cannot be enabled for scheduled, messaged, or Night Shift runs."
+  },
+  {
+   "id": "supliful",
+   "name": "Supliful",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "SUPLIFUL_API_KEY",
+   "docsUrl": "https://help.supliful.com/en/articles/12459926-connect-your-custom-app-to-supliful-using-shopify-admin-api",
+   "retiredDocsUrls": [
+    "https://docs.supliful.com/"
+   ],
+   "apiVia": "Shopify Admin API",
+   "apiBase": "https://{your-store}.myshopify.com/admin/api",
+   "authHint": "X-Shopify-Access-Token: ${SUPLIFUL_API_KEY}",
+   "aliases": [
+    "pod",
+    "supplements",
+    "vitamins",
+    "skincare",
+    "coffee",
+    "private label"
+   ],
+   "blurb": "Supplement, coffee, and skincare print-on-demand: white-label products, orders, fulfilment.",
+   "note": "Supliful publishes no public API of its own. Its documented route: install the Supliful app on a Shopify store, create a Shopify custom app there, and save that app’s Admin API access token here. Orders created in that store through the Admin API are fulfilled by Supliful."
+  },
+  {
+   "id": "fourthwall",
+   "name": "Fourthwall",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "FOURTHWALL_API_KEY",
+   "docsUrl": "https://docs.fourthwall.com/",
+   "apiBase": "https://api.fourthwall.com/open-api/v1.0",
+   "aliases": [
+    "pod",
+    "creator merch",
+    "merch storefront",
+    "fan shop"
+   ],
+   "blurb": "Creator merch storefronts: products, offers, orders, memberships.",
+   "note": "Generate an API token in Fourthwall → Settings → For developers."
+  },
+  {
+   "id": "shineon",
+   "name": "ShineOn",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "SHINEON_API_KEY",
+   "docsUrl": "https://api.shineon.com/docs",
+   "apiBase": "https://api.shineon.com/v1",
+   "aliases": [
+    "pod",
+    "jewelry",
+    "necklace",
+    "pendant",
+    "message card"
+   ],
+   "blurb": "Jewelry print-on-demand: pendants and message-card products, orders, fulfilment."
+  },
+  {
+   "id": "spod",
+   "name": "SPOD",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "SPOD_API_KEY",
+   "docsUrl": "https://rest.spod.com/docs",
+   "apiBase": "https://rest.spod.com",
+   "aliases": [
+    "pod",
+    "print on demand",
+    "spreadshirt",
+    "apparel"
+   ],
+   "blurb": "Spreadshirt's print-on-demand engine: articles, orders, shipping, stock."
+  },
+  {
+   "id": "teemill",
+   "name": "Teemill",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "TEEMILL_API_KEY",
+   "docsUrl": "https://teemill.com/api-docs/",
+   "apiBase": "https://api.teemill.com",
+   "retiredDocsUrls": [
+    "https://teemill.com/api-info/"
+   ],
+   "authHint": "Authorization: Bearer ${TEEMILL_API_KEY}",
+   "aliases": [
+    "pod",
+    "sustainable",
+    "organic apparel",
+    "circular fashion"
+   ],
+   "blurb": "Sustainable organic-cotton print-on-demand: create products from an image URL in one call."
+  },
+  {
+   "id": "zazzle",
+   "name": "Zazzle",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "ZAZZLE_API_KEY",
+   "docsUrl": "https://www.zazzle.com/api",
+   "apiBase": "https://www.zazzle.com/api/create",
+   "retiredDocsUrls": [
+    "https://www.zazzle.com/sell/developers/createaproduct"
+   ],
+   "aliases": [
+    "pod",
+    "print on demand",
+    "mugs",
+    "cards",
+    "gifts"
+   ],
+   "blurb": "Create-a-Product across ~1,300 Zazzle product types (mugs, cards, wrapping paper, skateboards…).",
+   "note": "Zazzle uses your associate/member ID in Create-a-Product URLs, not a secret header — save your associate ID as the key."
+  },
+  {
+   "id": "gumroad",
+   "name": "Gumroad",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "GUMROAD_API_KEY",
+   "docsUrl": "https://gumroad.com/api",
+   "apiBase": "https://api.gumroad.com/v2",
+   "aliases": [
+    "digital products",
+    "downloads",
+    "creator sales"
+   ],
+   "blurb": "Sell digital products: create/list products, licenses, sales.",
+   "note": "Create an application access token in Gumroad → Settings → Advanced. The token rides the access_token parameter."
+  },
+  {
+   "id": "lemon-squeezy",
+   "name": "Lemon Squeezy",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "LEMON_SQUEEZY_API_KEY",
+   "docsUrl": "https://docs.lemonsqueezy.com/api",
+   "apiBase": "https://api.lemonsqueezy.com/v1",
+   "authHint": "Authorization: Bearer ${LEMON_SQUEEZY_API_KEY}",
+   "aliases": [
+    "digital products",
+    "saas billing",
+    "licenses"
+   ],
+   "blurb": "Digital products, subscriptions, and license keys."
+  },
+  {
+   "id": "cj-dropshipping",
+   "name": "CJ Dropshipping",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "CJ_DROPSHIPPING_API_KEY",
+   "docsUrl": "https://developers.cjdropshipping.com/",
+   "apiBase": "https://developers.cjdropshipping.com/api2.0/v1",
+   "aliases": [
+    "dropshipping",
+    "sourcing",
+    "fulfilment"
+   ],
+   "blurb": "Dropshipping end to end: product sourcing, listings, orders, logistics.",
+   "note": "CJ exchanges your API key for a short-lived access token via getAccessToken — the docs show the flow; the agent can do the exchange itself."
+  },
+  {
+   "id": "keepa",
+   "name": "Keepa",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "KEEPA_API_KEY",
+   "docsUrl": "https://keepa.com/#!discuss/t/rest-api/110",
+   "apiBase": "https://api.keepa.com",
+   "aliases": [
+    "amazon",
+    "price tracking",
+    "arbitrage",
+    "product research"
+   ],
+   "blurb": "Amazon product and price-history intel for research and arbitrage.",
+   "note": "The key rides the ?key= query parameter, not a header."
+  },
+  {
+   "id": "discogs",
+   "name": "Discogs",
+   "category": "Commerce & Print-on-Demand",
+   "envVar": "DISCOGS_API_KEY",
+   "docsUrl": "https://www.discogs.com/developers",
+   "apiBase": "https://api.discogs.com",
+   "authHint": "Authorization: Discogs token=${DISCOGS_API_KEY}",
+   "aliases": [
+    "vinyl",
+    "records",
+    "collectibles",
+    "marketplace"
+   ],
+   "blurb": "The vinyl/record marketplace: search, pricing, collection, and listings."
+  },
+  {
+   "id": "lob",
+   "name": "Lob",
+   "category": "Physical World",
+   "envVar": "LOB_API_KEY",
+   "docsUrl": "https://docs.lob.com/",
+   "apiBase": "https://api.lob.com/v1",
+   "aliases": [
+    "direct mail",
+    "postcards",
+    "letters",
+    "print and mail"
+   ],
+   "blurb": "Send real postcards, letters, and checks by API — direct-mail campaigns from an agent.",
+   "note": "Lob uses HTTP Basic auth with the key as the username (empty password). Test keys print nothing."
+  },
+  {
+   "id": "lulu",
+   "name": "Lulu",
+   "category": "Physical World",
+   "envVar": "LULU_API_KEY",
+   "docsUrl": "https://developers.lulu.com/",
+   "apiBase": "https://api.lulu.com",
+   "aliases": [
+    "book publishing",
+    "print books",
+    "self publishing"
+   ],
+   "blurb": "Print and drop-ship real books: cost calculations, print jobs, tracking.",
+   "note": "Lulu issues a client key + secret exchanged for a bearer token (client-credentials) — the docs show the flow; use the sandbox (api.sandbox.lulu.com) while testing."
+  },
+  {
+   "id": "duffel",
+   "name": "Duffel",
+   "category": "Physical World",
+   "envVar": "DUFFEL_API_KEY",
+   "docsUrl": "https://duffel.com/docs/api",
+   "apiBase": "https://api.duffel.com",
+   "authHint": "Authorization: Bearer ${DUFFEL_API_KEY}",
+   "aliases": [
+    "flights",
+    "travel",
+    "booking",
+    "airlines"
+   ],
+   "blurb": "Flight search, offers, and booking — a travel-agent workflow by API.",
+   "note": "Every request also needs a Duffel-Version header (see docs). Test mode books nothing real."
+  },
+  {
+   "id": "stripe",
+   "name": "Stripe",
+   "category": "Payments",
+   "envVar": "STRIPE_API_KEY",
+   "docsUrl": "https://docs.stripe.com/api",
+   "apiBase": "https://api.stripe.com/v1",
+   "authHint": "Authorization: Bearer ${STRIPE_API_KEY}",
+   "blurb": "Payments, customers, invoices, subscriptions.",
+   "note": "Prefer a restricted key. Stripe also has a one-click MCP connector in APPS — use that if you want tools instead of raw REST."
+  },
+  {
+   "id": "resend",
+   "name": "Resend",
+   "category": "Email & Messaging",
+   "envVar": "RESEND_API_KEY",
+   "docsUrl": "https://resend.com/docs/api-reference/introduction",
+   "apiBase": "https://api.resend.com",
+   "authHint": "Authorization: Bearer ${RESEND_API_KEY}",
+   "blurb": "Transactional email sending, domains, audiences."
+  },
+  {
+   "id": "sendgrid",
+   "name": "SendGrid",
+   "category": "Email & Messaging",
+   "envVar": "SENDGRID_API_KEY",
+   "docsUrl": "https://www.twilio.com/docs/sendgrid/api-reference",
+   "apiBase": "https://api.sendgrid.com/v3",
+   "authHint": "Authorization: Bearer ${SENDGRID_API_KEY}",
+   "blurb": "Email delivery, templates, and stats."
+  },
+  {
+   "id": "brave-search",
+   "name": "Brave Search",
+   "category": "Search & Research",
+   "envVar": "BRAVE_SEARCH_API_KEY",
+   "docsUrl": "https://api-dashboard.search.brave.com/api-reference/web/search/get",
+   "apiBase": "https://api.search.brave.com/res/v1",
+   "authHint": "X-Subscription-Token: ${BRAVE_SEARCH_API_KEY}",
+   "aliases": [
+    "brave",
+    "brave web search"
+   ],
+   "blurb": "Independent web and news search through Brave's REST API."
+  },
+  {
+   "id": "firecrawl",
+   "name": "Firecrawl",
+   "category": "Search & Research",
+   "envVar": "FIRECRAWL_API_KEY",
+   "docsUrl": "https://docs.firecrawl.dev/api-reference/introduction",
+   "apiBase": "https://api.firecrawl.dev/v2",
+   "authHint": "Authorization: Bearer ${FIRECRAWL_API_KEY}",
+   "aliases": [
+    "firecrawl search",
+    "web scrape",
+    "web crawl",
+    "web extraction"
+   ],
+   "blurb": "Search, scrape, crawl, map, and extract structured content from websites."
+  },
+  {
+   "id": "airtable",
+   "name": "Airtable",
+   "category": "Data & Content",
+   "envVar": "AIRTABLE_API_KEY",
+   "docsUrl": "https://airtable.com/developers/web/api/introduction",
+   "apiBase": "https://api.airtable.com/v0",
+   "authHint": "Authorization: Bearer ${AIRTABLE_API_KEY}",
+   "blurb": "Bases, tables, and records as a lightweight database."
+  },
+  {
+   "id": "notion",
+   "name": "Notion",
+   "category": "Data & Content",
+   "envVar": "NOTION_API_KEY",
+   "docsUrl": "https://developers.notion.com/reference/intro",
+   "apiBase": "https://api.notion.com/v1",
+   "authHint": "Authorization: Bearer ${NOTION_API_KEY}",
+   "blurb": "Pages, databases, and blocks.",
+   "note": "Notion also has a one-click OAuth connector in APPS — that is usually the easier route."
+  },
+  {
+   "id": "jina",
+   "name": "Jina",
+   "category": "Developer Tools",
+   "envVar": "JINA_API_KEY",
+   "docsUrl": "https://jina.ai/reader/",
+   "apiBase": "https://r.jina.ai",
+   "blurb": "Cleaner page-text extraction for web_fetch — pages come back as readable text instead of raw HTML.",
+   "note": "Optional. StarNet uses this automatically for web_fetch when connected; without it pages still load, just with cruder text extraction. Jina's keyless tier no longer works."
+  },
+  {
+   "id": "github",
+   "name": "GitHub",
+   "category": "Developer Tools",
+   "envVar": "GITHUB_API_KEY",
+   "docsUrl": "https://docs.github.com/rest",
+   "apiBase": "https://api.github.com",
+   "authHint": "Authorization: Bearer ${GITHUB_API_KEY}",
+   "blurb": "Repos, issues, pull requests, actions.",
+   "note": "GitHub also has a one-click MCP connector in APPS."
+  },
+  {
+   "id": "porkbun",
+   "name": "Porkbun",
+   "category": "Developer Tools",
+   "envVar": "PORKBUN_API_KEY",
+   "docsUrl": "https://porkbun.com/api/json/v3/documentation",
+   "apiBase": "https://api.porkbun.com/api/json/v3",
+   "aliases": [
+    "domains",
+    "dns",
+    "domain registration"
+   ],
+   "blurb": "Domain search, registration, DNS, and portfolio management.",
+   "note": "Porkbun wants BOTH an apikey and secretapikey in the JSON request body — save the secret as a second KEYS entry named \"Porkbun Secret\" and enable API access per-domain in the Porkbun dashboard."
+  },
+  {
+   "id": "elevenlabs",
+   "name": "ElevenLabs",
+   "category": "AI & Media",
+   "envVar": "ELEVENLABS_API_KEY",
+   "docsUrl": "https://elevenlabs.io/docs/api-reference/introduction",
+   "apiBase": "https://api.elevenlabs.io/v1",
+   "authHint": "xi-api-key: ${ELEVENLABS_API_KEY}",
+   "aliases": [
+    "voice",
+    "tts",
+    "voiceover",
+    "audiobook",
+    "narration"
+   ],
+   "blurb": "Voice generation: narration, voiceovers, audiobooks, dubbing."
+  },
+  {
+   "id": "heygen",
+   "name": "HeyGen",
+   "category": "AI & Media",
+   "envVar": "HEYGEN_API_KEY",
+   "docsUrl": "https://docs.heygen.com/",
+   "apiBase": "https://api.heygen.com",
+   "authHint": "X-Api-Key: ${HEYGEN_API_KEY}",
+   "aliases": [
+    "avatar video",
+    "spokesperson",
+    "talking head",
+    "video generation"
+   ],
+   "blurb": "Avatar spokesperson videos: generate presenter videos from a script."
+  },
+  {
+   "id": "bannerbear",
+   "name": "Bannerbear",
+   "category": "AI & Media",
+   "envVar": "BANNERBEAR_API_KEY",
+   "docsUrl": "https://developers.bannerbear.com/",
+   "apiBase": "https://api.bannerbear.com/v2",
+   "authHint": "Authorization: Bearer ${BANNERBEAR_API_KEY}",
+   "aliases": [
+    "auto design",
+    "image generation",
+    "templates",
+    "social graphics"
+   ],
+   "blurb": "Templated image/design rendering at scale — product mockups, social graphics, thumbnails."
+  },
+  {
+   "id": "shotstack",
+   "name": "Shotstack",
+   "category": "AI & Media",
+   "envVar": "SHOTSTACK_API_KEY",
+   "docsUrl": "https://shotstack.io/docs/api/",
+   "apiBase": "https://api.shotstack.io/edit/v1",
+   "authHint": "x-api-key: ${SHOTSTACK_API_KEY}",
+   "aliases": [
+    "video editing",
+    "video render",
+    "shorts",
+    "video automation"
+   ],
+   "blurb": "Programmatic video editing: assemble and render videos from JSON timelines.",
+   "note": "Use the stage environment (api.shotstack.io/edit/stage) while testing — stage renders are free with a watermark."
+  },
+  {
+   "id": "bland",
+   "name": "Bland",
+   "category": "AI & Media",
+   "envVar": "BLAND_API_KEY",
+   "docsUrl": "https://docs.bland.ai/",
+   "apiBase": "https://api.bland.ai/v1",
+   "aliases": [
+    "ai phone",
+    "phone calls",
+    "voice agent",
+    "call automation"
+   ],
+   "blurb": "AI phone calls: place and manage automated voice calls — a phone-answering service by API.",
+   "note": "The raw key rides the authorization header with no Bearer prefix (see docs). Calls dial real phones — test on your own number first."
+  },
+  {
+   "id": "vapi",
+   "name": "Vapi",
+   "category": "AI & Media",
+   "envVar": "VAPI_API_KEY",
+   "docsUrl": "https://docs.vapi.ai/",
+   "apiBase": "https://api.vapi.ai",
+   "authHint": "Authorization: Bearer ${VAPI_API_KEY}",
+   "aliases": [
+    "ai phone",
+    "voice assistant",
+    "call automation"
+   ],
+   "blurb": "Voice-AI assistants and phone calls: build and run phone agents.",
+   "note": "Calls dial real phones — test on your own number first."
+  },
+  {
+   "id": "deepl",
+   "name": "DeepL",
+   "category": "AI & Media",
+   "envVar": "DEEPL_API_KEY",
+   "docsUrl": "https://developers.deepl.com/docs",
+   "apiBase": "https://api-free.deepl.com/v2",
+   "authHint": "Authorization: DeepL-Auth-Key ${DEEPL_API_KEY}",
+   "aliases": [
+    "translation",
+    "translate",
+    "localization"
+   ],
+   "blurb": "High-quality machine translation — a translation-agency workflow.",
+   "note": "Free-tier keys use api-free.deepl.com; paid keys use api.deepl.com."
+  },
+  {
+   "id": "transistor",
+   "name": "Transistor",
+   "category": "AI & Media",
+   "envVar": "TRANSISTOR_API_KEY",
+   "docsUrl": "https://developers.transistor.fm/",
+   "apiBase": "https://api.transistor.fm/v1",
+   "authHint": "x-api-key: ${TRANSISTOR_API_KEY}",
+   "aliases": [
+    "podcast",
+    "podcast hosting",
+    "episodes"
+   ],
+   "blurb": "Podcast hosting: shows, episodes, analytics — publish a podcast feed by API."
+  }
+ ],
+ "platformOrder": [
+  "Commerce & Print-on-Demand",
+  "Physical World",
+  "Payments",
+  "Email & Messaging",
+  "Search & Research",
+  "Data & Content",
+  "Developer Tools",
+  "AI & Media"
+ ]
+}
