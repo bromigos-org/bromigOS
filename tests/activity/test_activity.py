@@ -316,6 +316,38 @@ class TheRecord(Machine):
         self.assertEqual((rec["started_at"], rec["subject"]["name"], rec["requested_by"]), (NOW, "Photos", {"via": "cli", "device": None}))
         self.assertRegex(self.job(env, kind="pool.check", title="Checking the pool").id, r"^20261109-2240-pool\.check-[0-9a-f]{4}$")
 
+    def test_a_job_an_agent_asked_for_names_it(self):
+        env = self.m.env()
+        plain = self.job(env)
+        plain = self.m.on_disk()[plain.id]
+        self.assertEqual(plain["requested_by"], {"via": "cli", "device": None})   # no agent: the record as it always was
+        j = self.job(env, via="vector", device="desk", agent="ledger")
+        self.assertEqual(self.m.on_disk()[j.id]["requested_by"], {"via": "vector", "device": "desk", "agent": "ledger"})
+        for name in ("vector", "ledger-2", "night.ledger", "7", "x" * A.MAX_ID):
+            named = self.job(env, agent=name)
+            self.assertEqual(self.m.on_disk()[named.id]["requested_by"]["agent"], name)
+        before = len(self.m.on_disk())
+        for name in ("Ledger", "the ledger", "ledger_2", "-ledger", ".ledger", "", "lédger", "ledger\n", "\x1b[31mledger",
+                     "x" * (A.MAX_ID + 1), 7, ["ledger"]):
+            with self.assertRaises(A.ActivityError, msg=repr(name)) as e:
+                self.job(env, agent=name)
+            self.assertIn("an agent's name is short lower-case words, digits, dots and dashes (ledger)", str(e.exception))
+        self.assertEqual(len(self.m.on_disk()), before)                           # a name that isn't one starts nothing
+        # the record keeps it to its end, and when its process is gone with no last word
+        j.set_state("running")
+        self.assertEqual(j.finish(0)["requested_by"]["agent"], "ledger")
+        gone = self.job(env, agent="ledger")
+        gone.set_state("running")
+        gone.close()
+        rec = A.find(env, gone.id)
+        self.assertEqual((rec["state"], rec["requested_by"]["agent"]), ("interrupted", "ledger"))
+        # a Python command that keeps its own record
+        with A.job("backup.run", "Backing up", env=env, agent="ledger"):
+            pass
+        [backup] = [r for r in A.list_jobs(env) if r["kind"] == "backup.run"]
+        self.assertEqual((backup["state"], backup["requested_by"]), ("succeeded", {"via": "cli", "device": None, "agent": "ledger"}))
+        self.assertEqual((A.by_agent(rec), A.by_agent(plain), A.by_agent({"requested_by": "ledger"})), ("by agent ledger", "", ""))
+
     def test_a_python_command_is_a_job(self):
         env = self.m.env()
         with A.job("backup.run", "Backing up", env=env) as j:
@@ -740,6 +772,32 @@ class Shapes(Machine):
         finally:
             os.chmod(log, 0o640)
 
+    def test_the_agent_that_asked(self):
+        script = self.m.script('echo "::stage 100 All copied"\n')
+        run = ("run", "--kind", "backup.run", "--title", "Backing up", "--via", "vector")
+        code, out, err = self.m.cli(*run, "--agent", "ledger", "--json", "--", script)
+        self.assertEqual((code, err), (0, ""))
+        job = json.loads(out)["job"]
+        self.assertEqual((set(job), job["requested_by"]), (RECORD_KEYS, {"via": "vector", "device": None, "agent": "ledger"}))
+        self.assertEqual(self.m.cli(*run, "--json", "--", script)[0], 0)        # and one nobody's agent asked for
+        new, old = self.m.listed()
+        self.assertEqual((old["requested_by"], new["requested_by"]), (job["requested_by"], {"via": "vector", "device": None}))
+        self.assertEqual(json.loads(self.m.cli("show", job["id"], "--json")[1])["job"]["requested_by"], job["requested_by"])
+        # for people: the list and show say it, in the same words, and say nothing of a job without one
+        rows = self.m.cli()[1].splitlines()[1:]
+        self.assertRegex(rows[1], r"^done +just now +\S+ +Backing up, by agent ledger: All copied$")
+        self.assertRegex(rows[0], r"^done +just now +\S+ +Backing up: All copied$")
+        self.assertRegex(self.m.cli("show", job["id"])[1], rf"(?m)^  done just now, after \d+ s  ·  backup\.run  ·  {job['id']}  ·  by agent ledger$")
+        self.assertNotIn("agent", self.m.cli("show", new["id"])[1])
+        # a name that isn't one: said in words, before anything starts
+        for name in ("Ledger", "the ledger", "ledger_2", ""):
+            code, out, err = self.m.cli(*run, "--agent", name, "--", script)
+            self.assertEqual((code, out), (1, ""), name)
+            self.assertIn(f"an agent's name is short lower-case words, digits, dots and dashes (ledger), not {name!r}", err)
+        self.assertEqual(self.m.cli(*run, "--agent", "--", script)[0], 2)       # --agent takes a name
+        self.assertEqual(len(self.m.listed()), 2)
+        self.assertIn("--agent NAME", self.m.cli("--help")[1])
+
     def test_what_goes_before_a_command_that_must_be_root(self):
         class Person(A.Env):                              # someone who isn't root, on a real root
             stand_in = False
@@ -775,6 +833,15 @@ class InItsOwnUnit(Machine):
         self.assertNotIn("hunter2", call)                                         # the unit's command line is the id only
         self.assertEqual(rec["command"], [script, "--password", "***"])
         self.assertEqual(sorted(p.suffix for p in self.m.jobs.iterdir()), [".json", ".log"])   # the spec went as it started
+
+    def test_the_unit_names_the_agent_that_asked(self):
+        code, out, err = self.m.cli("run", "--kind", "backup.run", "--title", "Backing up", "--via", "vector", "--device", "desk",
+                                    "--agent", "ledger", "--", self.m.script('echo "::stage 100 All copied"\n'))
+        self.assertEqual(code, 0, err)
+        [rec] = self.m.listed()
+        self.assertEqual((rec["unit"], rec["requested_by"]), (f"bromigos-job-{rec['id']}.service",
+                                                              {"via": "vector", "device": "desk", "agent": "ledger"}))
+        self.assertNotIn("ledger", " ".join(self.m.calls()))                      # the unit's command line is the id only
 
     def test_it_finishes_with_whoever_started_it_gone(self):
         gate = self.m.tmp / "go"

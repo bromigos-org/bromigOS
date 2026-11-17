@@ -457,6 +457,27 @@ class Feeds(unittest.TestCase):
         self.assertEqual(rec["lab"]["media"][0]["path"], str(folder / "rel" / "pic.png"), "relative to the feed's folder")
         self.assertEqual([j["id"] for j in L.jobs(self.env, self.where, comfy=False)], ["feed-odd"])
 
+    def test_a_run_an_agent_asked_for_names_it(self):
+        L.Feed("plain", "Ships", env=self.env).step("a", "A")
+        self.assertEqual(L.find(self.env, "feed-plain", self.where)["requested_by"], {"via": "lab", "device": None})
+        with L.Feed("ships", "Ships", env=self.env, agent="ledger") as feed:
+            feed.step("cutout", "Cut out ship-a")
+        path = Path(self.where.write_feed(), "ships.jsonl")
+        lines = [json.loads(x) for x in path.read_text().splitlines()]
+        self.assertEqual(lines[0]["start"]["agent"], "ledger")
+        rec = L.find(self.env, "feed-ships", self.where)
+        self.assertEqual((rec["state"], rec["requested_by"]), ("succeeded", {"via": "lab", "device": None, "agent": "ledger"}))
+        self.assertEqual(A.by_agent(rec), "by agent ledger")
+        # a start line anyone wrote: a name that isn't one is left out, and the run still reads
+        for bad in ("Ledger", "the ledger", "x" * (A.MAX_ID + 1), "\x1b[31mledger", "", 7, ["ledger"], None):
+            lines[0]["start"]["agent"] = bad
+            path.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+            rec = L.find(self.env, "feed-ships", self.where)
+            self.assertEqual((rec["state"], rec["requested_by"]), ("succeeded", {"via": "lab", "device": None}), repr(bad))
+        with self.assertRaises(A.ActivityError):
+            L.Feed("ok", "x", env=self.env, agent="The Ledger")
+        self.assertFalse(Path(self.where.write_feed(), "ok.jsonl").exists())
+
     def test_the_writer_refuses_what_isnt_the_format(self):
         with self.assertRaises(A.ActivityError):
             L.Feed("Not A Run", "x", env=self.env)
@@ -501,6 +522,20 @@ class Cli(unittest.TestCase):
         code, out, err = self.m.cli("emit", "ships", "end", "succeeded", "1", "ship", "made")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.m.listed("--lab")[0]["result"]["summary"], "1 ship made")
+
+    def test_emit_names_the_agent_that_asked(self):
+        code, out, err = self.m.cli("emit", "ships", "start", "--title", "Universe assets: ships", "--agent", "ledger")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.m.cli("emit", "ships", "::stage", "40", "Cutting out")[0], 0)
+        [job] = self.m.listed("--lab")
+        self.assertEqual(job["requested_by"], {"via": "lab", "device": None, "agent": "ledger"})
+        self.assertRegex(self.m.cli("list")[1], r"(?m)^running +just now +feed-ships +Universe assets: ships, by agent ledger: 40 %")
+        self.assertRegex(self.m.cli("show", "feed-ships")[1], r"(?m)^  running .*  ·  lab\.pipeline  ·  feed-ships  ·  by agent ledger$")
+        self.assertRegex(self.m.cli("watch", "--once")[1], r"(?m)^  .*by agent ledger$")
+        code, out, err = self.m.cli("emit", "boats", "start", "--title", "Boats", "--agent", "The Ledger")
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("an agent's name is short lower-case words", err)
+        self.assertEqual([j["id"] for j in self.m.listed("--lab")], ["feed-ships"])
 
     def test_wrong_words_are_a_usage_error(self):
         for args in (("emit",), ("emit", "ships", "start"), ("emit", "ships", "dance"), ("list", "--lab", "--server"),

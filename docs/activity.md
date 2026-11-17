@@ -51,6 +51,18 @@ Reading needs no privilege, except for the log's lines, which are root's. `list`
 `--all` and `--limit N`. `show` takes `--log N` for more or fewer of the log's lines, and 0
 for all of them.
 
+A job that an AI agent asked for names the agent. An AI agent is a program that starts jobs
+by itself, on your behalf. The list says "by agent" and the name after the job's title:
+
+```text
+STATE    WHEN      JOB                                WHAT
+running  just now  20261110-0712-backup.run-usb-eb6a  Backing up to the USB drive, by agent ledger: 40 %, step 2 of 2, Copying what changed
+```
+
+`show` says the same after the job's id, and `watch` under the job's progress. A job that
+no agent asked for says nothing about one. `--agent` names the agent when the job starts.
+[Make a script a job](#make-a-script-a-job) describes it.
+
 The first job bromigOS itself runs this way is the Server tour's **Run** step, which applies
 the plan chosen at install (`bromigos lab provision --local … --apply`,
 [lab-provision.md](lab-provision.md#the-local-target)). Its record's steps are the plan's
@@ -75,6 +87,8 @@ privilege. So a command the job would refuse never asks for your password.
   rule.
 - **`retry`** starts the same command again, as a new job. It works for a job that ended
   failed, put back, cancelled or interrupted, and that was started with `--retry-safe`.
+  `--via`, `--device` and `--agent` say who asks this time. The new job doesn't take them
+  from the old one.
 
 A refusal ends with exit status 3. [The JSON](#the-json) has the `--json` form of each.
 
@@ -130,6 +144,17 @@ or `drive.test`. `--title` is plain words for people. `--subject TYPE:ID[:NAME]`
 the job is about, so a face can link it to an app or a drive. `--via` and `--device` say who
 asked. `--detach` prints the job's id and returns at once. `--json` prints the final record
 instead of the output.
+
+`--agent NAME` names the AI agent that asked for the job, when one did:
+
+```bash
+sudo bromigos activity run --kind backup.run --title "Backing up to the USB drive" \
+     --agent ledger -- /usr/local/bin/backup-to-usb
+```
+
+The name is short lower-case words, digits, dots and dashes, 64 characters at most, such as
+`ledger`. `run` refuses any other name and starts nothing. Leave the option out when a person
+or a timer asked.
 
 Four more options say how the job behaves beside other jobs:
 
@@ -276,6 +301,11 @@ Under `run`, give them with `--lock`. An exception ends the job as failed, with 
 exception's words. `activity.parse(line)` reads one progress line. The module is in
 `/usr/lib/bromigos/lib/`.
 
+`job(…, agent="ledger")` names the AI agent that asked, for a command that keeps its own
+record. Under `run`, give it with `--agent`. A name that isn't one raises
+`activity.ActivityError`. `activity.run()` and `activity.retry()`, which start a command as
+a job the way the command line does, take `agent=` too.
+
 ## Jobs that touch the same thing
 
 Two jobs that change the same thing must not run at once: two app updates, or a backup and a
@@ -397,7 +427,8 @@ escape sequence planted in a prompt reaches a terminal.
 
 The record's `lab` object has the rest: `instance`, `prompt_id`, `workflow`, `prompt`,
 `client` (who queued it), `queued_at`, `ran_at`, `elapsed_ms`, `estimate_ms`, `preview` and
-`interrupt` (true while stopping it means interrupting it).
+`interrupt` (true while stopping it means interrupting it). A ComfyUI prompt's record never
+names an agent, because ComfyUI doesn't say which one queued it. A feed's record can.
 
 ### Live progress and previews
 
@@ -471,6 +502,10 @@ job's id is `feed-<run>`. Each line is one object, written whole, under 4096 byt
 - `start` begins the run: its `title`, `kind` (starts with `lab.`; default `lab.pipeline`),
   `subject` (`TYPE:ID[:NAME]`), and `pid` with `boot_id`: the process doing the work. When
   that process is gone, the run reads as interrupted.
+- `start` may also carry `agent`, the name of the AI agent that asked for the run:
+  `"agent": "ledger"`. It follows `--agent`'s rule for a name
+  ([Make a script a job](#make-a-script-a-job)). A reader leaves out a name that breaks
+  the rule, and still reads the run.
 - `line` is any progress line `bromigos activity run` reads
   ([Make a script a job](#make-a-script-a-job)): `::step`, `::stage`, `::item`, `::note`,
   `::error`. The lines go through the same record a job run would keep, so a feed reads the
@@ -497,6 +532,8 @@ with Feed("ships-20261112", "Universe assets: ships") as feed:
 
 Leaving the `with` ends the run: succeeded, or failed with the exception's words. A line that
 can't be written is dropped, so a feed never stops the tool that writes it.
+`Feed("ships-20261112", "Universe assets: ships", agent="ledger")` names the agent that asked
+for the run.
 
 From any language, `bromigos activity emit` writes one line:
 
@@ -507,6 +544,8 @@ bromigos activity emit ships media out/ship-a/cut.png --step cutout
 bromigos activity emit ships media out/ship-a/ship-a.glb --output
 bromigos activity emit ships end succeeded 1 ship made
 ```
+
+`emit … start` takes `--agent NAME` too, as `run` does.
 
 The machine's follower reads a system feed's pictures only from the feed's own folder and
 `[feed] media` folders.
@@ -588,7 +627,7 @@ time: a new file takes the old one's place, so a reader never sees half a record
 | `stage` | string or null | What is happening now, from `::stage`. While it waits for another job: which one. |
 | `notes` | list of `{id, words, at}` | The `::note` lines, 20 at most. |
 | `started_at`, `updated_at`, `ended_at` | int | Milliseconds since the epoch, UTC. `ended_at` is null until the end. |
-| `requested_by` | `{via, device}` | Who asked. `via` is `cli`, `board`, `phone`, `timer` or `vector`. |
+| `requested_by` | `{via, device}` or `{via, device, agent}` | Who asked. See below. |
 | `unit` | string or null | The systemd unit. Null for a job run in the foreground. |
 | `locks` | list of strings | The locks the job named. It holds them while it runs, and waits for them while `waiting_for` is `another job`. |
 | `can` | list of strings | What a face may offer now: `answer`, `cancel`, `retry`. See below. |
@@ -605,6 +644,11 @@ time: a new file takes the old one's place, so a reader never sees half a record
 
 `stage`, `notes`, `exit_code` and `boot_id` aren't in the first design. They were added
 because the progress lines carry them and a reader needs them.
+
+`requested_by.via` is `cli`, `board`, `phone`, `timer` or `vector`, and `lab` for a
+[lab job](#lab-jobs). `requested_by.device` is the name of the device that asked, or null.
+`requested_by.agent` is the name of the AI agent that asked. The key is there only when an
+agent asked, so a record without it reads as it always did.
 
 `error.step` is the failed step's id, or null. `error.words` is the first `::error` line,
 or the command's last line when it printed none. `error.code` is one of:
@@ -754,6 +798,9 @@ sudo bromigos activity run --kind K --title T --detach --json -- COMMAND   # {"s
 `log_tail` is null when the caller may not read the log. `list --json` gives 20 jobs unless
 you pass `--all` or `--limit N`. A record read this way already shows an interrupted job as
 `interrupted`.
+
+A record's `requested_by` has the `agent` key only for a job an AI agent asked for, with the
+name as it was given. Every other record has no such key.
 
 ```bash
 sudo bromigos activity answer ID CHOICE --json   # {"schema": 1, "ok": …, "refused": …, "words": …, "job": record}

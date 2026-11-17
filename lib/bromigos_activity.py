@@ -102,6 +102,7 @@ LOCK_POLL = 0.5                                    # seconds between looks at a 
 KIND_OK = re.compile(r"^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$")
 ID_OK = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 JOB_ID_OK = re.compile(r"^\d{8}-\d{4}-[a-z0-9][a-z0-9.-]*-[0-9a-f]{4}$")
+AGENT_OK = re.compile(r"[a-z0-9][a-z0-9.-]*\Z")     # an AI agent's name: ledger, vector
 
 
 class ActivityError(Exception):
@@ -447,14 +448,17 @@ def parse_subject(text):
 
 
 def new_record(env, job_id, kind, title, subject=None, command=(), via="cli", device=None, unit=None, locks=(),
-               parent=None, cancel_safe=False):
+               parent=None, cancel_safe=False, agent=None):
     now = env.now_ms()
+    asked = {"via": via, "device": _cut(device, MAX_ID) if device else None}
+    if agent is not None:                           # only a job an AI agent asked for names one
+        asked["agent"] = check_agent(agent)
     return {
         "schema": SCHEMA, "id": job_id, "kind": kind, "title": _words(title, MAX_TITLE), "subject": subject,
         "state": "queued", "waiting_for": None, "question": None,
         "steps": [], "step": None, "pct": None, "stage": None, "notes": [],
         "started_at": now, "updated_at": now, "ended_at": None,
-        "requested_by": {"via": via, "device": _cut(device, MAX_ID) if device else None},
+        "requested_by": asked,
         "unit": unit, "locks": check_locks(locks), "can": [], "cancel_safe": bool(cancel_safe), "cancel_note": None,
         "result": None, "error": None, "exit_code": None,
         "command": redact_argv(command), "log": env.file(job_id, ".log"),
@@ -476,13 +480,24 @@ def fit(rec):
     return rec
 
 
-def check(kind, title, via="cli"):
+def check(kind, title, via="cli", agent=None):
     if not KIND_OK.match(kind or "") or len(kind) > 48:
         raise ActivityError(f"a job's kind is two or more short words joined by dots (app.install), not {kind!r}")
     if via not in VIA:
         raise ActivityError(f"--via is one of {', '.join(VIA)}, not {via!r}")
     if not _flat(title):
         raise ActivityError("a job needs a title: a few plain words, such as \"Updating Photos\"")
+    check_agent(agent)
+
+
+def check_agent(name):
+    """The AI agent that asked for a job, by its name, or None when none did: short lower-case
+    words, digits, dots and dashes (ledger)."""
+    if name is None:
+        return None
+    if not isinstance(name, str) or not AGENT_OK.match(name) or len(name) > MAX_ID:
+        raise ActivityError(f"an agent's name is short lower-case words, digits, dots and dashes (ledger), not {name!r}")
+    return name
 
 
 def check_locks(names):
@@ -537,13 +552,14 @@ class Job(Lines):
     a child joining) waits in a file beside the record until this process looks."""
 
     def __init__(self, env, kind, title, subject=None, command=(), via="cli", device=None, job_id=None, unit=None,
-                 locks=(), parent=None, cancel_safe=False, retry=None):
-        check(kind, title, via)
+                 locks=(), parent=None, cancel_safe=False, retry=None, agent=None):
+        check(kind, title, via, agent)
         self.env = env
         self.id = job_id or new_id(env, kind, subject)
         env.ensure_dir()
         self.path = env.file(self.id, ".json")
-        self.rec = new_record(env, self.id, kind, title, subject, command, via, device, unit, locks, parent, cancel_safe)
+        self.rec = new_record(env, self.id, kind, title, subject, command, via, device, unit, locks, parent, cancel_safe,
+                              agent)
         self.errors, self.sticky, self.offline, self.last_line = [], set(), set(), ""
         self._wrote, self._dirty, self._lock = 0.0, False, None
         self.retry, self._cancel_safe = retry, bool(cancel_safe)     # retry: retry_spec()'s, or None
@@ -1420,15 +1436,16 @@ def parent_of(env, text):
 
 
 def run(env, kind, title, argv, subject=None, via="cli", device=None, detach=False, echo=None, self_argv=None, note=None,
-        locks=(), parent=None, cancel_safe=False, retry_safe=False, on_state=None, cwd=None, remark=None):
+        locks=(), parent=None, cancel_safe=False, retry_safe=False, on_state=None, cwd=None, remark=None, agent=None):
     """Start argv as a job and (unless detach) watch it to its end. Returns (exit status, the
     job's id). With systemd the job is its own unit and outlives the caller; without, it runs
     here, in the foreground, with the same record.
 
     locks: names it must hold while it runs (it waits for another job that has one). parent: the
     job it is a part of. cancel_safe: stopping it is safe until it says otherwise. retry_safe:
-    it may be started again after it ended badly. remark: a first note in its record."""
-    check(kind, title, via)
+    it may be started again after it ended badly. remark: a first note in its record. agent: the
+    AI agent that asked for it, by its name (ledger), when one did."""
+    check(kind, title, via, agent)
     locks = check_locks(locks)
     if not argv:
         raise ActivityError("nothing to run: bromigos activity run --kind KIND --title WORDS -- COMMAND…")
@@ -1447,13 +1464,13 @@ def run(env, kind, title, argv, subject=None, via="cli", device=None, detach=Fal
         env.ensure_dir()
         sweep(env)
         job = Job(env, kind, title, subject, argv, via, device, locks=locks, parent=parent, cancel_safe=cancel_safe,
-                  retry=again).open()
+                  retry=again, agent=agent).open()
         if remark:
             job.remark(remark)
         return supervise(env, job, [exe, *argv[1:]], echo=echo, cwd=cwd, on_state=on_state), job.id
     env.ensure_dir()
     job_id = new_id(env, kind, subject)
-    spec = {"kind": kind, "title": title, "subject": subject, "via": via, "device": device,
+    spec = {"kind": kind, "title": title, "subject": subject, "via": via, "device": device, "agent": agent,
             "argv": [exe, *argv[1:]], "typed": list(argv), "cwd": cwd, "locks": locks, "parent": parent,
             "cancel_safe": bool(cancel_safe), "retry": again, "remark": remark}
     write_json(env.file(job_id, ".spec"), spec, 0o600)
@@ -1485,7 +1502,8 @@ def run_spec(env, job_id):
     sweep(env)
     job = Job(env, spec["kind"], spec["title"], spec.get("subject"), spec.get("typed") or spec["argv"],
               spec.get("via") or "cli", spec.get("device"), job_id, unit_name(job_id), locks=spec.get("locks") or (),
-              parent=spec.get("parent"), cancel_safe=spec.get("cancel_safe"), retry=spec.get("retry")).open()
+              parent=spec.get("parent"), cancel_safe=spec.get("cancel_safe"), retry=spec.get("retry"),
+              agent=spec.get("agent")).open()
     if spec.get("remark"):
         job.remark(spec["remark"])
     return supervise(env, job, spec["argv"], cwd=spec.get("cwd"))
@@ -1601,10 +1619,11 @@ def retry_refusal(rec):
     return None
 
 
-def retry(env, text, via="cli", device=None, **how):
+def retry(env, text, via="cli", device=None, agent=None, **how):
     """Start again a job that ended failed, rolled-back, cancelled or interrupted, and was
     started as safe to start again: a new job with the same kind, title, subject, locks and
-    command. `how` is run()'s (detach, echo, self_argv, note, on_state). Returns run()'s
+    command. via, device and agent say who asks now; the old job's aren't carried over. `how`
+    is run()'s (detach, echo, self_argv, note, on_state). Returns run()'s
     (exit status, the new job's id); raises ActivityError when the record can't be started again."""
     rec = find(env, text)
     why = retry_refusal(rec)
@@ -1613,11 +1632,11 @@ def retry(env, text, via="cli", device=None, **how):
         raise ActivityError(why or f"what {rec['id']} ran isn't kept any more, so it can't be started again")
     return run(env, rec["kind"], rec["title"], spec["argv"], rec.get("subject"), via, device, locks=rec.get("locks") or (),
                cancel_safe=spec.get("cancel_safe"), retry_safe=True, cwd=spec.get("cwd"),
-               remark=f"Started again from {rec['id']}.", **how)
+               remark=f"Started again from {rec['id']}.", agent=agent, **how)
 
 
 @contextlib.contextmanager
-def job(kind, title, subject=None, env=None, via="cli", locks=()):
+def job(kind, title, subject=None, env=None, via="cli", locks=(), agent=None):
     """For a Python command that is a job:
 
         with activity.job("backup.run", "Backing up") as j:
@@ -1626,9 +1645,10 @@ def job(kind, title, subject=None, env=None, via="cli", locks=()):
             if j.ask("usb", "Plug in the backup drive.", [("ready", "It's plugged in")]) == "ready": …
 
     Under `bromigos activity run` it prints the progress lines and the wrapper keeps the
-    record (and holds the locks `run --lock` named). On its own it keeps the record itself, in
-    this process (no unit: it ends when the process does), and waits here for `locks`. An
-    exception ends the job failed, with the exception's words."""
+    record (and holds the locks `run --lock` named, and names the agent `run --agent` did). On
+    its own it keeps the record itself, in this process (no unit: it ends when the process
+    does), waits here for `locks`, and names `agent`, the AI agent that asked for it, when one
+    did. An exception ends the job failed, with the exception's words."""
     env = env or Env()
     if env.environ.get("BROMIGOS_ACTIVITY_JOB"):
         j = Lines()
@@ -1637,7 +1657,7 @@ def job(kind, title, subject=None, env=None, via="cli", locks=()):
             j.step(j.current, state="done")
         return
     sweep(env)
-    j = Job(env, kind, title, subject, [os.path.basename(sys.argv[0] or "python")], via, locks=locks).open()
+    j = Job(env, kind, title, subject, [os.path.basename(sys.argv[0] or "python")], via, locks=locks, agent=agent).open()
     try:
         while not j.try_locks():
             j.queue()
@@ -1709,13 +1729,21 @@ def now_words(rec):
     return ", ".join(parts)
 
 
+def by_agent(rec):
+    """"by agent ledger" for a job an AI agent asked for; "" for every other job."""
+    asked = rec.get("requested_by")
+    agent = asked.get("agent") if isinstance(asked, dict) else None
+    return f"by agent {agent}" if agent and isinstance(agent, str) else ""
+
+
 def plain_list(jobs, now_ms):
     if not jobs:
         return "No jobs yet. A long job shows here while it runs and for 30 days after."
     rows = []
     for r in jobs:
         when = ago(now_ms - (r.get("ended_at") or r["started_at"]))
-        rows.append((WORDS[r["state"]], when, r["id"], r["title"] + (": " + now_words(r) if now_words(r) else "")))
+        what = r["title"] + (", " + by_agent(r) if by_agent(r) else "")
+        rows.append((WORDS[r["state"]], when, r["id"], what + (": " + now_words(r) if now_words(r) else "")))
     w = [max(len(row[k]) for row in rows + [("STATE", "WHEN", "JOB", "")]) for k in range(3)]
     lines = [f"{'STATE':<{w[0]}}  {'WHEN':<{w[1]}}  {'JOB':<{w[2]}}  WHAT"]
     lines += [f"{a:<{w[0]}}  {b:<{w[1]}}  {c:<{w[2]}}  {d}" for a, b, c, d in rows]
@@ -1750,7 +1778,7 @@ def plain_show(rec, tail, now_ms):
     end = rec.get("ended_at")
     head = f"{WORDS[rec['state']]} {ago(now_ms - (end or rec['started_at']))}"
     head += f", after {took(end - rec['started_at'])}" if end else f", for {took(now_ms - rec['started_at'])}"
-    lines = [rec["title"], f"  {head}  ·  {rec['kind']}  ·  {rec['id']}"]
+    lines = [rec["title"], f"  {head}  ·  {rec['kind']}  ·  {rec['id']}" + (f"  ·  {by_agent(rec)}" if by_agent(rec) else "")]
     if now_words(rec):
         lines.append("  " + now_words(rec))
     if rec["steps"]:
