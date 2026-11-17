@@ -347,7 +347,10 @@ def runtime_secrets(state, values):
             command = "sudo -n install -d -m 0700 /opt/bromigos-agents; sudo -n sh -c 'umask 077; cat > /opt/bromigos-agents/" + agent + ".env'"
             P.run(P.ssh_args(target) + [command], text)
         else:
-            P.kubectl(target, ['apply', '-f', '-'], P.dump({'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': agent + '-env', 'namespace': 'lab-agents'}, 'type': 'Opaque', 'stringData': env}))
+            # Replace the Secret whole. An apply would merge it, so a credential the plan no longer has
+            # (a dropped connector's key, a removed channel's token) would stay in the Secret's data.
+            exists = P.kubectl(target, ['-n', 'lab-agents', 'get', 'secret', agent + '-env', '--ignore-not-found', '-o', 'name']).strip()
+            P.kubectl(target, ['replace' if exists else 'create', '-f', '-'], P.dump({'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': agent + '-env', 'namespace': 'lab-agents'}, 'type': 'Opaque', 'stringData': env}))
 
 
 # Whitelist metadata at the source. Never read messages, logs, env files or Secret values.

@@ -235,8 +235,13 @@ travels the way the agent's other credentials do:
 
 The generated settings hold `${CONNECTOR_TAVILY_KEY}`, never the key. The key isn't in
 `plan.json`, in a command's arguments or in the summary. Planning again reuses the
-encrypted key. When you stop choosing a connector, the next plan drops its key from the
-encrypted credentials.
+encrypted key.
+
+When you stop choosing a connector, its key goes too. The next plan drops it from the
+encrypted credentials. The next apply writes the box's env file whole, without it, and
+replaces the Kubernetes Secret whole instead of merging it, so the old entry doesn't stay.
+Vault keeps a secret's earlier versions, and your repository's history keeps the earlier
+ciphertext. Revoke a key at its service when you no longer want it to work.
 
 ### Generated settings
 

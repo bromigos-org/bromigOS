@@ -435,6 +435,37 @@ class AgentConnectors(unittest.TestCase):
             A.runtime_secrets(dict(state, selected=['hermes']), {'hermes-env': env})
         self.assertIn('The key for the web-search connector is missing', str(error.exception))
 
+    def test_a_dropped_connector_leaves_no_key_behind(self):
+        env = {'LLM_API_KEY': 'test-secret-value', 'AGENT_API_KEY': 'test-api-key', 'TELEGRAM_BOT_TOKEN': 'fake-bot', 'DISCORD_BOT_TOKEN': 'fake-discord'}
+        saved = {'hermes-env': dict(env, CONNECTOR_WEB_SEARCH_KEY=KEY)}
+        without = dict(OPTIONS, connectors=['docs'])
+        with mock.patch('getpass.getpass', side_effect=AssertionError('Unexpected prompt')):
+            options, values = A.configure(['hermes'], dict(without), saved)
+        self.assertEqual({'hermes-env': env}, values)                       # what sops encrypts next, and Vault stores
+        for target in (TARGET, CLUSTER):
+            files, _ = P.plan_files(target, ['hermes'], FACTS, age_recipient='age1example', agents=options)
+            self.assertNotIn('CONNECTOR_WEB_SEARCH', ''.join(files.values()))
+        state = {'selected': ['hermes'], 'target': TARGET, 'agents': options}
+        # On a box the env file is written whole, so the old line goes with it.
+        with mock.patch.object(P, 'run') as run:
+            A.runtime_secrets(state, values)
+        argv, data = run.call_args.args
+        self.assertIn("cat > /opt/bromigos-agents/hermes.env", argv[-1])
+        self.assertNotIn('>>', argv[-1])
+        self.assertNotIn('CONNECTOR_', data)
+        # On a cluster the Secret is replaced whole, never merged: an apply would leave the old key in its data.
+        for found, verb in (('secret/hermes-env\n', 'replace'), ('', 'create')):
+            with mock.patch.object(P, 'kubectl', side_effect=lambda target, args, data=None: found if 'secret' in args else '') as kube:
+                A.runtime_secrets(dict(state, target=CLUSTER), values)
+            calls = [call.args for call in kube.call_args_list]
+            looked = [args for _, args, *_ in calls if 'secret' in args]
+            self.assertEqual([['-n', 'lab-agents', 'get', 'secret', 'hermes-env', '--ignore-not-found', '-o', 'name']], looked)   # its name only
+            sent = [(args, json.loads(data[0])) for _, args, *data in calls if data and '"Secret"' in data[0]]
+            self.assertEqual([[verb, '-f', '-']], [args for args, _ in sent])
+            self.assertEqual(A.environment('hermes', options, env), sent[0][1]['stringData'])
+            self.assertNotIn('CONNECTOR_', json.dumps(sent[0][1]))
+            self.assertEqual({'name': 'hermes-env', 'namespace': 'lab-agents'}, sent[0][1]['metadata'])
+
     def test_the_key_is_in_no_generated_file_and_no_output(self):
         for target in (TARGET, CLUSTER):
             files, resolved = P.plan_files(target, ['hermes', 'openclaw'], FACTS, age_recipient='age1example', agents=CONNECTED)
