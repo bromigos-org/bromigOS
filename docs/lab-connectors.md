@@ -104,6 +104,26 @@ themselves, so they should need nothing from us. bromigOS hasn't checked that ye
 Jira & Confluence has no address. Its `via` key names Zapier, the connector that reaches
 it.
 
+## Entries that can spend money or contact people
+
+Most entries read and change data in one account. A few can do more: spend money, or reach
+people outside your lab. Those entries have an `acts` key, a sentence that says what the
+entry can do. `show` prints it as `Can act`.
+
+| Entry | Kind | What it can do |
+|---|---|---|
+| Adspirer | one-click | Create ad campaigns that spend real ad budget. |
+| Markifact | one-click | Edit live ad campaigns. |
+| Composio | one-click | Act in the apps you connect to it, which can send email and messages. |
+| Zapier | one-click | Act in the apps you connect to it, which can send email and messages. |
+| Bland | key | Place calls to real phones. |
+| Vapi | key | Place calls to real phones. |
+| Lob | key | Send real postcards, letters and cheques by post. |
+
+The marks are bromigOS's own, and the list is short on purpose. An entry without a mark
+isn't promised to be harmless: read what a service's tools can do before you give it to an
+agent.
+
 ## The liveness check
 
 Each connector's address was asked once, on the day in the file's `checked` key. The
@@ -165,6 +185,7 @@ Each one-click connector is a `[[connector]]` table:
 | `aliases` | Other words people type for it. |
 | `summary` | One or two sentences on what it does. Required. |
 | `listed_only` | Why bromigOS can't offer it yet, as a sentence. |
+| `acts` | What it can do that spends money or contacts people, as a sentence. |
 | `answered`, `answer` | The liveness check's result. Absent when the address is never asked. |
 
 Each key platform is a `[[platform]]` table:
@@ -180,6 +201,7 @@ Each key platform is a `[[platform]]` table:
 | `aliases`, `summary` | As for a connector. `summary` is required. |
 | `note` | What to know before you use it. |
 | `api_notes` | Checked notes on the API itself, for whoever calls it. |
+| `acts` | As for a connector. |
 
 ### What the loader refuses
 
@@ -218,13 +240,15 @@ which is licensed under MIT, Copyright (c) 2026 Andrew Sims. The MIT notice is i
 `/usr/share/licenses/bromigos-lab/LICENSE-starnet`.
 
 bromigOS isn't part of StarNet, and StarNet doesn't endorse it. This is bromigOS's own
-catalogue, made from StarNet's rows. The import changes four things:
+catalogue, made from StarNet's rows. The import changes five things:
 
 - Keys get plain names, such as `env` and `api_base`.
 - Keys that only StarNet's window or its own code uses are dropped.
 - Entries that work only through StarNet's own code, or through a sign-in that StarNet
   registered, are kept and marked `listed_only`.
 - Wording that names StarNet's own screens and tools is reworded.
+- Entries that can spend money or contact people get an `acts` key. The script's `ACTS`
+  list names them.
 
 The API notes are kept as they were checked, with the same rewording.
 

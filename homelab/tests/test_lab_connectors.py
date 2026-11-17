@@ -32,6 +32,9 @@ CHECKED = ROOT / "tools/lab/connectors/checked.json"
 # the rows that work only through a sign-in or code of our own: listed, never on offer
 LISTED_ONLY = {"github", "gmail", "gmail-app-password", "gmail-send", "google-calendar", "google-docs",
                "google-drive", "google-files", "google-sheets"}
+# the rows marked as able to spend money or contact people (tools/lab/connectors-import.py: ACTS)
+ACTS = {("one-click", "adspirer"), ("one-click", "composio"), ("one-click", "markifact"), ("one-click", "zapier"),
+        ("key", "bland"), ("key", "lob"), ("key", "vapi")}
 
 GOOD = """
 format = 1
@@ -147,6 +150,16 @@ class ShippedTest(unittest.TestCase):
                     self.assertTrue(r[key].startswith("https://"), (r["id"], key))
         self.assertEqual([r["id"] for r in self.cat["rows"] if r.get("local")], ["unreal-engine"])
 
+    def test_rows_that_spend_money_or_contact_people_say_what_they_can_do(self):
+        self.assertEqual({(r["kind"], r["id"]) for r in self.cat["rows"] if "acts" in r}, ACTS)
+        for r in self.cat["rows"]:
+            if "acts" in r:
+                self.assertRegex(r["acts"], r"^It .*\.$", r["id"])
+        self.assertIn("spend real ad budget", C.find(self.cat, "adspirer")[0]["acts"])
+        self.assertIn("calls to real phones", C.find(self.cat, "bland", "key")[0]["acts"])
+        self.assertNotIn("acts", C.find(self.cat, "tavily")[0])
+        self.assertEqual(C.describe(C.find(self.cat, "zapier")[0])["acts"], C.find(self.cat, "zapier")[0]["acts"])
+
     def test_api_notes_are_kept(self):
         notes = C.find(self.cat, "printify", "key")[0]["api_notes"]
         self.assertIn("EVERY variant of the product must be in the request", notes)
@@ -213,6 +226,12 @@ class ValidateTest(unittest.TestCase):
 
     def test_a_row_with_no_address_names_the_connector_that_reaches_it(self):
         self.bad('url = "https://mcp.example.org/mcp"\n', "", "no url, and no via")
+
+    def test_acts_is_a_sentence_on_either_kind_of_row(self):
+        for old in ('summary = "Reads the docs."', 'summary = "Sells things."'):
+            self.assertEqual(C.problems(changed(old, old + '\nacts = "It can send post."')), [])
+            self.assertTrue(any("acts is words" in p for p in C.problems(changed(old, old + "\nacts = true"))))
+            self.assertTrue(any("acts is empty" in p for p in C.problems(changed(old, old + '\nacts = ""'))))
 
     def test_another_format_is_refused_whole(self):
         self.assertEqual(C.problems(changed("format = 1", "format = 2")),
@@ -375,6 +394,8 @@ class CliTest(unittest.TestCase):
         self.assertRegex(out, r"API base +https://api\.printify\.com/v1\n")
         self.assertRegex(out, r"Note +Create a personal access token")
         self.assertRegex(out, r"API notes +Mockups are read-only")
+        self.assertNotIn("Can act", out)
+        self.assertRegex(self.cli("show", "lob")[1], r"Can act +It can send real postcards, letters and cheques")
         self.assertIn("connecting one to an agent isn't built yet", out)
         self.assertRegex(self.cli("show", "supliful")[1], r"API base +https://\{your-store\}\.myshopify\.com/admin/api "
                                                           r"\(through the Shopify Admin API\)")
@@ -386,6 +407,8 @@ class CliTest(unittest.TestCase):
         self.assertRegex(out, r"Address +https://mcp\.tavily\.com/mcp\n")
         self.assertRegex(out, r"Sign-in +an API key\n")
         self.assertRegex(out, r"Last check +2026-11-17: answered \(\d+\)\n")
+        self.assertNotIn("Can act", out)
+        self.assertRegex(self.cli("show", "zapier")[1], r"Can act +It acts in the apps you connect to it")
         out = self.cli("show", "replaid")[1]
         self.assertRegex(out, r"Last check +2026-11-17: didn't answer \(")
         out = self.cli("show", "unreal-engine")[1]
@@ -503,6 +526,8 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(gmail["auth"], "sign-in")
         self.assertIn("listed_only", gmail)
         self.assertEqual({r["id"] for r in doc["connector"] if "listed_only" in r}, LISTED_ONLY)
+        self.assertEqual({("one-click", r["id"]) for r in doc["connector"] if "acts" in r}
+                         | {("key", r["id"]) for r in doc["platform"] if "acts" in r}, ACTS)
         etsy = next(r for r in doc["platform"] if r["id"] == "etsy")
         self.assertIs(etsy["unattended"], False)
         self.assertNotIn("unattended", next(r for r in doc["platform"] if r["id"] == "stripe"))
@@ -525,6 +550,13 @@ class ImportTest(unittest.TestCase):
         with self.assertRaises(self.tool.Refused) as e:
             self.tool.build(source, self.checked)
         self.assertIn("the words this import rewords aren't there once", str(e.exception))
+
+    def test_a_marked_row_the_source_no_longer_has_stops_the_import(self):
+        source = copy.deepcopy(self.source)
+        source["platforms"] = [r for r in source["platforms"] if r["id"] != "lob"]
+        with self.assertRaises(self.tool.Refused) as e:
+            self.tool.build(source, self.checked)
+        self.assertIn("platform lob: marked as one that acts", str(e.exception))
 
     def test_a_control_character_stops_the_import(self):
         source = copy.deepcopy(self.source)

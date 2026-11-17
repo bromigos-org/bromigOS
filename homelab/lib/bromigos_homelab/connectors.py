@@ -46,10 +46,10 @@ TOP_KEYS = ("format", "checked", "connector_categories", "platform_categories", 
 # every key a row may have, and its shape: a misspelt one is a problem, not a key nobody reads
 CONNECTOR_KEYS = {"id": str, "name": str, "category": str, "auth": str, "url": str, "via": str, "local": bool,
                   "official": bool, "homepage": str, "key_header": str, "aliases": list, "summary": str,
-                  "listed_only": str, "answered": bool, "answer": str}
+                  "listed_only": str, "acts": str, "answered": bool, "answer": str}
 PLATFORM_KEYS = {"id": str, "name": str, "category": str, "env": str, "docs": str, "api_base": str, "api_via": str,
                  "auth_header": str, "unattended": bool, "aliases": list, "summary": str, "note": str,
-                 "api_notes": str}
+                 "api_notes": str, "acts": str}
 CONNECTOR_NEEDS = ("id", "name", "category", "auth", "official", "homepage", "summary")
 PLATFORM_NEEDS = ("id", "name", "category", "env", "docs", "api_base", "summary")
 _SHAPES = {str: "words", bool: "true or false", list: "a list of words"}
@@ -376,7 +376,7 @@ def print_show(cat, r):
         _field("Docs", r["docs"])
         _field("API base", r["api_base"] + (f" (through the {r['api_via']})" if r.get("api_via") else ""))
         _field("Needs", needs(r))
-        for label, key in (("Note", "note"), ("API notes", "api_notes")):
+        for label, key in (("Note", "note"), ("API notes", "api_notes"), ("Can act", "acts")):
             if r.get(key):
                 _field(label, r[key])
     else:
@@ -390,6 +390,8 @@ def print_show(cat, r):
             _field("Last check", "never asked: " + ("it runs on your own machine" if r.get("local") else
                                                     "it has no address"))
         _field("Run by", "the service's own maker" if r["official"] else "someone other than the service's maker")
+        if r.get("acts"):
+            _field("Can act", r["acts"])
         _field("Homepage", r["homepage"])
     if r.get("aliases"):
         _field("Also called", ", ".join(r["aliases"]))
