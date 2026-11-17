@@ -42,6 +42,11 @@ Run `bromigos update` to get them. The next release notes will include these hig
   reached with an API key, such as Etsy, Printify and Shopify. It's a catalogue: it doesn't
   connect anything yet. See
   [Services your agents could use](lab.md#services-your-agents-could-use).
+- `bromigos activity` and the Lab board say which AI agent asked for a job, when one did:
+  "by agent ledger". A tool names its agent as it starts the job, with
+  `bromigos activity run --agent <name>`. `<name>` is the agent's short name, such as
+  `ledger`. See
+  [the activity reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/activity.md#make-a-script-a-job).
 
 ### Fixed
 
