@@ -10,7 +10,7 @@ import { extname, join, normalize } from "node:path";
 const root = new URL("../out/", import.meta.url).pathname;
 const fonts = process.env.BOARD_FONTS ?? "/usr/share/fonts/TTF"; // ttf-geist-mono's folder
 const port = Number(process.argv[2] ?? process.env.PORT ?? 4317);
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".ttf": "font/ttf", ".svg": "image/svg+xml", ".bin": "application/octet-stream", ".png": "image/png", ".txt": "text/plain" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".ttf": "font/ttf", ".svg": "image/svg+xml", ".bin": "application/octet-stream", ".png": "image/png", ".txt": "text/plain", ".webp": "image/webp", ".mp4": "video/mp4" };
 const HEADERS = { "Content-Security-Policy": "default-src 'self'", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" };
 
 const streams = new Map(); // a test's id → its open activity streams
