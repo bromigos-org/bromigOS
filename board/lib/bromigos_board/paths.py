@@ -12,6 +12,7 @@ has one root, /.
 """
 import json
 import os
+import re
 import secrets
 import time
 
@@ -71,6 +72,25 @@ def names():
     """The names the board's page answers at: <server>.local, and the old start page's."""
     h = hostname().lower()
     return (f"{h}.local", f"home-{h}.local")
+
+
+# a whole DNS name in lower case, at least two labels: board.mylab.example
+ADDRESS = re.compile(r"^(?=.{4,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
+
+
+def address_of(settings):
+    """The one more name the board answers at, when root gave it one ([board] address: the board
+    behind a reverse proxy of the lab's own, such as a cluster's ingress). `settings` is the
+    reader's, out of the snapshot, or root's own (board_settings). None: it has none, or what is
+    there isn't a name."""
+    a = settings.get("address") if isinstance(settings, dict) else None
+    a = a.strip().lower() if isinstance(a, str) else ""
+    return a if ADDRESS.match(a) else None
+
+
+def home_address(settings):
+    """Where a person opens the board: its given address, else <server>.local."""
+    return address_of(settings) or f"{hostname().lower()}.local"
 
 
 def now_ms():
@@ -158,4 +178,4 @@ def board_settings():
         doc = {}
     b = doc.get("board") if isinstance(doc.get("board"), dict) else {}
     world = b.get("world")
-    return {"door": b.get("door", True) is not False, "world": world if world in WORLDS else "wick"}
+    return {"door": b.get("door", True) is not False, "world": world if world in WORLDS else "wick", "address": address_of(b)}

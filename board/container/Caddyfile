@@ -1,0 +1,12 @@
+# The Lab board's site in a container: plain HTTP on 8080, behind the lab's own ingress, which
+# holds the certificate and decides who can reach it. The site itself is the package's
+# (board/caddy/site.caddy), the same one a server's Caddy imports.
+{
+	auto_https off
+	admin off
+	persist_config off
+}
+
+:8080 {
+	import /usr/share/bromigos-board/caddy/site.caddy
+}

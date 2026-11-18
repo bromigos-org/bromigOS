@@ -93,12 +93,13 @@ def door(snapshot):
         if t and t["id"] not in seen:
             seen.add(t["id"])
             tiles.append(t)
-    doc = {"schema": SCHEMA, "lab": lab(host), "server": {"name": host}, "world": world, "door": on, "tiles": tiles,
+    doc = {"schema": SCHEMA, "lab": lab(host, paths.address_of(settings)), "server": {"name": host}, "world": world, "door": on, "tiles": tiles,
            "signin": dict(SIGNIN)}
     return {k: doc[k] for k in DOOR_KEYS}
 
 
-def lab(host):
+def lab(host, address=None):
     """The lab this page belongs to. A single server is its own lab home (DESIGN §8, decision
-    6): its name and address are the server's until labs of several servers land."""
-    return {"name": host, "address": f"https://{host}.local"}
+    6): its name and address are the server's until labs of several servers land. `address`:
+    root's [board] address, when the board answers at a name of the lab's own."""
+    return {"name": host, "address": f"https://{address or host + '.local'}"}

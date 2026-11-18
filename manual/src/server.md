@@ -252,6 +252,14 @@ sudo bromigos server board sessions             # the browsers signed in
 sudo bromigos server board sessions --end ID    # sign one out
 ```
 
+**A lab that is a cluster.** There is no single server there for the board to be the page
+of, so the board runs as a container behind the cluster's own ingress
+(`ghcr.io/bromigos-org/bromigos-board`). You give it the name people open, and it shows
+the lab's creation jobs on Activity. The pages about one server's drives and apps stay
+empty there for now.
+[In a container](https://github.com/bromigos-org/bromigOS/blob/main/docs/board.md#in-a-container)
+has the steps.
+
 The board's pages are still being built: until they land, the page lists the apps. The
 [Lab board docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/board.md) have
 the API and everything it reads.

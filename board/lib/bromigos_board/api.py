@@ -179,15 +179,16 @@ def csrf_ok(request):
     """Every request that changes something comes from the board's own page: it carries
     X-Bromigos-Board: 1, which a page on another site can't send without a CORS answer this API
     never gives; it was sent to one of the board's own names (paths.names: <server>.local or
-    home-<server>.local), whatever Host says otherwise; its Origin, when the browser sends one, is
-    that same name; its Sec-Fetch-Site, when sent, is same-origin; and its body is JSON
+    home-<server>.local; and root's [board] address, when the board sits behind the lab's own
+    reverse proxy, as the reader read it), whatever Host says otherwise; its Origin, when the
+    browser sends one, is that same name; its Sec-Fetch-Site, when sent, is same-origin; and its body is JSON
     (json_body), which a plain form can't send. The session cookie is SameSite=Strict besides."""
     if request.method in READ_METHODS:
         return True
     if request.headers.get(CSRF_HEADER) != "1":
         return False
     host = request.headers.get("host", "").lower()
-    if host not in paths.names():
+    if host not in paths.names() and host != paths.address_of((read_snapshot() or {}).get("settings")):
         return False
     origin = request.headers.get("origin")
     if origin is not None and origin.lower() != f"https://{host}":
