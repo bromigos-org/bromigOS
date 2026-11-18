@@ -1,0 +1,105 @@
+/* THE POST: the lab's jobs as a station's crew at work (lib/post/). The host links this file; the
+   module injects no style of its own, so the page works under
+   Content-Security-Policy: default-src 'self'. Every position and size the module sets goes
+   through the CSSOM (el.style.setProperty).
+
+   Everything is scoped under .post, the root each mount creates. The rings and bursts wear the
+   host's world tokens (--phosphor --amber --danger --cyan); the station is a painting and keeps
+   its own colours. Reduced motion (.post.reduced, and the browser's setting) holds everything
+   still, and .post.idle (the hero is off screen, or the page is hidden) pauses what loops. */
+.post { position: relative; min-width: 0; display: grid; justify-items: center; overflow: hidden; border: 1px solid var(--line);
+  background: radial-gradient(120% 90% at 30% 20%, #0f1c3a, #070d1c 70%); }
+.post *, .post *::before, .post *::after { box-sizing: border-box; }
+.post [hidden] { display: none !important; }
+/* the station and the top of the list under it share the first screen: as wide as the page allows, no taller than about three fifths of the window */
+.post .station { position: relative; isolation: isolate; overflow: hidden; aspect-ratio: var(--ar, 1.2); width: min(100%, calc(min(62svh, 700px) * var(--ar, 1.2))); }
+.post.unknown .station { filter: saturate(.35) brightness(.6); }
+.post canvas.stars { position: absolute; inset: 0; width: 100%; height: 100%; animation: post-breathe var(--d, 3s) ease-in-out var(--w, 0s) infinite alternate; }
+.post .pods { position: absolute; inset: 0; pointer-events: none; }
+.post .pods .pod, .post .pods .glow { position: absolute; display: block; max-width: none; }
+.post .flip { transform: scaleX(-1); }
+/* a room's living clip lies over its still, cut to the still's own outline, so only the room moves */
+.post video.pod { object-fit: fill; opacity: 0; transition: opacity .25s; -webkit-mask: var(--m) center / 100% 100% no-repeat; mask: var(--m) center / 100% 100% no-repeat; }
+.post video.pod.on { opacity: 1; }
+.post video.pod.dead { display: none; }
+.post img.frame { position: absolute; display: block; max-width: none; pointer-events: none; z-index: 20000; inset: 0; width: 100%; height: 100%; }
+/* a painting's own lights, lifted out as a layer: it breathes or flickers by itself, runs hot while its room works, and flashes when a job ends */
+.post .glow { pointer-events: none; opacity: .3; animation: post-breathe var(--d, 3s) ease-in-out var(--w, 0s) infinite alternate; }
+.post .glow.fr { position: absolute; max-width: none; z-index: 20001; inset: 0; width: 100%; height: 100%; }
+.post .glow.tw { animation: post-twinkle var(--d, 5s) linear var(--w, 0s) infinite; }
+.post .glow.busy { animation: post-busy .55s ease-in-out infinite alternate; }
+.post .glow.flash { animation: post-flash 1.3s ease-out 1; }
+@keyframes post-breathe { from { opacity: .12; } to { opacity: .8; } }
+@keyframes post-twinkle { 0% { opacity: .7; } 7% { opacity: .15; } 11% { opacity: .85; } 38% { opacity: .55; } 42% { opacity: .05; } 46% { opacity: .75; } 71% { opacity: .9; } 74% { opacity: .3; } 100% { opacity: .7; } }
+@keyframes post-busy { from { opacity: .35; } to { opacity: 1; filter: brightness(1.5); } }
+@keyframes post-flash { 0% { opacity: 1; filter: brightness(3) saturate(1.4); } 30% { opacity: .2; } 45% { opacity: 1; filter: brightness(2.4); } 100% { opacity: .4; filter: none; } }
+.post .chase { position: absolute; z-index: 20002; width: 1.2%; aspect-ratio: 2 / 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; background: radial-gradient(closest-side, #ffd27a, rgba(255, 170, 60, .5) 45%, transparent); }
+
+/* the delivery shuttle: it comes down onto the pad for a job there and leaves when there is none */
+.post .ship { position: absolute; pointer-events: none; aspect-ratio: 331 / 250; transform: translate(-50%, -62%); will-change: left, top; }
+.post .ship img, .post .ship canvas, .post .ship .fold { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, .5)); }
+/* its legs folding, as one strip of frames: the page steps along it forwards to take off and backwards to land */
+.post .ship .fold { background-repeat: no-repeat; background-size: 2500% 100%; }
+.post .shipshade { position: absolute; z-index: 20003; pointer-events: none; width: 10.5%; aspect-ratio: 2.1 / 1; border-radius: 50%; transform: translate(-50%, -50%); background: radial-gradient(closest-side, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0)); }
+
+/* a crate in someone's arms, and the crates stacked on the pad */
+.post .crate { position: absolute; pointer-events: none; width: 1.35%; max-width: none; transform: translate(-50%, -100%); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5)); }
+
+/* the crew and the machines: each stands on its foot */
+.post .act { position: absolute; left: 0; top: 0; pointer-events: none; transform: translateY(-100%); }
+.post .act img, .post .act canvas { position: absolute; left: 0; bottom: 0; height: 100%; width: auto; max-width: none; transform: translateX(-50%); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55)); }
+.post .act img.carry { height: 27%; bottom: 30%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5)); }
+.post .act.flip { transform: translateY(-100%); }
+.post .act.flip img, .post .act.flip canvas { transform: translateX(-50%) scaleX(-1); }
+.post .mach { position: absolute; pointer-events: none; transform: translate(-50%, -100%); }
+.post .mach.flip { transform: translate(-50%, -100%) scaleX(-1); }
+.post .mach img, .post .mach canvas { height: 100%; width: auto; max-width: none; display: block; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .5)); }
+
+/* the ring of light under whoever is working: part of the figure, so it sits on the floor under their feet.
+   It fills with the job's own share done; a job that never said one gets a short arc that turns. */
+.post svg.ring { position: absolute; inset: auto auto 0 0; z-index: -1; width: auto; aspect-ratio: 2 / 1; transform: translate(-50%, 46%); overflow: visible; }
+.post svg.ring ellipse { fill: none; stroke-width: 3; stroke-linecap: round; }
+.post svg.ring .track { stroke: color-mix(in srgb, var(--phosphor) 18%, transparent); }
+.post svg.ring .fill { stroke: var(--phosphor); filter: drop-shadow(0 0 4px var(--phosphor)); }
+.post svg.ring.turn .fill { stroke-dasharray: 22 78; animation: post-turn 1.5s linear infinite; }
+.post svg.ring.ask .track { stroke: color-mix(in srgb, var(--amber) 30%, transparent); }
+.post svg.ring.ask .fill { stroke: var(--amber); stroke-dasharray: 100 0; filter: drop-shadow(0 0 4px var(--amber)); animation: post-ask 1.6s ease-in-out infinite alternate; }
+@keyframes post-turn { to { stroke-dashoffset: -100; } }
+@keyframes post-ask { from { opacity: .45; } to { opacity: 1; } }
+/* a job that asks while all three crew are busy: the same amber ring, alone on the floor at its place */
+.post .mark { position: absolute; pointer-events: none; height: 5%; transform: translateY(-100%); }
+
+/* the burst when a job ends, and when the shuttle sets down */
+.post svg.fx { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 40100; pointer-events: none; }
+.post svg.fx ellipse { fill: none; stroke-width: 3; stroke-linecap: round; transform-box: fill-box; transform-origin: center; stroke: var(--cyan, #4fe3cb); }
+.post svg.fx ellipse.fail { stroke: var(--danger); }
+.post svg.fx ellipse.land { stroke: var(--amber); }
+
+/* what a job throws off, by its kind of work: sparks, floating panes, a sweep of light, parcels, keystrokes */
+.post .p { position: absolute; z-index: 40101; pointer-events: none; }
+.post .p.p-weld { width: 3px; height: 3px; border-radius: 50%; background: #fff3c4; box-shadow: 0 0 6px 2px #ffb347; }
+.post .p.p-crank { width: 4px; height: 4px; border-radius: 50%; background: #ffe0b0; box-shadow: 0 0 8px 3px #ff7a2e; }
+.post .p.p-holo { width: 9px; height: 7px; border: 1px solid #8fe9ff; background: rgba(79, 200, 255, .22); box-shadow: 0 0 6px rgba(79, 200, 255, .8); }
+.post .p.p-type { width: 5px; height: 2px; background: var(--phosphor); box-shadow: 0 0 5px var(--phosphor); }
+.post .p.p-scan { width: 26px; height: 2px; background: var(--phosphor); box-shadow: 0 0 8px 2px var(--phosphor); border-radius: 1px; }
+.post .p.p-pack { width: 7px; height: 6px; background: #c9a36a; border: 1px solid #7d5d33; box-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+
+/* what the pointer and the keyboard reach: a room's floor, the pad, each machine, each crew member.
+   Each has a hint; the ones with a job are buttons that open it. */
+.post .hits { position: absolute; inset: 0; z-index: 40000; pointer-events: none; }
+.post .hit { position: absolute; display: block; pointer-events: auto; }
+.post .hit.at { transform: translate(-50%, -100%); }
+.post .hit.mach { z-index: 1; aspect-ratio: 7 / 10; }
+.post .hit.fig { z-index: 2; aspect-ratio: 6 / 10; }
+.post .hit[role="button"] { cursor: pointer; }
+.post .hit[role="button"]:hover, .post .hit[role="button"]:focus-visible { background: color-mix(in srgb, var(--cyan, #4fe3cb) 16%, transparent); outline: none; }
+.post .hit.mach[role="button"]:focus-visible, .post .hit.fig[role="button"]:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 1px; }
+/* a job that failed while the page was open: its room's floor flashes red once */
+.post .hit.failed { animation: post-bad 1.3s ease-out 1; }
+@keyframes post-bad { 0%, 45% { background: color-mix(in srgb, var(--danger) 55%, transparent); } 25% { background: color-mix(in srgb, var(--danger) 10%, transparent); } 100% { background: transparent; } }
+
+.post.idle *, .post.idle *::before, .post.idle *::after { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .post *, .post *::before, .post *::after { animation: none !important; transition: none !important; }
+}
+.post.reduced *, .post.reduced *::before, .post.reduced *::after { animation: none !important; transition: none !important; }

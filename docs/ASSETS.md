@@ -65,6 +65,7 @@ names, in backticks, with an explicit decision: **yes** (who, date) or **no**
 | The phone hologram (`board/web/public/holo/phone.bin`, `lite/phone.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with TRELLIS image-large (shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | In the board's folder for pages to come; no machine kind draws it yet. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
 | The dish hologram, the lab's way out (`board/web/public/holo/dish.bin`, `lite/dish.bin`) | A Qwen-Image-2512 concept, cut out with Lucida, made 3D with Step1X-3D (Geometry-Label, shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | In the board's folder for pages to come; no machine kind draws it yet. Made on the lab for 0 credits; its lines are in `board/web/public/holo/provenance.jsonl`. [See the notes](#3d-holograms) |
 | STATIC's OWL as a hologram (`board/web/public/holo/static-owl.bin`, `lite/static-owl.bin`) | A Qwen-Image-Edit-2511 redraw of OWL's identity concept, cut out with Lucida, made 3D with TRELLIS image-large (shape only), baked with VECTOR's tools | **yes** (BLACKFLAME, 2026-11-11) | In the board's folder for pages to come. The mesh and every model that touched it are Apache-2.0 or MIT, but the redraw's reference is OWL's identity concept, painted with Qwen-Image 2.1 (non-commercial): as with the rest of STATIC, [see the notes](#static-the-mascot) before a commercial use |
+| The Lab board's post (`board/web/public/post/`: the corridors' painting `frame.webp`, six room paintings `pod-*.webp` each with three clips `pod-*-{idle,work,done}.mp4`, the lights' layers `glow-*.webp`, six machines `m-*-{idle,run,done}.webp`, the shuttle `ship-{idle,fly,fold}.webp` and its crate `crate.webp`, and the crew's loops `{lineman,owl,exo}-*.webp`) | Painted on the lab over grey blockouts with Qwen-Image-Edit-2511, one upscale with SeedVR2 7B, and every loop and clip animated with Wan 2.2 I2V-A14B and its Lightning LoRAs | **yes** (BLACKFLAME, 2026-11-18) | Apache-2.0 models only, made on the lab for 0 credits. Each file has its line in `board/web/public/post/provenance.jsonl`, and `post.json` beside it says where everything stands. The crew are STATIC's shells LINEMAN, OWL and EXO, redrawn from their cut-outs: as with the rest of STATIC, [see the notes](#static-the-mascot) before a commercial use |
 | 3D holograms made on the homelab: the worlds' posts, creatures and craft | Open models on the homelab, no credits; each job in `themes/*/holo/generations.jsonl` and `theme/holo/generations.jsonl` | **yes** (operator, 2026-10-08) | Research and community licences. See [the notes](#3d-holograms) |
 | 3D burn-in emblem | Extruded from the Wick's emblem | yes, as a brand asset | In `bromigos-vector` |
 | The Drift map's lore catalogue (`live/lore/catalog.json`) | bromigos.org's public lore export, copied by `tools/lore/sync-catalog.py` | yes, as a brand asset | In `bromigos-live`. A user's `[driftmap] catalog` replaces it |
@@ -289,8 +290,13 @@ On first use, each file is fetched from one pinned revision and checked against 
   in quarters. The board's build copies them into its page (`board/web/scripts/art.mjs`);
   they are not in `bromigos-mascot-art`. Where a shell has no cut-out, the station falls
   back to a round portrait lifted from that shell's loop in the guide, and then to its
-  name. SPARK, HERMIT and EXO have no painting in this repository: their boards aren't
-  locked, so on the station they are named in words.
+  name. SPARK, HERMIT and EXO have no cut-out there: their boards aren't locked, so on
+  the station they are named in words.
+- **What ships with it: the post's crew.** LINEMAN, OWL and EXO walk and work on the Lab
+  board's post (`board/web/public/post/`, Activity's hero). Each has two walking loops and
+  a standing loop for each kind of work, about 130 pixels high. Each view was redrawn from
+  the shell's cut-out with Qwen-Image-Edit-2511 and animated with Wan 2.2 I2V-A14B, both
+  Apache-2.0. These are the only paintings of EXO in this repository.
 - **How the shells were made.** Scene boards were painted on the lab with
   Qwen-Image-Edit-2511 (Apache-2.0), using the approved concepts as identity references.
   BLACKFLAME locked them on 2026-10-31. The clips are Wan 2.2 I2V-A14B (Apache-2.0) from

@@ -5,7 +5,8 @@
 # board's service (bromigos-board) answers /api/. Geist Mono comes from ttf-geist-mono, linked
 # in, so the page fetches nothing from another site.
 #
-#   /usr/share/bromigos-board/web/   index.html, _next/ (scripts and styles), fonts/ (links)
+#   /usr/share/bromigos-board/web/   index.html, _next/ (scripts and styles), fonts/ (links),
+#                                    holo/ (the holograms), post/ (the post's art), lamplight/ (the crew)
 
 pkgname=bromigos-board-web
 pkgver=0.0.0
@@ -58,6 +59,9 @@ build() {
 check() {
   cd "$srcdir/web/out"
   test -s index.html || { echo "the export has no index.html" >&2; return 1; }
+  # the art the page asks for by name came along: the station's holograms and the post's drawing
+  test -s holo/lite/wick-cut.bin || { echo "the export has no holograms (board/web/public/holo)" >&2; return 1; }
+  test -s post/post.json && test -s post/frame.webp || { echo "the export has no post art (board/web/public/post)" >&2; return 1; }
   test ! -e fixtures || { echo "the export carries test fixtures" >&2; return 1; }
   # the fixture switch is compiled off
   ! grep -rlq '/fixtures/' _next/static || { echo "the export can read fixtures" >&2; return 1; }

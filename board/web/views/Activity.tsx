@@ -8,12 +8,16 @@
 // the picture as it's made, its ring, its stage and the queue behind it. Three toggles pick all
 // jobs, this server's, or the lab's.
 //
+// Over the list stands the post (components/Post.tsx): the same jobs as a station's crew at
+// work, one crew member at each job that runs or asks. It adds no fact the list doesn't have.
+//
 // A job's answers, Stop and Start again are controls where the server lets the page; otherwise
 // each job shows the command that does it at the server. `#job/ID` opens one job in a sheet.
 import { useEffect, useState } from "react";
 import { Boundary } from "@/components/Boundary";
 import { JobCard } from "@/components/JobCard";
 import { LabJobCard } from "@/components/LabJobCard";
+import { Post } from "@/components/Post";
 import { Icon, Planned, State } from "@/components/ui";
 import type { JobRecord } from "@/lib/api/types";
 import { inFilter, isOpen, type JobFilter } from "@/lib/jobs";
@@ -148,6 +152,9 @@ export function Activity({ sheetId }: { sheetId: string | null }) {
     <>
       <section className={`page${sheetId ? " sh-under" : ""}`} aria-label="Activity" inert={sheetId ? true : undefined}>
         <Tabs place="activity" label="Activity" />
+        <Boundary what="The post">
+          <Post />
+        </Boundary>
         <section className="panel" title="The jobs this server knows: the long things it does, each a record with named steps, and the lab's creation jobs (docs/activity.md)">
           <div className="ac-top">
             <Filter value={filter} set={setFilter} counts={counts} />

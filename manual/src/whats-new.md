@@ -47,6 +47,12 @@ Run `bromigos update` to get them. The next release notes will include these hig
   people, such as Stripe or Zapier, is refused until you allow it by name. Hermes Agent
   asks you before a service's tool changes anything. See
   [Give an agent a service](lab.md#give-an-agent-a-service).
+- **The post, on the Lab board's Activity page.** Your lab's jobs are drawn as a small
+  space station at work. A crew member walks to each job that is running and works there:
+  at the server rack for a picture or a clip, at the press for a backup, at the print
+  bench for an app. A ring of light under them fills as the job goes. Press a crew
+  member, a machine or a room to open its job. It shows only what your jobs really say,
+  and the list of jobs is still under it.
 - `bromigos activity` and the Lab board say which AI agent asked for a job, when one did:
   "by agent ledger". A tool names its agent as it starts the job, with
   `bromigos activity run --agent <name>`. `<name>` is the agent's short name, such as

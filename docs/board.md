@@ -16,8 +16,10 @@ gathers the readings, the Caddy site, and what the page never shows.
   places, and Settings at the foot. The top bar: where you are, Ask or search, Depth and
   You. The activity strip along the bottom, which rises into the drawer of jobs. At phone
   width the rail becomes a bar along the bottom with the places only.
-- **Activity.** Every job the page knows, from the live stream and from the list the board
-  read: the ones that ask, the ones that run or wait, and the ones that ended. Each shows
+- **Activity.** The hero is [the post](#the-post): a small station whose crew walk to each
+  job that runs or asks and work there. Under it, every job the page knows, from the live
+  stream and from the list the board read: the ones that ask, the ones that run or wait,
+  and the ones that ended. Each shows
   its steps, what it asks, how it ended, and the command that looks closer
   (`bromigos activity show ID`). A job that an AI agent asked for says which one, as "by
   agent ledger", from the record's `requested_by.agent`
@@ -82,13 +84,15 @@ gathers the readings, the Caddy site, and what the page never shows.
 | `board/web/pages/` | The one page (`index.tsx`), its document and its styles' entry |
 | `board/web/shell/` | The rail, the top bar, the strip and its drawer, the Depth drawer, tabs and sheets |
 | `board/web/views/` | The door and the sign-in sheet, and one file per place |
-| `board/web/components/` | Icons and buttons, the job card, Lamplight's two heroes, the trend chart, the error boundary |
+| `board/web/components/` | Icons and buttons, the job card, Lamplight's two heroes, the post's hero, the trend chart, the error boundary |
 | `board/web/lib/api/` | The API's client (`client.ts`), its reader (`read.ts`), the types the views use (`types.ts`), fixture mode (`fixtures.ts`) |
 | `board/web/lib/lab.tsx` | The page's state and its one connection to the server |
 | `board/web/lib/words.ts` | The headlines' rules |
 | `board/web/lib/routes.ts` | Every route, its tabs and sheets |
 | `board/web/lib/lamplight/` | Lamplight, the station: a module with no React in it, and its stylesheet |
 | `board/web/lib/lamplight-assets.ts` | What the station may draw: its models and STATIC's crew |
+| `board/web/lib/post/` | The post, Activity's station: a module with no React in it, and its stylesheet |
+| `board/web/public/post/` | The post's art: its paintings, clips and loops, `post.json` (where everything stands) and `provenance.jsonl` |
 | `board/web/lib/holo/` | The hologram renderer |
 | `board/web/styles/` | DRIFTGLASS on the web: the worlds' tokens, the parts, a file per place |
 | `board/web/tests/` | The Playwright tests; `tests/contract/service.json` holds real answers of the service |
@@ -300,6 +304,117 @@ command's output: a drive's model string, a share's name, a job's words.
   then also the ids and state words, then the numbers, and draws Home with every panel,
   a machine's hero and a bare hologram.
 
+## The post
+
+Activity's hero is a small space station, seen from above with its roofs off. Its three
+crew are the lab's jobs: when a job runs, a crew member walks to the room where that kind
+of work is done and works there. Everything on it comes from the job records
+([activity.md](activity.md#the-record)). It only shows: nothing on it starts, answers or
+stops a job.
+
+- **A job that runs has a crew member working at its place.** A ring of light under the
+  crew member fills with the job's own share done (`pct`). A job that never said a share
+  gets a short arc that turns, never a number.
+- **A job that waits for your answer has a crew member standing at its place**, not
+  working, on an amber ring.
+- **A queued or waiting job isn't drawn.** Nobody is working on it yet.
+- **A job that ends while you watch is shown once.** When it ended well, its room plays
+  its finish and a ring bursts where it was worked. When it failed, was put back or was
+  interrupted, the room's floor flashes red. A stopped job's crew member just walks home.
+  Nothing that ended before the page was open is replayed.
+- **There are three crew: LINEMAN, OWL and EXO.** A job keeps the crew member it was
+  given. With a fourth job at once, that job's room and machine run with nobody standing
+  there. A job that asks with nobody free gets the amber ring alone at its place.
+- **With no job, the crew rest in the quarters**, and the rooms play their quiet clips.
+- **The picture has no words or numbers on it.** Hover over a crew member, a machine or a
+  room to read what it is. One with a job says the job's own title, its step and its share
+  done. Press it to open that job, as the list under it does.
+
+### Which job goes where
+
+A job's place comes from its kind, and from whether an AI agent asked for it. The first
+row that fits wins. The whole table is one file, `lib/post/places.ts`, and each row's
+sentence there is also the hover hint on the page.
+
+| A job | Is worked at | The crew member |
+|---|---|---|
+| The lab's creation jobs: a kind that starts with `lab.` | The server rack, in the control room | Scans the rack |
+| A job an AI agent asked for, and a kind that starts with `agent.`, `plan.`, `ask.` or `vector.` | The hologram table, in the control room | Works the hologram |
+| Updates of the system and downloads: a kind that starts with `server.`, `system.`, `package.`, `update.` or `download.`, and `app.models` | The landing pad. A shuttle lands for it | Unloads the shuttle, a crate at a time |
+| Any other kind that starts with `app.` | The print bench, in the workshop | Welds |
+| Backups, snapshots and restores: a kind that starts with `backup.`, `snapshot.` or `restore.` | The press, in the print shop | Packs |
+| Drives, storage, power and hardware: a kind that starts with `drive.`, `pool.`, `storage.`, `disk.`, `power.`, `ups.`, `hardware.` or `salvage.` | The power core, in the workshop | Turns the core's wheel |
+| Anything else | The terminal, in the greenhouse | Types |
+
+A job that is a part of another, such as one app's update inside "update every app", is
+drawn as the whole job, not beside it. Two jobs at one place stand apart: the second crew
+member takes the room's own spot.
+
+At a machine the crew member stands beside it, facing it, in that work's own loop. On the
+pad the work is carried. Once the shuttle is down, the crew member reaches into it with
+their back to you, walks a crate over to a stack, bends to set it down and goes back for
+the next. The trips go on for as long as the job runs. They say nothing about how far it
+is: the ring still shows the record's own share. When the job ends, the crate in hand is
+set down first, and the shuttle waits for that. With two jobs at the pad, one crew member
+carries and the other stands by.
+
+The layout is fixed. There is no way to move a room or a machine, because placing a
+machine doesn't change what the lab may do.
+
+### How it is built
+
+The post is a module with no React in it (`lib/post/`), like Lamplight. The page hands it
+the jobs it has (`fromJobs`) and where its art is served, and calls `update` with each new
+list. An update re-sends the crew in place. It remounts nothing and fetches no art again.
+
+| File | What |
+|---|---|
+| `places.ts` | The table above, the states, and their sentences |
+| `floor.ts` | Where each room sits, and where the crew can walk |
+| `model.ts` | Which job has which crew member, where everyone is, what each room and machine does |
+| `post.ts` | The page: the paintings, the crew, the rings, what the pointer reaches |
+| `sane.ts`, `from-jobs.ts` | The door for the jobs and for the station's drawing |
+| `post.css` | Its stylesheet, scoped under `.post` |
+
+- **Rooms are separate paintings.** Each room module was painted on its own grid. The
+  module places it at its doorway (`post.json`). On the corridor it wasn't painted for, a
+  room is the same picture mirrored.
+- **One depth order.** Rooms are drawn far to near, each with its machines and whoever is
+  inside it. The corridors and anyone in them come last. So a nearer room's walls cover a
+  crew member standing behind them.
+- **The crew walk only where there is floor.** Every spot someone can stand is a stop.
+  Stops are joined only where floor lies between them: along a corridor, through a
+  doorway, across a room. A walk is the shortest chain of stops. Someone re-sent part-way
+  goes on to the stop ahead or back to the one behind, so nobody crosses a wall or open
+  space.
+- **What moves.** Each crew member has two walking loops, mirrored to face the way they
+  walk, and a standing loop for each kind of work. Each room has three clips cut to its
+  own outline: quiet, busy and a finish. Machines have idle, running and finished loops.
+  The shuttle flies with its legs folded away and unfolds them as it lands. The crates it
+  brought stay stacked on the pad until it leaves.
+- **Art is fetched when it is first needed.** A lab that only makes backups never fetches
+  the welding loop or the shuttle.
+- **It stops when nobody is looking.** The loop and the clips pause while the hero is off
+  screen and while the page is hidden.
+- **Reduced motion holds it still.** Nobody walks and no clip plays. Each crew member
+  stands at its job, and each loop is held on one frame.
+
+The module loads only when the hero is on screen. Until it and the station's drawing have
+loaded, or if they can't, the hero's frame says how many jobs run and how many need you.
+
+It works under the board's content policy the way Lamplight does: no `<style>` element,
+no style attribute in markup, no inline handler and no `data:` URL. Every position is set
+through the CSSOM. A job's words reach the page only as a hint's text, never as markup.
+
+What it is handed is treated as untrusted (`sane.ts`). A state that isn't one of the
+record's nine is never drawn. A share done that isn't a number from 0 to 100 is left
+out, so the ring turns. The station's drawing is checked the same way: a room or a
+machine whose name could reach another file's address stops the whole drawing, and the
+plain state stands. `tests/post-hostile.spec.ts` holds this.
+
+What ships (`public/post/`, [ASSETS.md](ASSETS.md)): 95 files, about 13 MB. All of it was
+made on the lab with Apache-2.0 models, and `provenance.jsonl` has a line for each file.
+
 ## Charts
 
 The trend is ECharts, one series at a time in the world's colour, with a crosshair and its
@@ -417,6 +532,7 @@ send yet. The package's build leaves fixture mode out.
 | `setup`, `stale` | Nothing installed yet; a reading five minutes old |
 | `actions` | The server lets the page add apps |
 | `jobs` | A disk asks with a choice that can't be undone, a backup runs and may be stopped, one failed and may be started again; the server lets the page answer, stop and start again |
+| `post` | Four jobs for the post's three crew: a disk asks, a backup runs, the lab makes a picture and a pipeline runs |
 | `lab`, `cameras` | Four machines in the rail; a machine that runs Cameras |
 | `channels` | Alerts go to Discord with quiet hours and to a webhook that needs a look; a third channel is off |
 
@@ -440,6 +556,24 @@ Content-Security-Policy.
   that runs and ends; a job that names the AI agent that asked for it, and a name that
   isn't one left out; one job by its address; the stream's and the board's lists joined;
   the jobs unread; and that nothing but a GET is sent.
+- **The post** (`tests/post.spec.ts`, `tests/post-unit.spec.ts`,
+  `tests/post-hostile.spec.ts`):
+  - On the page: a crew member at each job that runs or asks, with the record's own
+    share done on its ring and its title in the hint; a figure, a machine and a room
+    opening the job; a job that finishes or fails while the page is open, shown once;
+    nothing replayed on load; four jobs for three crew; the loop stopping off screen and
+    while the page is hidden; reduced motion; and the plain state when the script or the
+    drawing doesn't arrive.
+  - The walk: the crew's positions are read from the page while jobs start, end and
+    re-send them part-way. No crew member may ever be off the floor.
+  - Without a browser: the table, kind by kind; the door; every walk a chain of joined
+    stops; and the model run through random job churn. After every step nobody is off the
+    floor, and every job that runs has a crew member or a lit room.
+  - Hostile jobs and a hostile drawing stay text, and no file of the module writes markup.
+  - Every file the post can ask for ships, with its line of provenance.
+
+  The test browser can't decode the rooms' clips (H.264). So the tests check which clip a
+  room shows, not that it plays.
 - **A job's controls** (`tests/jobs.spec.ts`): the answers, Stop and Start again as
   controls with the server's word and the job's, and the commands without; a choice that
   can't be undone asking for a code, with Back; and against the service's real refusals

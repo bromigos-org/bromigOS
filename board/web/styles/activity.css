@@ -1,5 +1,16 @@
 /* Activity: the readings over the list, the groups of jobs, and a job's closer look */
 .ac-rd { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Activity's hero: the post (lib/post/post.css is its own stylesheet, scoped under .post). Until its module and
+   its drawing have loaded, the frame carries the jobs' plain state in the station's place, at the station's size. */
+.post-hero { position: relative; min-width: 0; display: grid; }
+.post-hero > * { grid-area: 1 / 1; min-width: 0; }
+.post-wait { display: grid; justify-items: center; align-items: center; border: 1px solid var(--line);
+  background: radial-gradient(ellipse 60% 55% at 50% 100%, color-mix(in srgb, var(--phosphor) 12%, transparent), transparent), color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.post-wait::before { content: ""; grid-area: 1 / 1; width: min(100%, calc(min(62svh, 700px) * 1884 / 1568)); aspect-ratio: 1884 / 1568; }
+.post-line { grid-area: 1 / 1; margin: 0; max-width: none; padding: 0 16px; text-align: center; font-size: 20px; letter-spacing: .2em; color: var(--phosphor); text-shadow: 0 0 16px var(--lit), 0 0 3px var(--glow); }
+.post-line.warn { color: var(--amber); text-shadow: 0 0 16px color-mix(in srgb, var(--amber) 55%, transparent); }
+.post-line.q { color: var(--static); text-shadow: none; }
+@container view (max-width: 860px) { .post-line { font-size: 15px; letter-spacing: .14em; } }
 .ac-group .job + .job { margin-top: 8px; }
 .ac-group > .small { margin: 0; }
 .job-closer { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule); display: grid; gap: 8px; }
