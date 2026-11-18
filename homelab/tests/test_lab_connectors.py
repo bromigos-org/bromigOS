@@ -32,6 +32,12 @@ CHECKED = ROOT / "tools/lab/connectors/checked.json"
 # the rows that work only through a sign-in or code of our own: listed, never on offer
 LISTED_ONLY = {"github", "gmail", "gmail-app-password", "gmail-send", "google-calendar", "google-docs",
                "google-drive", "google-files", "google-sheets"}
+# the rows marked as able to spend money or contact people (tools/lab/connectors-import.py: ACTS)
+ACTS = {("one-click", "adspirer"), ("one-click", "composio"), ("one-click", "markifact"), ("one-click", "zapier"),
+        ("one-click", "paypal"), ("one-click", "ramp"), ("one-click", "square"), ("one-click", "stripe"),
+        ("key", "bland"), ("key", "lob"), ("key", "stripe"), ("key", "vapi")}
+# rows that change data in the service they reach, and no more: never marked
+DATA_ONLY = ("hubspot", "airtable", "prisma", "apify")
 
 GOOD = """
 format = 1
@@ -76,14 +82,17 @@ summary = "Sells things."
 
 def setUpModule():
     """The checkout's catalogue, never an installed bromigos-lab's (it comes first in
-    connectors.paths(), and may be an older one)."""
-    global _SHARE
+    connectors.paths(), and may be an older one). And no lab plan of this computer's own."""
+    global _SHARE, _PLANS
     _SHARE = mock.patch.object(C, "SHARE", "/nonexistent")
     _SHARE.start()
+    _PLANS = mock.patch.object(C, "plans", return_value=[])
+    _PLANS.start()
 
 
 def tearDownModule():
     _SHARE.stop()
+    _PLANS.stop()
 
 
 def tool():
@@ -146,6 +155,21 @@ class ShippedTest(unittest.TestCase):
                 if key in r and not r.get("local"):
                     self.assertTrue(r[key].startswith("https://"), (r["id"], key))
         self.assertEqual([r["id"] for r in self.cat["rows"] if r.get("local")], ["unreal-engine"])
+
+    def test_rows_that_spend_money_or_contact_people_say_what_they_can_do(self):
+        self.assertEqual({(r["kind"], r["id"]) for r in self.cat["rows"] if "acts" in r}, ACTS)
+        for r in self.cat["rows"]:
+            if "acts" in r:
+                self.assertRegex(r["acts"], r"^It .*\.$", r["id"])
+        self.assertIn("spend real ad budget", C.find(self.cat, "adspirer")[0]["acts"])
+        self.assertIn("calls to real phones", C.find(self.cat, "bland", "key")[0]["acts"])
+        self.assertNotIn("acts", C.find(self.cat, "tavily")[0])
+        for rid in DATA_ONLY:
+            self.assertNotIn("acts", C.find(self.cat, rid, "one-click")[0], rid)
+        for row in C.find(self.cat, "stripe"):
+            self.assertEqual(row["acts"], "It can take payments, issue refunds and move money, within what its key "
+                                          "allows.")
+        self.assertEqual(C.describe(C.find(self.cat, "zapier")[0])["acts"], C.find(self.cat, "zapier")[0]["acts"])
 
     def test_api_notes_are_kept(self):
         notes = C.find(self.cat, "printify", "key")[0]["api_notes"]
@@ -213,6 +237,12 @@ class ValidateTest(unittest.TestCase):
 
     def test_a_row_with_no_address_names_the_connector_that_reaches_it(self):
         self.bad('url = "https://mcp.example.org/mcp"\n', "", "no url, and no via")
+
+    def test_acts_is_a_sentence_on_either_kind_of_row(self):
+        for old in ('summary = "Reads the docs."', 'summary = "Sells things."'):
+            self.assertEqual(C.problems(changed(old, old + '\nacts = "It can send post."')), [])
+            self.assertTrue(any("acts is words" in p for p in C.problems(changed(old, old + "\nacts = true"))))
+            self.assertTrue(any("acts is empty" in p for p in C.problems(changed(old, old + '\nacts = ""'))))
 
     def test_another_format_is_refused_whole(self):
         self.assertEqual(C.problems(changed("format = 1", "format = 2")),
@@ -297,6 +327,73 @@ class NeedsTest(unittest.TestCase):
                                                     "say how the key is sent. A key alone can't run it unattended.")
 
 
+class ChosenTest(unittest.TestCase):
+    """What an agent may be given (`bromigos lab provision --connectors`), and each refusal's words."""
+    def setUp(self):
+        self.cat = C.load()
+
+    def refused(self, *args, **kwargs):
+        with self.assertRaises(C.Refused) as e:
+            C.chosen(self.cat, *args, **kwargs)
+        return str(e.exception)
+
+    def test_connectors_that_need_nothing_or_a_key_are_given_in_the_order_asked(self):
+        rows = C.chosen(self.cat, ["tavily", "Context7", "tavily"])
+        self.assertEqual([r["id"] for r in rows], ["tavily", "context7"])
+        self.assertEqual([r["auth"] for r in rows], ["key", "none"])
+        self.assertEqual(C.chosen(self.cat, []), [])
+        self.assertEqual(C.chosen(self.cat, ["airtable"])[0]["kind"], "one-click")   # the connector, not the platform
+        self.assertEqual([r["id"] for r in C.chosen(self.cat, list(DATA_ONLY))], list(DATA_ONLY))
+
+    def test_an_id_nothing_has(self):
+        self.assertEqual(self.refused(["tavilly"]), "No connector has the id 'tavilly'. bromigos lab connectors "
+                                                    "search WORDS finds one by name.")
+        self.assertIn("Close: cloudflare-bindings, cloudflare-docs.", self.refused(["cloudflare"]))
+
+    def test_a_key_platform_a_sign_in_and_a_listed_row(self):
+        self.assertEqual(self.refused(["printify"]), "Printify (printify) can't be given to an agent: it's a key "
+                                                     "platform, not a connector, and key platforms come in a later change.")
+        self.assertEqual(self.refused(["notion"]), "Notion (notion) can't be given to an agent: it needs a sign-in in "
+                                                   "a browser, and sign-in connectors come in a later change.")
+        self.assertIn("GitHub (github) can't be given to an agent: it's listed only. GitHub's server doesn't register",
+                      self.refused(["github"]))
+        self.assertIn("its server runs on your own machine", self.refused(["unreal-engine"]))
+        self.assertIn("it's reached through the zapier connector", self.refused(["atlassian"]))
+        self.assertIn("Adspirer (adspirer) can't be given to an agent: it needs a sign-in",
+                      self.refused(["adspirer"], allow_acting=["adspirer"]))
+
+    def test_a_row_that_acts_is_named_a_second_time(self):
+        self.assertEqual(self.refused(["tavily", "zapier"]),
+                         "Zapier (zapier) can act for you. It acts in the apps you connect to it, which can send email "
+                         "and messages. To give it to an agent anyway, add --allow-acting zapier.")
+        self.assertEqual([r["id"] for r in C.chosen(self.cat, ["tavily", "zapier"], allow_acting=["zapier"])],
+                         ["tavily", "zapier"])
+        self.assertEqual(self.refused(["tavily"], allow_acting=["zapier"]),
+                         "--allow-acting names zapier, which isn't among the connectors chosen.")
+        self.assertEqual(self.refused(["stripe"]),
+                         "Stripe (stripe) can act for you. It can take payments, issue refunds and move money, within "
+                         "what its key allows. To give it to an agent anyway, add --allow-acting stripe.")
+        self.assertEqual(C.chosen(self.cat, ["stripe"], allow_acting=["stripe"])[0]["kind"], "one-click")
+        for rid in ("paypal", "square", "ramp"):                    # a sign-in comes first, whatever is allowed
+            self.assertIn("it needs a sign-in in a browser", self.refused([rid], allow_acting=[rid]))
+
+    def test_a_row_whose_address_did_not_answer_is_named_a_second_time(self):
+        cat = copy.deepcopy(self.cat)
+        row = C.find(cat, "exa")[0]
+        row.update(answered=False, answer="timed out")
+        with self.assertRaises(C.Refused) as e:
+            C.chosen(cat, ["exa"])
+        self.assertEqual(str(e.exception), "Exa Search (exa) didn't answer when its address was checked on 2026-11-17 "
+                                           "(timed out). To choose it anyway, add --allow-unanswered exa.")
+        self.assertEqual(C.chosen(cat, ["exa"], allow_unanswered=["exa"]), [row])
+        self.assertIn("--allow-unanswered names tavily", self.refused(["exa"], allow_unanswered=["tavily"]))
+
+    def test_at_most_eight(self):
+        free = [r["id"] for r in C.rows(self.cat, kind="one-click") if r["auth"] == "none" and not r.get("local")]
+        self.assertEqual(len(C.chosen(self.cat, free[:C.MOST])), 8)
+        self.assertEqual(self.refused(free[:9]), "An agent is given at most 8 connectors, and 9 were chosen.")
+
+
 class CliTest(unittest.TestCase):
     def cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
@@ -319,7 +416,9 @@ class CliTest(unittest.TestCase):
         self.assertRegex(out, r"\n  printify +Printify +PRINTIFY_API_KEY +Print-on-demand")
         self.assertNotRegex(out, r"\n  gmail ")
         self.assertIn("more aren't on offer (--all lists them): 9 listed only, 1 no address of its own", out)
-        self.assertIn("connecting one to an agent isn't built yet", out)
+        self.assertIn("bromigos lab provision … --connectors ID …", out)
+        self.assertIn("Sign-in connectors and key platforms can't be given to an agent yet.", out)
+        self.assertNotIn("In your lab's plan", out)
         self.assertEqual(self.cli()[1], out)                            # no verb: list
 
     def test_list_all_adds_the_rest_and_says_why(self):
@@ -375,7 +474,9 @@ class CliTest(unittest.TestCase):
         self.assertRegex(out, r"API base +https://api\.printify\.com/v1\n")
         self.assertRegex(out, r"Note +Create a personal access token")
         self.assertRegex(out, r"API notes +Mockups are read-only")
-        self.assertIn("connecting one to an agent isn't built yet", out)
+        self.assertNotIn("Can act", out)
+        self.assertRegex(self.cli("show", "lob")[1], r"Can act +It can send real postcards, letters and cheques")
+        self.assertRegex(out, r"Agents +Can't be given to an agent yet: it's a key platform")
         self.assertRegex(self.cli("show", "supliful")[1], r"API base +https://\{your-store\}\.myshopify\.com/admin/api "
                                                           r"\(through the Shopify Admin API\)")
 
@@ -386,6 +487,8 @@ class CliTest(unittest.TestCase):
         self.assertRegex(out, r"Address +https://mcp\.tavily\.com/mcp\n")
         self.assertRegex(out, r"Sign-in +an API key\n")
         self.assertRegex(out, r"Last check +2026-11-17: answered \(\d+\)\n")
+        self.assertNotIn("Can act", out)
+        self.assertRegex(self.cli("show", "zapier")[1], r"Can act +It acts in the apps you connect to it")
         out = self.cli("show", "replaid")[1]
         self.assertRegex(out, r"Last check +2026-11-17: didn't answer \(")
         out = self.cli("show", "unreal-engine")[1]
@@ -393,6 +496,37 @@ class CliTest(unittest.TestCase):
         self.assertRegex(out, r"Last check +never asked: it runs on your own machine\n")
         out = self.cli("show", "gmail")[1]
         self.assertRegex(out, r"Needs +Listed only\. The address is Google's own API")
+
+    def test_show_says_whether_an_agent_can_be_given_it(self):
+        say = lambda rid: " ".join(self.cli("show", rid, "--kind", "one-click")[1].split())     # noqa: E731
+        self.assertIn("Agents bromigos lab provision … --connectors tavily gives it to an agent.", say("tavily"))
+        self.assertIn("--connectors zapier --allow-acting zapier gives it", say("zapier"))
+        self.assertIn("Can't be given to an agent yet: it needs a sign-in in a browser", say("notion"))
+        self.assertIn("Can't be given to an agent yet: it's listed only. GitHub's server", say("github"))
+        self.assertIn("Can't be given to an agent yet: its server runs on your own machine", say("unreal-engine"))
+        self.assertIn("Can't be given to an agent yet: it has no address of its own", say("atlassian"))
+        self.assertNotIn("In use", say("tavily"))
+
+    def test_show_and_list_say_what_the_labs_plan_uses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = os.path.join(tmp, "plan.json")
+            Path(plan).write_text(json.dumps({"selected": ["grafana", "hermes", "openclaw"],
+                                              "agents": {"connectors": ["tavily", "context7"]}}), encoding="utf-8")
+            self.assertEqual(C.in_use([plan]), {"tavily": ["hermes", "openclaw"], "context7": ["hermes", "openclaw"]})
+            self.assertEqual(C.in_use([os.path.join(tmp, "none.json")]), {})
+            Path(plan + ".bad").write_text("{", encoding="utf-8")
+            self.assertEqual(C.in_use([plan + ".bad"]), {})
+            with mock.patch.object(C, "plans", return_value=[plan]):
+                out = " ".join(self.cli("show", "tavily")[1].split())
+                self.assertIn("In use Your lab's plan gives it to hermes and openclaw.", out)
+                self.assertNotIn("In use", self.cli("show", "exa")[1])
+                self.assertIn("In your lab's plan: context7 (hermes and openclaw), tavily (hermes and openclaw).",
+                              self.cli("list")[1])
+                rows = {r["id"]: r for r in json.loads(self.cli("list", "--kind", "one-click", "--json")[1])["rows"]}
+                self.assertEqual(rows["tavily"]["in_use"], ["hermes", "openclaw"])
+                self.assertNotIn("in_use", rows["exa"])
+        with mock.patch.object(C, "plans", side_effect=OSError("no config")):
+            self.assertEqual(C.in_use(), {})
 
     def test_show_an_id_both_kinds_have(self):
         code, out, _ = self.cli("show", "stripe")
@@ -503,6 +637,8 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(gmail["auth"], "sign-in")
         self.assertIn("listed_only", gmail)
         self.assertEqual({r["id"] for r in doc["connector"] if "listed_only" in r}, LISTED_ONLY)
+        self.assertEqual({("one-click", r["id"]) for r in doc["connector"] if "acts" in r}
+                         | {("key", r["id"]) for r in doc["platform"] if "acts" in r}, ACTS)
         etsy = next(r for r in doc["platform"] if r["id"] == "etsy")
         self.assertIs(etsy["unattended"], False)
         self.assertNotIn("unattended", next(r for r in doc["platform"] if r["id"] == "stripe"))
@@ -525,6 +661,13 @@ class ImportTest(unittest.TestCase):
         with self.assertRaises(self.tool.Refused) as e:
             self.tool.build(source, self.checked)
         self.assertIn("the words this import rewords aren't there once", str(e.exception))
+
+    def test_a_marked_row_the_source_no_longer_has_stops_the_import(self):
+        source = copy.deepcopy(self.source)
+        source["platforms"] = [r for r in source["platforms"] if r["id"] != "lob"]
+        with self.assertRaises(self.tool.Refused) as e:
+            self.tool.build(source, self.checked)
+        self.assertIn("platform lob: marked as one that acts", str(e.exception))
 
     def test_a_control_character_stops_the_import(self):
         source = copy.deepcopy(self.source)

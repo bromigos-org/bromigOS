@@ -112,7 +112,7 @@ class Provisioned(Adapter):
                 try:
                     rows.append(A.metadata(state, agent))
                 except (P.ProvisionError, ValueError, OSError):
-                    rows.append({"name": agent, "status": "unreachable", "model": state["agents"]["model"], "gateways": "unknown", "activity": "unknown"})
+                    rows.append({"name": agent, "status": "unreachable", "model": state["agents"]["model"], "gateways": "unknown", "activity": "unknown", "connectors": "unknown"})
         return rows
 
     def secrets(self):

@@ -27,7 +27,8 @@ What the import changes. Fields get plain names. What only StarNet's interface o
 uses is dropped. A row that works only through StarNet's own code, or through a sign-in client
 StarNet registered, is kept and marked `listed_only` with the reason (LISTED_ONLY). Wording that
 names StarNet's own screens and tools is reworded (REWORDED): each old text must still be there,
-so an upstream edit stops the import instead of slipping past.
+so an upstream edit stops the import instead of slipping past. A row that can spend or move
+money, or contact people, is marked `acts` with what it can do (ACTS): the mark is ours.
 
 --probe is the only part that uses the network: one GET per address, a generic User-Agent, no
 credentials, redirects not followed, nothing read but the status. A row on your own machine
@@ -73,8 +74,8 @@ PLATFORM_KEPT = {"id": "id", "name": "name", "category": "category", "envVar": "
 # the row's note says what the service needs instead.
 PLATFORM_DROPPED = ("retiredDocsUrls", "unattendedReason")
 # our own fields, written after the source's
-CONNECTOR_ORDER = list(CONNECTOR_KEPT.values()) + ["listed_only", "answered", "answer"]
-PLATFORM_ORDER = list(PLATFORM_KEPT.values())
+CONNECTOR_ORDER = list(CONNECTOR_KEPT.values()) + ["listed_only", "acts", "answered", "answer"]
+PLATFORM_ORDER = list(PLATFORM_KEPT.values()) + ["acts"]
 
 GOOGLE = ("The address is Google's own API, not a remote MCP server. It needs a Google sign-in that bromigOS "
           "registers and tools of our own on top. Neither is built.")
@@ -86,6 +87,27 @@ LISTED_ONLY = (
     (lambda r: r.get("deviceFlow"),
      "GitHub's server doesn't register a sign-in by itself, so it needs a GitHub sign-in that bromigOS "
      "registers. It isn't set up."),
+)
+
+# (table, id, what it can do): the rows that can spend or move money, or contact people. An agent
+# is given one only when you name it a second time (docs/lab-agents.md). Many other rows can change
+# data in the service they reach (a CRM's records, a database): those aren't marked. The list is
+# ours: a row with no mark isn't promised to be harmless. Each row must still be in the source, so
+# a renamed one stops the import.
+ACTS = (
+    ("connector", "adspirer", "It can create ad campaigns that spend real ad budget."),
+    ("connector", "markifact", "It can edit live ad campaigns."),
+    ("connector", "composio", "It acts in the apps you connect to it, which can send email and messages."),
+    ("connector", "zapier", "It acts in the apps you connect to it, which can send email and messages."),
+    ("connector", "paypal", "It can create invoices and act on payments in your PayPal account, within what your "
+                            "sign-in allows."),
+    ("connector", "ramp", "It can approve and edit spending in your Ramp account, within what your sign-in allows."),
+    ("connector", "square", "It can take payments and create orders on Square, within what your sign-in allows."),
+    ("connector", "stripe", "It can take payments, issue refunds and move money, within what its key allows."),
+    ("platform", "bland", "It can place calls to real phones."),
+    ("platform", "lob", "It can send real postcards, letters and cheques by post."),
+    ("platform", "stripe", "It can take payments, issue refunds and move money, within what its key allows."),
+    ("platform", "vapi", "It can place calls to real phones."),
 )
 
 # (table, id, field, the source's words, ours)
@@ -151,7 +173,8 @@ HEADER = """\
 # reach. A [[connector]] is a remote MCP server ("one-click": an address, and at most a sign-in
 # or a key). A [[platform]] has no such server: an agent reaches its REST API with a key ("paste
 # a key"). `bromigos lab connectors` lists, searches and shows them (bromigos_homelab.connectors).
-# It's a catalogue only: nothing here connects, signs in or keeps a key yet.
+# The file is a catalogue: nothing in it connects, signs in or keeps a key. `bromigos lab provision`
+# gives an agent the connectors you choose from it (docs/lab-agents.md).
 #
 # Made by tools/lab/connectors-import.py from tools/lab/connectors/: change those, never this
 # file. The rows are derived from StarNet's catalogue (https://github.com/androoAGI/starnet),
@@ -177,6 +200,7 @@ HEADER = """\
 #   aliases                other words people type for it (search matches them)
 #   summary                one or two sentences on what it does
 #   listed_only            why bromigOS can't offer it yet: it needs a sign-in or code of our own
+#   acts                   what it can do that spends or moves money, or contacts people (absent: no mark)
 #   answered               whether the address answered on `checked` (absent: never asked)
 #   answer                 the HTTP status it gave, or why there was none
 #
@@ -190,6 +214,7 @@ HEADER = """\
 #   aliases, summary       as above
 #   note                   what to know before you use it
 #   api_notes              checked notes on the API itself, for whoever calls it
+#   acts                   as above
 """
 
 
@@ -277,6 +302,14 @@ def _reword(tables):
                               "StarNet: reword it (REWORDED)")
 
 
+def _acts(tables):
+    for table, rid, what in ACTS:
+        rows = [r for r in tables[table] if r["id"] == rid]
+        if len(rows) != 1:
+            _fail(f"{table} {rid}: marked as one that acts (ACTS), but the source has no such row")
+        rows[0]["acts"] = what
+
+
 def _order(rows, cats, table):
     for r in rows:
         if r.get("category") not in cats:
@@ -293,6 +326,7 @@ def build(source, checked):
     tables = {"connector": [connector(r) for r in source["connectors"]],
               "platform": [platform(r) for r in source["platforms"]]}
     _reword(tables)
+    _acts(tables)
     day = checked.get("checked")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(day)):
         _fail("checked.json has no `checked` day (2026-11-17)")

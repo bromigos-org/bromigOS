@@ -2,7 +2,8 @@
 # reach. A [[connector]] is a remote MCP server ("one-click": an address, and at most a sign-in
 # or a key). A [[platform]] has no such server: an agent reaches its REST API with a key ("paste
 # a key"). `bromigos lab connectors` lists, searches and shows them (bromigos_homelab.connectors).
-# It's a catalogue only: nothing here connects, signs in or keeps a key yet.
+# The file is a catalogue: nothing in it connects, signs in or keeps a key. `bromigos lab provision`
+# gives an agent the connectors you choose from it (docs/lab-agents.md).
 #
 # Made by tools/lab/connectors-import.py from tools/lab/connectors/: change those, never this
 # file. The rows are derived from StarNet's catalogue (https://github.com/androoAGI/starnet),
@@ -28,6 +29,7 @@
 #   aliases                other words people type for it (search matches them)
 #   summary                one or two sentences on what it does
 #   listed_only            why bromigOS can't offer it yet: it needs a sign-in or code of our own
+#   acts                   what it can do that spends or moves money, or contacts people (absent: no mark)
 #   answered               whether the address answered on `checked` (absent: never asked)
 #   answer                 the HTTP status it gave, or why there was none
 #
@@ -41,6 +43,7 @@
 #   aliases, summary       as above
 #   note                   what to know before you use it
 #   api_notes              checked notes on the API itself, for whoever calls it
+#   acts                   as above
 format = 1
 checked = "2026-11-17"
 connector_categories = [
@@ -552,6 +555,7 @@ aliases = [
 ]
 summary = """One key bridges 500+ apps — including managed Gmail and Outlook email connections, plus X, \
 Slack, Google Drive, Notion, GitHub, and more."""
+acts = "It acts in the apps you connect to it, which can send email and messages."
 answered = true
 answer = "401"
 
@@ -569,6 +573,7 @@ aliases = [
 ]
 summary = """Bridge to 7,000+ apps — including Gmail, Google Calendar, Drive, Sheets, and Slack — through \
 one key."""
+acts = "It acts in the apps you connect to it, which can send email and messages."
 answered = true
 answer = "401"
 
@@ -949,6 +954,7 @@ url = "https://mcp.paypal.com/mcp"
 official = true
 homepage = "https://paypal.com"
 summary = "Create invoices and query PayPal orders and payments. Needs PayPal sign-in (OAuth)."
+acts = "It can create invoices and act on payments in your PayPal account, within what your sign-in allows."
 answered = true
 answer = "401"
 
@@ -962,6 +968,7 @@ official = true
 homepage = "https://ramp.com"
 aliases = ["ramp", "corporate cards", "expenses", "spend"]
 summary = "Query Ramp transactions, cards, and spend programs. Needs Ramp sign-in (OAuth)."
+acts = "It can approve and edit spending in your Ramp account, within what your sign-in allows."
 answered = true
 answer = "401"
 
@@ -974,6 +981,7 @@ url = "https://mcp.squareup.com/mcp"
 official = true
 homepage = "https://squareup.com"
 summary = "Payments, catalog, and orders on Square. Needs Square sign-in (OAuth)."
+acts = "It can take payments and create orders on Square, within what your sign-in allows."
 answered = true
 answer = "401"
 
@@ -986,6 +994,7 @@ url = "https://mcp.stripe.com/"
 official = true
 homepage = "https://stripe.com"
 summary = "Query customers, payments, invoices, and subscriptions with a restricted Stripe API key."
+acts = "It can take payments, issue refunds and move money, within what its key allows."
 answered = true
 answer = "401"
 
@@ -1041,6 +1050,7 @@ homepage = "https://adspirer.com"
 aliases = ["adspirer", "ad campaigns", "google ads", "meta ads", "tiktok ads", "paid media"]
 summary = """Create and optimize ad campaigns across Google, Meta, TikTok, LinkedIn and Amazon. Spends REAL \
 ad budget. Needs Adspirer sign-in (OAuth)."""
+acts = "It can create ad campaigns that spend real ad budget."
 answered = true
 answer = "401"
 
@@ -1055,6 +1065,7 @@ homepage = "https://markifact.com"
 aliases = ["markifact", "google ads", "meta ads", "ga4", "ads reporting", "marketing"]
 summary = """Google Ads, Meta Ads, GA4, Shopify, HubSpot and 50+ marketing platforms. Can edit LIVE \
 campaigns. Needs Markifact sign-in (OAuth)."""
+acts = "It can edit live ad campaigns."
 answered = true
 answer = "405"
 
@@ -1293,6 +1304,7 @@ api_base = "https://api.lob.com/v1"
 aliases = ["direct mail", "postcards", "letters", "print and mail"]
 summary = "Send real postcards, letters, and checks by API — direct-mail campaigns from an agent."
 note = "Lob uses HTTP Basic auth with the key as the username (empty password). Test keys print nothing."
+acts = "It can send real postcards, letters and cheques by post."
 
 [[platform]]
 id = "lulu"
@@ -1319,6 +1331,7 @@ auth_header = "Authorization: Bearer ${STRIPE_API_KEY}"
 summary = "Payments, customers, invoices, subscriptions."
 note = """Prefer a restricted key. Stripe is also a one-click connector: use that for tools instead of raw \
 REST."""
+acts = "It can take payments, issue refunds and move money, within what its key allows."
 
 # ---- platforms: Email & Messaging
 
@@ -1448,6 +1461,7 @@ aliases = ["ai phone", "phone calls", "voice agent", "call automation"]
 summary = "AI phone calls: place and manage automated voice calls — a phone-answering service by API."
 note = """The raw key rides the authorization header with no Bearer prefix (see docs). Calls dial real \
 phones — test on your own number first."""
+acts = "It can place calls to real phones."
 
 [[platform]]
 id = "deepl"
@@ -1518,3 +1532,4 @@ auth_header = "Authorization: Bearer ${VAPI_API_KEY}"
 aliases = ["ai phone", "voice assistant", "call automation"]
 summary = "Voice-AI assistants and phone calls: build and run phone agents."
 note = "Calls dial real phones — test on your own number first."
+acts = "It can place calls to real phones."

@@ -94,7 +94,8 @@
   bromigos lab connectors search WORDS | show ID
                                     find one by name or alias; show what it needs: its address and
                                     sign-in, or its key's variable, docs and API notes. Each takes
-                                    --json. A catalogue only: nothing connects or keeps a key yet
+                                    --json, and says whether an agent can be given it. Nothing
+                                    here connects or keeps a key: provision --connectors does
   bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
   bromigos lab link [--intent self-hosted|hosted] [--name NAME] [--json] [--timeout S] [--no-start]
                                     link this computer to your Bromigos account as a lab: a short
@@ -117,6 +118,12 @@
   bromigos lab provision [plan|apply|add SERVICE|remove SERVICE] --repo PATH [options]
                                     review and provision your own box or cluster, including agents
       --llm-url URL --agent-model ID  connect agents to an existing model endpoint
+      --connectors ID…              give Hermes and OpenClaw connectors from the catalogue: the ones
+                                    that need nothing or a key (--allow-acting ID for one that can
+                                    spend money or contact people; --allow-unanswered ID for one
+                                    whose address didn't answer when it was checked). Hermes asks
+                                    you before a connector's write calls: --trust-connector ID
+                                    lets one run them without asking
   bromigos lab provision cluster --spec FILE --repo PATH
                                     plan VMs or existing nodes, storage and mandatory monitoring
   bromigos lab provision add-node --node-spec FILE --role worker|gpu --on PROVIDER --repo PATH
