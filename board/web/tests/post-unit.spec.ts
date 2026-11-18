@@ -223,7 +223,7 @@ for (const seed of [1, 2, 3, 4, 5, 6])
       // three crew, each with one job at most, no two standing on one spot
       const busy = m.crew.filter((c) => c.job);
       must(new Set(busy.map((c) => c.job)).size === busy.length, () => `t=${t}: two crew have one job`);
-      const standing = m.crew.filter((c) => c.state === "work" || c.state === "wait").map((c) => c.stop);
+      const standing = m.crew.filter((c) => (c.state === "work" || c.state === "wait") && !c.haul && !c.path.length).map((c) => c.stop);   // (someone carrying on the pad is on the move)
       must(new Set(standing).size === standing.length, () => `t=${t}: two crew stand on one spot`);
       for (const c of m.crew) if (!c.job && c.state === "idle") must(c.stop === c.home, () => `t=${t}: ${c.name} rests away from the quarters`);
     }
@@ -258,6 +258,70 @@ test("the crew face the way they walk: each loop is mirrored when the walk needs
   expect(wrong.slice(0, 5)).toEqual([]);
   // each was painted facing one way, as the art is: the three walk away from us facing right
   expect(CREW.map((c) => [c.id, c.side.to, c.side.away])).toEqual([["lineman", -1, 1], ["owl", -1, 1], ["exo", -1, 1]]);
+});
+
+test("the pad: the work is carried, trip after trip while the job runs, and the trip in hand is finished when it ends", () => {
+  const m = new Model(pack.map), run = job({ id: "a", kind: "server.update", pct: 10 }), c = m.crew[0];
+  const ps = m.stops.get("ps")!.p, pk = m.stops.get("pk")!.p;
+  m.set({ known: true, jobs: [run] });
+  // already running when the page opened: the shuttle is down, LINEMAN reaches into it, and no crate is out yet
+  expect([m.ship.state, m.stack, c.stop, c.look, c.carry]).toEqual(["landed", 0, "ps", "work", 0]);
+  expect(far(ps, m.ship.home), "the worker stands at the ship").toBeLessThan(70);
+  const seen: string[] = [], wrong: string[] = [];
+  let worst = 0, most = 0;
+  const watch = (n: number, until = () => false) => {
+    for (let i = 0; i < n && !until(); i++) {
+      m.step(0.05);
+      worst = Math.max(worst, m.off()); most = Math.max(most, m.stack);
+      const h = c.haul;
+      if (h && seen[seen.length - 1] !== h.step) seen.push(h.step);
+      if (!h) continue;
+      // each part of a trip looks like what it is: back to us at the hatch, a crate in the arms on the way over, bent at the stack
+      const want = { reach: "work", carry: "to", bend: "lift", back: "to" }[h.step];
+      if (c.look !== want) wrong.push(`${h.step}: seen in ${c.look}`);
+      if ((c.carry !== 0) !== (h.step === "carry" || (h.step === "bend" && !h.did))) wrong.push(`${h.step}: ${c.carry ? "a crate" : "no crate"} in the arms`);
+      if (h.step === "carry" && c.carry !== Math.sign(pk[0] - ps[0])) wrong.push("the crate is held to the wrong side");
+      // and it never leaves the stretch between the ramp and the stack
+      if (Math.abs(far(c.pos, ps) + far(c.pos, pk) - far(ps, pk)) > 1e-6) wrong.push(`off the stretch at ${c.pos}`);
+    }
+  };
+  watch(700);
+  expect(seen.slice(0, 9)).toEqual(["reach", "carry", "bend", "back", "reach", "carry", "bend", "back", "reach"]);
+  expect(seen.length, "it keeps making trips for as long as the job runs").toBeGreaterThan(30);
+  expect(wrong.slice(0, 5)).toEqual([]);
+  expect([most, m.stack], "the stack shows three crates and no more").toEqual([3, 3]);
+  expect(m.live.get("a")!.job.pct, "how far the job is stays the record's").toBe(10);
+  expect([c.state, c.job, m.ship.state]).toEqual(["work", "a", "landed"]);
+  // the job ends with a crate in the arms: it is carried over and set down, the shuttle waits for that, and then both leave
+  watch(200, () => c.haul?.step === "carry" && far(c.pos, ps) > 15);
+  expect(c.haul!.step).toBe("carry");
+  m.set({ known: true, jobs: [{ ...run, state: "succeeded", ok: true }] });
+  expect(m.news.map((n) => n.what)).toEqual(["ok"]);
+  expect([c.job, c.haul!.last, c.carry !== 0, m.shows("a")]).toEqual([null, true, true, null]);
+  seen.length = 0;
+  watch(200, () => !c.haul);
+  expect(seen).toEqual(["carry", "bend"]);
+  expect([c.state, c.carry, m.ship.state], "set down: on the way home, and the shuttle was still there").toEqual(["walk", 0, "landed"]);
+  watch(800);
+  expect([c.state, c.stop, m.ship.state, m.stack]).toEqual(["idle", c.home, "away", 0]);
+  expect(wrong).toEqual([]);
+  expect(worst).toBeLessThan(1e-6);
+  // a job that ends while the worker reaches in, or walks back with empty arms, stops there: no new trip is begun
+  m.set({ known: true, jobs: [{ ...run, id: "b" }] });
+  watch(900, () => c.haul?.step === "back");
+  expect(c.haul!.step).toBe("back");
+  m.set({ known: true, jobs: [] });
+  m.step(0.05);
+  expect([c.haul, c.state, c.carry]).toEqual([null, "walk", 0]);
+  // and two jobs at the pad: one crew member carries, the other stands by on the pad
+  const two = new Model(pack.map);
+  two.set({ known: true, jobs: [job({ id: "a", kind: "server.update" }), job({ id: "b", kind: "app.models" })] });
+  for (let i = 0; i < 200; i++) two.step(0.05);
+  expect(two.crew[0].haul).not.toBeNull();
+  expect([two.crew[1].haul, two.crew[1].state, two.crew[1].look, two.crew[1].stop]).toEqual([null, "work", "idle", "pr0"]);
+  // held still (reduced motion): nobody carries; the worker stands at the ship and reaches in
+  two.set({ known: true, jobs: [job({ id: "a", kind: "server.update" })] }, true);
+  expect([two.crew[0].haul, two.crew[0].stop, two.crew[0].look, two.crew[0].carry, two.stack]).toEqual([null, "ps", "work", 0, 0]);
 });
 
 test("the crew: a job keeps its crew member, a fourth lights its room, and the first reading replays nothing", () => {
@@ -320,9 +384,9 @@ test("the crew: a job that asks stands and waits; two jobs at one place stand ap
   expect(m.spots.rack.stops).toEqual(expect.arrayContaining([m.crew[0].stop, m.crew[1].stop]));
   expect(m.ship.state, "a job at the pad, even one that asks, keeps the shuttle down").toBe("landed");
   expect(m.news.map((n) => n.what)).toEqual(["land"]);
-  // the answer comes: the same crew member starts working, where they stand
+  // the answer comes: the same crew member starts working, where they stand: at the foot of the ramp, back to us, arms into the ship
   m.set({ known: true, jobs: [job({ id: "c", kind: "server.update", state: "running", pct: 10 })] });
-  expect(m.crew[2]).toMatchObject({ job: "c", state: "work", look: "lift" });
+  expect(m.crew[2]).toMatchObject({ job: "c", state: "work", look: "work", flip: m.spots.pad.face !== m.crew[2].side.work, stop: "ps", carry: 0 });
   // the jobs unread: nobody is shown, and the next reading replays nothing
   m.set({ known: false, jobs: [] });
   expect(m.live.size).toBe(0);
@@ -351,7 +415,7 @@ test("the crew: a job that asks stands and waits; two jobs at one place stand ap
 
 test("the art: every picture and clip the post can ask for ships, and each has its line of provenance", () => {
   const have = new Set(readdirSync(ART));
-  const m = new Model(pack.map), want = new Set<string>(["post.json", "frame.webp", "glow-x1.webp", "glow-x2.webp", "glow-x3.webp", "glow-pad.webp", "ship-idle.webp", "ship-fly.webp", "ship-fold.webp"]);
+  const m = new Model(pack.map), want = new Set<string>(["post.json", "frame.webp", "glow-x1.webp", "glow-x2.webp", "glow-x3.webp", "glow-pad.webp", "ship-idle.webp", "ship-fly.webp", "ship-fold.webp", "crate.webp"]);
   // the shuttle's legs are one strip of frames side by side: the strip is as wide as the drawing says
   const strip = readFileSync(`${ART}ship-fold.webp`), x = strip.indexOf("VP8X");
   expect(pack.ship).toEqual({ frames: 25, w: 331, h: 250 });

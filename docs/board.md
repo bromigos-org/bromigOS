@@ -340,7 +340,7 @@ sentence there is also the hover hint on the page.
 |---|---|---|
 | The lab's creation jobs: a kind that starts with `lab.` | The server rack, in the control room | Scans the rack |
 | A job an AI agent asked for, and a kind that starts with `agent.`, `plan.`, `ask.` or `vector.` | The hologram table, in the control room | Works the hologram |
-| Updates of the system and downloads: a kind that starts with `server.`, `system.`, `package.`, `update.` or `download.`, and `app.models` | The landing pad. A shuttle lands for it | Unloads the shuttle |
+| Updates of the system and downloads: a kind that starts with `server.`, `system.`, `package.`, `update.` or `download.`, and `app.models` | The landing pad. A shuttle lands for it | Unloads the shuttle, a crate at a time |
 | Any other kind that starts with `app.` | The print bench, in the workshop | Welds |
 | Backups, snapshots and restores: a kind that starts with `backup.`, `snapshot.` or `restore.` | The press, in the print shop | Packs |
 | Drives, storage, power and hardware: a kind that starts with `drive.`, `pool.`, `storage.`, `disk.`, `power.`, `ups.`, `hardware.` or `salvage.` | The power core, in the workshop | Turns the core's wheel |
@@ -349,6 +349,14 @@ sentence there is also the hover hint on the page.
 A job that is a part of another, such as one app's update inside "update every app", is
 drawn as the whole job, not beside it. Two jobs at one place stand apart: the second crew
 member takes the room's own spot.
+
+At every place the crew member stands at the thing, faces it and does the task. On the
+pad the task is carried. Once the shuttle is down, the crew member reaches into it with
+their back to you, walks a crate over to a stack, bends to set it down and goes back for
+the next. The trips go on for as long as the job runs. They say nothing about how far it
+is: the ring still shows the record's own share. When the job ends, the crate in hand is
+set down first, and the shuttle waits for that. With two jobs at the pad, one crew member
+carries and the other stands by.
 
 The layout is fixed. There is no way to move a room or a machine, because placing a
 machine doesn't change what the lab may do.
@@ -382,7 +390,8 @@ list. An update re-sends the crew in place. It remounts nothing and fetches no a
 - **What moves.** Each crew member has two walking loops, mirrored to face the way they
   walk, and a standing loop for each kind of work. Each room has three clips cut to its
   own outline: quiet, busy and a finish. Machines have idle, running and finished loops.
-  The shuttle flies with its legs folded away and unfolds them as it lands.
+  The shuttle flies with its legs folded away and unfolds them as it lands. The crates it
+  brought stay stacked on the pad until it leaves.
 - **Art is fetched when it is first needed.** A lab that only makes backups never fetches
   the welding loop or the shuttle.
 - **It stops when nobody is looking.** The loop and the clips pause while the hero is off
@@ -403,7 +412,7 @@ out, so the ring turns. The station's drawing is checked the same way: a room or
 machine whose name could reach another file's address stops the whole drawing, and the
 plain state stands. `tests/post-hostile.spec.ts` holds this.
 
-What ships (`public/post/`, [ASSETS.md](ASSETS.md)): 94 files, about 13 MB. All of it was
+What ships (`public/post/`, [ASSETS.md](ASSETS.md)): 95 files, about 13 MB. All of it was
 made on the lab with Apache-2.0 models, and `provenance.jsonl` has a line for each file.
 
 ## Charts

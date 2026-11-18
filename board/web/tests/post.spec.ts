@@ -201,7 +201,7 @@ test("the crew walk only on the floor, also when re-sent part-way", async ({ pag
     ] } });
   });
   const { post, fig, asked, errors, csp } = await station(page, "post");
-  expect(asked.filter((p) => p.includes("/ship-")), "no job at the pad yet: no shuttle is fetched").toEqual([]);
+  expect(asked.filter((p) => p.includes("/ship-") || p.includes("/crate")), "no job at the pad yet: no shuttle and no crate is fetched").toEqual([]);
   const stops = chart(pack.map, rooms(pack.map));
   let worst = 0, moved = 0, last = await feet(page);
   const until = Date.now() + 24_000;
@@ -224,8 +224,17 @@ test("the crew walk only on the floor, also when re-sent part-way", async ({ pag
   await expect(post.locator('.ship img[src="/post/ship-idle.webp"]')).toBeVisible();
   await expect(post.locator(".ship .fold")).toBeHidden();
   await expect(post.locator('.ship img[src="/post/ship-fly.webp"]')).toBeHidden();
-  expect(await post.locator(".ship .fold").evaluate((e) => [e.style.backgroundImage, e.style.backgroundSize, e.style.backgroundPositionX])).toEqual(['url("/post/ship-fold.webp")', "2500% 100%", "0%"]);
+  const strip = await post.locator(".ship .fold").evaluate((e: HTMLElement) => [e.style.backgroundImage, e.style.backgroundSize, e.style.backgroundPositionX]);
+  expect(strip.slice(0, 2)).toEqual(['url("/post/ship-fold.webp")', "2500% 100%"]);
+  expect(parseFloat(strip[2]), "the last frame it showed: its legs all but down").toBeLessThan(13);
   expect([...new Set(asked.filter((p) => p.includes("/ship-")))].sort()).toEqual(["/post/ship-fly.webp", "/post/ship-fold.webp", "/post/ship-idle.webp"]);
+  // and EXO unloads it: at the hatch with its back to us, across with a crate in its arms, bent at the stack, where the crates pile up
+  await expect(post.locator(".crate:not([hidden])")).toHaveCount(3, { timeout: 20_000 });
+  await expect(post.locator('.act img.carry[src="/post/crate.webp"]')).toHaveCount(1);
+  expect(asked).toEqual(expect.arrayContaining(["/post/crate.webp", "/post/exo-work.webp", "/post/exo-lift.webp"]));
+  const stretch = [stops.get("ps")!.p, stops.get("pk")!.p];
+  const exo = (await feet(page))[2];
+  expect(Math.hypot(exo[0] - stretch[0][0], exo[1] - stretch[0][1]) + Math.hypot(exo[0] - stretch[1][0], exo[1] - stretch[1][1]), "EXO is between the ramp and the stack").toBeLessThan(Math.hypot(stretch[0][0] - stretch[1][0], stretch[0][1] - stretch[1][1]) + 1);
   await expect(post.locator('.act svg.ring.turn:not([hidden])')).toHaveCount(2);   // the two that never said a share done
   expect(errors).toEqual([]);
   expect(await csp()).toEqual([]);

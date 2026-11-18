@@ -6,8 +6,8 @@
 // createElement, text reaches the page only through `title`, `aria-label` and a data attribute
 // (never as markup), every position and size is set through the CSSOM, and every picture and
 // clip is asked for under the art folder's own address, by a name this module made.
-import { CORRIDOR_Z, type Room, band } from "./floor";
-import { type Figure, type Live, type Loop, type News, Model } from "./model";
+import { CORRIDOR_Z, type Room, band, pad } from "./floor";
+import { type Figure, type Live, type Loop, type News, CRATES, Model } from "./model";
 import { type PlaceId, PLACES, RULES, placeRule } from "./places";
 import { sane, sanePack } from "./sane";
 import type { PostData, PostHandle, PostOptions, PostPack, Pt } from "./types";
@@ -56,10 +56,10 @@ class Pic {
 type Clip = "idle" | "work" | "done";
 interface RoomView { R: Room; glow: HTMLImageElement; clips: Partial<Record<Clip, HTMLVideoElement>>; clip: Clip | null; hit: HTMLElement; after: Element }
 interface MachView { place: PlaceId; pics: Record<"idle" | "run" | "done", Pic>; shown: "idle" | "run" | "done"; hit: HTMLElement; mark: SVGSVGElement }
-interface FigView { c: Figure; node: HTMLElement; pics: Partial<Record<Loop, Pic>>; shown: Loop | null; ring: SVGSVGElement; fill: SVGEllipseElement; hit: HTMLElement; spark: number }
+interface FigView { c: Figure; node: HTMLElement; pics: Partial<Record<Loop, Pic>>; shown: Loop | null; ring: SVGSVGElement; fill: SVGEllipseElement; hit: HTMLElement; spark: number; crate: HTMLImageElement | null; held: number }
 
 /** How often each kind of work throws something off, in seconds. */
-const EVERY: Record<string, number> = { weld: 0.12, crank: 0.15, holo: 0.32, work: 0.2, scan: 1.15, pack: 0.8, lift: 1.1 };
+const EVERY: Record<string, number> = { weld: 0.12, crank: 0.15, holo: 0.32, work: 0.2, scan: 1.15, pack: 0.8 };
 const quote = (title: string) => `“${title || "a job with no title"}”`;
 
 export class Post implements PostHandle {
@@ -78,6 +78,7 @@ export class Post implements PostHandle {
   private padGlow!: HTMLImageElement;
   private padMark!: SVGSVGElement;
   private ship!: { node: HTMLElement; shade: HTMLElement; pics: { idle: Pic; fly: Pic }; fold: HTMLElement; frames: number; frame: number; strip: string | null; warmed: boolean };
+  private crates: HTMLImageElement[] = [];
   private lights: Animation[] = [];
   private sparks = 0;
   private undo: (() => void)[] = [];
@@ -202,6 +203,17 @@ export class Post implements PostHandle {
     node.append(fold);
     stage.append(shade, node);
 
+    // the crates stacked on the pad: each shows once it has been carried there
+    const P = pad(map);
+    P.crates.slice(0, CRATES).forEach((q) => {
+      const im = el("img", "crate");
+      im.alt = ""; im.hidden = true; im.setAttribute("aria-hidden", "true");
+      // behind whoever stands at the stack, and each crate over the one behind it
+      css(im, { left: this.left(q), top: this.top(q), "z-index": String(CORRIDOR_Z + Math.round(P.stack[1] + (q[1] - P.stack[1]) / 2 - 12)) });
+      stage.append(im);
+      this.crates.push(im);
+    });
+
     // the crew: each with the ring of light that shows under them while they work
     for (const c of m.crew) {
       const node = el("div", "act"), ring = svg("svg", "ring"), track = svg("ellipse", "track"), fill = svg("ellipse", "fill");
@@ -214,7 +226,7 @@ export class Post implements PostHandle {
       stage.append(node);
       const hit = this.hit(hits, "fig at");
       css(hit, { height: `${c.tall * 100}%` });
-      const v: FigView = { c, node, pics: {}, shown: null, ring, fill, hit, spark: 0 };
+      const v: FigView = { c, node, pics: {}, shown: null, ring, fill, hit, spark: 0, crate: null, held: 0 };
       for (const k of ["to", "away", "idle"] as const) this.loop(v, k).warm();
       this.figViews.push(v);
     }
@@ -384,8 +396,11 @@ export class Post implements PostHandle {
       if (v.shown !== c.look) { for (const p of Object.values(v.pics)) if (p !== want) p.show(false, r); v.shown = c.look; }
       want.show(true, r);
       v.node.classList.toggle("flip", c.flip);
+      this.carry(v);
       this.ring(v);
     }
+    // the stack on the pad, and the loops the carrying needs, asked for when someone first has a job there
+    this.crates.forEach((im, i) => { const up = i < m.stack; if (up && !im.getAttribute("src")) im.src = this.url("crate.webp"); im.hidden = !up; });
     const s = m.ship, away = s.state === "away", S = this.ship;
     S.node.hidden = away; S.shade.hidden = away;
     if (!away) {
@@ -402,6 +417,20 @@ export class Post implements PostHandle {
       css(S.shade, { opacity: String(Math.max(0, 1 - s.far * 2.2)) });
     }
     this.padGlow.classList.toggle("busy", s.state === "in" || s.state === "out");
+  }
+
+  /** A crate in a crew member's arms, held to the side they walk toward. */
+  private carry(v: FigView): void {
+    const side = v.c.carry;
+    if (!side && !v.crate) return;
+    if (!v.crate) {
+      v.crate = el("img", "carry");
+      v.crate.alt = ""; v.crate.src = this.url("crate.webp");
+      v.node.append(v.crate);
+    }
+    v.crate.hidden = !side;
+    const dx = side * 0.2 * v.node.offsetHeight;
+    if (side && dx !== v.held) { v.held = dx; css(v.crate, { transform: `translateX(calc(-50% + ${dx.toFixed(1)}px))` }); }
   }
 
   /** The ring under a crew member: the job's own share done, a short arc that turns when it never said one, amber when it asks. */
@@ -444,7 +473,7 @@ export class Post implements PostHandle {
     this.say(this.padHit, m.at("pad"), () => `The ${padRule.name}. ${padRule.says} Nothing is arriving now.`);
     for (const v of this.figViews) {
       const c = v.c, L = c.job ? m.live.get(c.job) : undefined;
-      this.say(v.hit, L ? [L] : [], () => (c.state === "walk" ? `${c.name} is walking back to the ${m.restName}. ${RULES.rest}` : `${c.name}, one of the crew, is resting in the ${m.restName}. ${RULES.rest}`), { c });
+      this.say(v.hit, L ? [L] : [], () => (c.haul ? `${c.name} is setting down the last crate on the ${placeRule("pad").name}.` : c.state === "walk" ? `${c.name} is walking back to the ${m.restName}. ${RULES.rest}` : `${c.name}, one of the crew, is resting in the ${m.restName}. ${RULES.rest}`), { c });
     }
   }
 
@@ -526,10 +555,10 @@ export class Post implements PostHandle {
     }
   }
 
-  /** What the work throws off, by its kind: sparks, floating panes, a sweep of light, parcels, dust, keystrokes. */
+  /** What the work throws off, by its kind: sparks, floating panes, a sweep of light, parcels, keystrokes. */
   private effect(v: FigView, dt: number): void {
     const c = v.c, L = c.job ? this.model!.live.get(c.job) : undefined, every = L && EVERY[L.act];
-    if (!L || !every) return;
+    if (!L || !every || L.place === "pad") return;        // on the pad the work is carried: the crates are what shows
     v.spark += dt;
     if (v.spark < every || this.sparks > 40) return;
     v.spark = 0;
@@ -542,8 +571,7 @@ export class Post implements PostHandle {
     else if (kind === "holo") { at(0.15 + r() * 0.5, 0.7 + r() * 0.5); const sk = `skewY(${side * -26}deg)`; fr = [{ transform: T(0, 0.1, sk), opacity: 0 }, { transform: T(0, 0, sk), opacity: 1, offset: 0.25 }, { transform: T((r() - 0.5) * 0.4, -0.22, sk), opacity: 0 }]; ms = 1300; }
     else if (kind === "type") { at(0.28 + r() * 0.28, 0.82); fr = [{ transform: T(0, 0), opacity: 1 }, { transform: T(0, -0.45), opacity: 0 }]; ms = 900; }
     else if (kind === "scan") { at(0.42, 1.2); const sk = `translateX(-50%) skewY(${side * -26}deg)`; fr = [{ transform: T(0, 0, sk), opacity: 0.9 }, { transform: T(0, 1.0, sk), opacity: 0.9 }, { transform: T(0, 0, sk), opacity: 0.2 }]; ms = 1100; ease = "ease-in-out"; }
-    else if (kind === "pack") { at(0.3, 0.5); fr = [{ transform: T(0, 0), opacity: 1 }, { transform: T(side * 0.3, -0.3), opacity: 1, offset: 0.45 }, { transform: T(side * 0.62, 0.12), opacity: 0 }]; ms = 780; ease = "linear"; }
-    else { at((r() - 0.5) * 0.5, 0.03); fr = [{ transform: "translate(-50%, 0) scale(1)", opacity: 0.8 }, { transform: "translate(-50%, 0) scale(3.2)", opacity: 0 }]; ms = 800; }
+    else { at(0.3, 0.5); fr = [{ transform: T(0, 0), opacity: 1 }, { transform: T(side * 0.3, -0.3), opacity: 1, offset: 0.45 }, { transform: T(side * 0.62, 0.12), opacity: 0 }]; ms = 780; ease = "linear"; }
     e.setAttribute("aria-hidden", "true");
     this.stage.append(e);
     this.sparks++;

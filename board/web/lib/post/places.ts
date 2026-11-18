@@ -20,7 +20,11 @@ import type { PostJob } from "./types";
 
 /** A place a job is worked at: one of the six machines, or the landing pad. */
 export type PlaceId = "rack" | "holotable" | "pad" | "fabricator" | "press" | "core" | "terminal";
-/** What the crew member is seen doing there: one standing loop each (the art folder's NAME-ACT.webp). */
+/**
+ * What the crew member is seen doing there: one standing loop each (the art folder's
+ * NAME-ACT.webp), at the thing and facing it. The pad's work is carried instead: a crate at a
+ * time from the shuttle to a stack, with "lift" the loop for bending to set one down (model.ts).
+ */
 export type Act = "scan" | "holo" | "lift" | "weld" | "pack" | "crank" | "work";
 
 export interface PlaceRule {

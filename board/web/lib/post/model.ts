@@ -28,6 +28,13 @@ export const SPEED = 135;
  */
 const FLIGHT = 3.4, LINGER = 1.6;
 export const LEGS = 1.3;
+/**
+ * Work on the pad is carried: crates go one at a time from the foot of the shuttle's ramp to a
+ * stack on the pad. How many crates the stack shows, how long reaching into the ship or bending
+ * to the stack takes, and how fast someone walks with a crate and back without one.
+ */
+export const CRATES = 3;
+const HANDLE = 0.8, LOADED = 0.55, EMPTY = 0.8;
 /** How long a finish shows: the room's clip, a machine's finished loop, and the flash. */
 export const SHOWS = { room: 3, machine: 2.2, flash: 1.3 };
 
@@ -48,6 +55,14 @@ export interface Figure extends Walk {
   /** The loop they are seen in now, and whether it is mirrored. */
   look: Loop;
   flip: boolean;
+  /** A crate in their arms: 0 none, else the side it is held to (-1 screen-left, 1 screen-right). */
+  carry: -1 | 0 | 1;
+  /**
+   * The trip in hand on the pad: reaching into the shuttle, carrying a crate to the stack, bending
+   * to set it down, walking back. `last`: the job ended or asks, so this trip is finished and
+   * no other is begun.
+   */
+  haul: { step: "reach" | "carry" | "bend" | "back"; t: number; did: boolean; last: boolean } | null;
 }
 
 /** A job on the picture. */
@@ -94,6 +109,8 @@ export class Model {
   known = false;
   /** What to show once; the page takes these. */
   news: News[] = [];
+  /** How many crates lie stacked on the pad: the ones carried there while the shuttle is down. */
+  stack = 0;
   private ends: { how: "ok" | "fail"; place: PlaceId; t: number }[] = [];
   private fresh = true;
 
@@ -101,6 +118,7 @@ export class Model {
     this.rooms = rooms(map);
     this.stops = chart(map, this.rooms);
     const P = pad(map), spots = {} as Record<PlaceId, Spot>;
+    // the pad: the foot of the shuttle's ramp, facing the ship; a second and a third job there stand by on the pad
     spots.pad = { place: "pad", room: null, machine: null, stops: [stopId.pad, ...P.rest.map((_, n) => stopId.padRest(n))], face: 1, at: P.spot };
     for (const R of this.rooms)
       for (const m of R.machines) {
@@ -113,7 +131,7 @@ export class Model {
     const q = this.rooms.find((R) => R.rest.length);
     this.crew = CREW.map((c, i): Figure => {
       const home = q ? stopId.rest(q.id, i % q.rest.length) : stopId.padRest(i % P.rest.length);
-      return { ...c, i, home, pos: [...this.stops.get(home)!.p] as Pt, stop: home, path: [], state: "idle", job: null, look: "idle", flip: false };
+      return { ...c, i, home, pos: [...this.stops.get(home)!.p] as Pt, stop: home, path: [], state: "idle", job: null, look: "idle", flip: false, carry: 0, haul: null };
     });
     this.ship = { state: "away", t: 0, wait: 0, at: [...P.ship] as Pt, home: P.ship, far: 1, look: "fly", folded: 1 };
   }
@@ -136,7 +154,7 @@ export class Model {
     if (!data.known) {
       this.live.clear(); this.ends = []; this.news = []; this.known = false; this.fresh = true;
       for (const c of this.crew) { c.job = null; this.rest(c); }
-      this.ship.state = "away";
+      this.ship.state = "away"; this.stack = 0;
       return;
     }
     const instant = still || this.fresh;
@@ -164,18 +182,33 @@ export class Model {
       const rule = placeFor(w.job), spot = this.spots[rule.place] ?? this.spots.pad;
       this.live.set(id, { job: w.job, mode: w.mode, place: spot.place, act: placeRule(spot.place).act, who: null, stop: null, face: spot.face });
     }
-    // a job with nobody: the next free crew member, the ones at rest first
+    this.dispatch(instant);
+    if (instant) { this.ends = []; this.news = []; this.stack = 0; this.ship.state = this.wanted ? "landed" : "away"; this.ship.wait = 0; this.fly(); }
+  }
+
+  /**
+   * Who has which job, and where each goes. A job with nobody gets the next free crew member,
+   * the ones at rest first. Someone with a crate in their arms is not free, and is not sent
+   * anywhere, until it is set down.
+   */
+  private dispatch(instant: boolean): void {
+    if (instant) for (const c of this.crew) { c.haul = null; c.carry = 0; }
     for (const L of this.byId()) {
       if (L.who !== null) continue;
-      const c = this.crew.find((x) => !x.job && x.state === "idle") ?? this.crew.find((x) => !x.job);
+      const free = (x: Figure) => !x.job && !x.haul;
+      const c = this.crew.find((x) => free(x) && x.state === "idle") ?? this.crew.find(free);
       if (!c) break;
       const taken = new Set([...this.live.values()].map((x) => x.stop));
       L.who = c.i; L.stop = this.spots[L.place].stops.find((s) => !taken.has(s)) ?? this.spots[L.place].stops[0];
       c.job = L.job.id;
     }
-    // and everyone goes where they now belong
     for (const c of this.crew) {
       const L = c.job ? this.live.get(c.job) : undefined;
+      if (c.haul) {
+        // carrying on the pad: on with it while its job runs; otherwise this trip is the last
+        if (!(L && L.mode === "run" && this.hauls(L))) c.haul.last = true;
+        continue;
+      }
       if (L?.stop) {
         if (instant) { place(this.stops, c, L.stop); this.stand(c, L); }
         else if (c.stop === L.stop && !c.path.length) this.stand(c, L);
@@ -184,17 +217,66 @@ export class Model {
       else if (c.stop !== c.home || c.path.length) { head(this.stops, c, c.home); c.state = "walk"; }
       else this.rest(c);
     }
-    if (instant) { this.ends = []; this.news = []; this.ship.state = this.wanted ? "landed" : "away"; this.ship.wait = 0; this.fly(); }
   }
 
   private byId(): Live[] { return [...this.live.values()].sort((a, b) => (a.job.id < b.job.id ? -1 : a.job.id > b.job.id ? 1 : 0)); }
 
-  private rest(c: Figure): void { place(this.stops, c, c.home); c.state = "idle"; c.look = "idle"; c.flip = false; }
+  private rest(c: Figure): void { place(this.stops, c, c.home); c.state = "idle"; c.look = "idle"; c.flip = false; c.carry = 0; c.haul = null; }
 
-  /** Standing at a job: at work in the place's own loop, or waiting in the plain standing one. */
+  /** The job whose crew member carries the crates: the one standing at the foot of the shuttle's ramp. */
+  private hauls(L: Live): boolean { return L.place === "pad" && L.stop === stopId.pad; }
+
+  /**
+   * Standing at a job: at work in the place's own loop, facing the thing worked on, or waiting in
+   * the plain standing one. On the pad the work is carried (haul); standing there, the worker
+   * reaches into the shuttle with their back to us. A second job at the pad has its crew member
+   * stand by: one carries at a time.
+   */
   private stand(c: Figure, L: Live): void {
-    if (L.mode === "run") { c.state = "work"; c.look = L.act; c.flip = L.act !== "lift" && L.face !== c.side.work; }
-    else { c.state = "wait"; c.look = "idle"; c.flip = false; }
+    c.carry = 0;
+    if (L.mode !== "run") { c.state = "wait"; c.look = "idle"; c.flip = false; return; }
+    c.state = "work";
+    if (L.place !== "pad") { c.look = L.act; c.flip = L.face !== c.side.work; }
+    else if (this.hauls(L)) { c.look = "work"; c.flip = L.face !== c.side.work; }
+    else { c.look = "idle"; c.flip = false; }
+  }
+
+  /**
+   * One step of the carrying, while the shuttle is down: reach into the ship, walk to the stack
+   * with a crate, bend to set it down, walk back, and again for as long as the job runs. The
+   * record says how far the job is, never this routine. When the job ends, the trip in hand is
+   * finished (a crate in the arms is set down) and no other is begun.
+   */
+  private carryOn(c: Figure, dt: number): void {
+    const h = (c.haul ??= { step: "reach", t: 0, did: false, last: false });
+    if (h.step === "reach") {
+      if (h.last) return this.setDown(c);
+      if ((h.t += dt) >= HANDLE) { h.step = "carry"; h.t = 0; }
+    } else if (h.step === "carry" || h.step === "back") {
+      const loaded = h.step === "carry";
+      if (!loaded && h.last) return this.setDown(c);
+      if (!c.path.length) c.path = [loaded ? stopId.padStack : stopId.pad];
+      walk(this.stops, c, SPEED * (loaded ? LOADED : EMPTY) * dt);
+      if (!c.path.length) { h.step = loaded ? "bend" : "reach"; h.t = 0; h.did = false; }
+    } else {
+      h.t += dt;
+      if (!h.did && h.t >= HANDLE / 2) { h.did = true; this.stack = Math.min(CRATES, this.stack + 1); }
+      if (h.t >= HANDLE) { if (h.last) return this.setDown(c); h.step = "back"; h.t = 0; }
+    }
+    // how each part of a trip looks: back to us at the hatch; walking, with the crate held to the
+    // side walked toward; bent at the stack, the crate in the arms until it is set down
+    if (h.step === "reach") { c.look = "work"; c.flip = this.spots.pad.face !== c.side.work; c.carry = 0; }
+    else if (h.step === "bend") { c.look = "lift"; c.flip = false; c.carry = h.did ? 0 : -1; }
+    else {
+      const to = this.stops.get(h.step === "carry" ? stopId.padStack : stopId.pad)!.p, dir = to[0] >= c.pos[0] ? 1 : -1;
+      c.look = "to"; c.flip = dir !== c.side.to; c.carry = h.step === "carry" ? dir : 0;
+    }
+  }
+
+  /** The last trip is done: the crew member is free again, for the job they still have, another, or home. */
+  private setDown(c: Figure): void {
+    c.haul = null; c.carry = 0;
+    this.dispatch(false);
   }
 
   // ---------------------------------------------------------------- time
@@ -202,6 +284,15 @@ export class Model {
   step(dt: number): void {
     this.clock += dt;
     for (const c of this.crew) {
+      if (c.state === "work") {
+        // on the pad there is nothing to carry until the shuttle is down
+        const L = c.job ? this.live.get(c.job) : undefined;
+        if (c.haul || (L && L.mode === "run" && this.hauls(L) && !c.path.length)) {
+          if (c.haul || this.ship.state === "landed") this.carryOn(c, dt);
+          else { c.look = "idle"; c.flip = false; }
+        }
+        continue;
+      }
       if (c.state !== "walk") continue;
       const moved = walk(this.stops, c, SPEED * dt);
       // down the screen is toward us (the front loop), up is away (the back loop); left or right picks the mirror
@@ -215,15 +306,18 @@ export class Model {
     this.ends = this.ends.filter((e) => this.clock - e.t < SHOWS.room);
   }
 
-  /** A job at the pad calls the shuttle in; it sets down, waits while there is one, and leaves. */
-  private get wanted(): boolean { for (const L of this.live.values()) if (L.place === "pad") return true; return false; }
+  /** A job at the pad calls the shuttle in; it sets down, waits while there is one (and while a last crate is carried), and leaves. */
+  private get wanted(): boolean {
+    for (const L of this.live.values()) if (L.place === "pad") return true;
+    return this.crew.some((c) => c.haul);
+  }
 
   private shuttle(dt: number): void {
     const s = this.ship, wanted = this.wanted;
     if (s.state === "away" && wanted) { s.state = "in"; s.t = 0; }
     else if (s.state === "in") { s.t += dt; if (s.t >= FLIGHT) { s.state = "landed"; s.wait = 0; this.news.push({ what: "land", place: "pad", at: [s.home[0], s.home[1] + 30] }); } }
     else if (s.state === "landed") { s.wait = wanted ? 0 : s.wait + dt; if (s.wait > LINGER) { s.state = "out"; s.t = 0; } }
-    else if (s.state === "out") { s.t += dt; if (wanted && s.t < FLIGHT * 0.3) { s.state = "in"; s.t = FLIGHT - s.t; } else if (s.t >= FLIGHT) s.state = "away"; }
+    else if (s.state === "out") { s.t += dt; if (wanted && s.t < FLIGHT * 0.3) { s.state = "in"; s.t = FLIGHT - s.t; } else if (s.t >= FLIGHT) { s.state = "away"; this.stack = 0; } }
     this.fly();
   }
 

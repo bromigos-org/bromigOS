@@ -104,10 +104,16 @@ export function band(map: PostMap, all: Room[], p: Pt): number {
 
 // ---------------------------------------------------------------- the pad
 
-/** On the pad: where the shuttle sets down, where someone unloads it, the way onto it, and where others stand. */
-export function pad(map: PostMap): { ship: Pt; spot: Pt; way: Pt; rest: Pt[] } {
-  const F = toStage(map);
-  return { ship: F(70.2, 30.6), spot: F(66.2, 34.6), way: F(64.8, 31.5), rest: [F(65, 30.2), F(64.3, 31.6), F(64.6, 33)] };
+/**
+ * On the pad: where the shuttle sets down, the foot of its ramp, where someone stands to set a
+ * crate on the stack, the way onto the pad, where others stand, and where the stacked crates lie.
+ */
+export function pad(map: PostMap): { ship: Pt; spot: Pt; stack: Pt; way: Pt; rest: Pt[]; crates: Pt[] } {
+  const F = toStage(map), ship = F(70.2, 30.6), stack: Pt = [ship[0] - 107, ship[1] + 51];
+  return {
+    ship, spot: [ship[0] - 44, ship[1] + 47], stack, way: F(64.8, 31.5), rest: [F(64.2, 30.4), F(64.3, 31.9), F(64.6, 33.3)],
+    crates: [[-30, -2], [-9, -9], [-20, -19]].map(([dx, dy]): Pt => [stack[0] + dx, stack[1] + dy]),
+  };
 }
 
 // ---------------------------------------------------------------- the stops
@@ -115,13 +121,14 @@ export function pad(map: PostMap): { ship: Pt; spot: Pt; way: Pt; rest: Pt[] } {
 export interface Stop { p: Pt; to: string[] }
 export type Stops = Map<string, Stop>;
 
-/** A machine's stop, a room's own spot, the middle of its floor, a rest spot. */
+/** A machine's stop, a room's own spot, the middle of its floor, a rest spot; on the pad, the ramp's foot and the stack. */
 export const stopId = {
   machine: (room: string, n: number) => `m:${room}:${n}`,
   spot: (room: string) => `s:${room}`,
   inside: (room: string) => `i:${room}`,
   rest: (room: string, n: number) => `r:${room}:${n}`,
   pad: "ps",
+  padStack: "pk",
   padRest: (n: number) => `pr${n}`,
 };
 
@@ -130,11 +137,11 @@ export function chart(map: PostMap, all: Room[]): Stops {
   const stops: Stops = new Map(), P = pad(map);
   const stop = (id: string, p: Pt) => { stops.set(id, { p, to: [] }); return id; };
   const link = (a: string, b: string) => { stops.get(a)!.to.push(b); stops.get(b)!.to.push(a); };
-  stop("j", map.junction); stop("p0", map.pad[0]); stop("pw", P.way); stop(stopId.pad, P.spot);
+  stop("j", map.junction); stop("p0", map.pad[0]); stop("pw", P.way); stop(stopId.padStack, P.stack); stop(stopId.pad, P.spot);
   const F = toStage(map);
   const line = (on: Dock["on"]) => map.docks.filter((d) => d.on === on).sort((a, b) => a.d - b.d).map((d) => stop(`c:${d.id}`, on === "spine" ? F(d.d, map.spineY) : F(map.branchX, d.d)));
   for (const l of [[...line("spine"), "j", "p0"], ["j", ...line("branch")]]) for (let i = 1; i < l.length; i++) link(l[i - 1], l[i]);
-  link("p0", "pw"); link("pw", stopId.pad);
+  link("p0", "pw"); link("pw", stopId.padStack); link(stopId.padStack, stopId.pad);
   P.rest.forEach((q, i) => link("pw", stop(stopId.padRest(i), q)));
   for (const R of all) {
     const mid = stop(stopId.inside(R.id), R.inside);
