@@ -25,7 +25,7 @@ class GatherTests(Root):
             self.assertTrue(doc["sources"][name]["ok"], name)
             self.assertIsNotNone(doc[name], name)
         self.assertEqual(doc["host"], "myserver")
-        self.assertEqual(doc["settings"], {"door": True, "world": "wick"})
+        self.assertEqual(doc["settings"], {"door": True, "world": "wick", "address": None})
         self.assertNotIn("door_fallback", doc)
         self.assertEqual(doc["sources"]["alerts"]["rc"], 1)
 

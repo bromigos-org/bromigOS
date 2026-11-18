@@ -1,0 +1,90 @@
+#!/bin/bash
+# The Lab board in a container (docs/board.md, "In a container"). On a server, systemd runs the
+# board's parts: its socket and API, the reader and the lab follower that start when the page
+# asks, and Caddy. Here this script does, with the same users and the same folders:
+#
+#   the API       as bromigos-board, on /run/bromigos-board.sock (handed to it as systemd would)
+#   Caddy         as caddy, on port 8080, with the package's own site
+#   the reader    as root, whenever the API marks `wanted` or `door` (it ends itself when nobody looks)
+#   the follower  as bromigos-labjobs, while a browser is signed in, when /etc/bromigos/labjobs.toml
+#                 names a ComfyUI
+#
+# The action helper isn't started: there is no server under a container for the page to act on,
+# and the default server.toml here allows no action.
+#
+# Settings: /etc/bromigos/server.toml when it is there (mount it). Otherwise one is written from
+#   BOARD_ADDRESS   the name the board answers at behind the ingress (board.mylab.example)
+#   BOARD_WORLD     the world the page wears (wick when unset)
+# If any part ends, the container ends, and whatever runs it starts it again.
+set -u
+
+log() { printf 'bromigos-board-container: %s\n' "$*" >&2; }
+board=/usr/lib/bromigos/board/bromigos-board
+follow=/usr/lib/bromigos/bin/bromigos-activity
+as() { local user=$1; shift; exec setpriv --reuid="$user" --regid="$user" --init-groups --inh-caps=-all "$@"; }
+
+if [ ! -e /etc/bromigos/server.toml ]; then
+  install -d -m 0755 /etc/bromigos
+  {
+    printf '# Written by bromigos-board-container at start. Mount your own to replace it.\n[board]\nactions = []\n'
+    [ -n "${BOARD_ADDRESS:-}" ] && printf 'address = "%s"\n' "${BOARD_ADDRESS//[^A-Za-z0-9.-]/}"
+    [ -n "${BOARD_WORLD:-}" ] && printf 'world = "%s"\n' "${BOARD_WORLD//[^a-z-]/}"
+  } > /etc/bromigos/server.toml
+fi
+
+# the folders, as on a server (tmpfiles), and nothing left from a run before
+rm -f /run/bromigos-board.sock
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/bromigos-board.conf || { log "the board's folders couldn't be made"; exit 1; }
+chown bromigos-board:bromigos-board /var/lib/bromigos-board 2>/dev/null || true
+: > /run/bromigos-labjobs-wanted; chmod 0644 /run/bromigos-labjobs-wanted
+install -d -o caddy -g caddy -m 0700 /var/lib/caddy/data /var/lib/caddy/config
+
+pids=()
+end() { trap - TERM INT; kill "${pids[@]}" 2>/dev/null; wait; exit "${1:-0}"; }
+trap 'end 0' TERM INT
+
+"$board" snapshot >/dev/null 2>&1 || log "the first reading didn't finish; the page asks for the next"
+
+# the API: the socket is made here and handed over, so it is there before Caddy's first request
+( umask 0077; exec systemd-socket-activate -l /run/bromigos-board.sock setpriv --reuid=bromigos-board --regid=bromigos-board --init-groups --inh-caps=-all "$board" serve ) 2>&1 | grep --line-buffered -v -E '^(Listening on|Communication attempt|Execing|Executing)' >&2 &
+pids+=($!)
+for _ in $(seq 50); do [ -S /run/bromigos-board.sock ] && break; sleep 0.1; done
+if ! { chown bromigos-board:caddy /run/bromigos-board.sock && chmod 0660 /run/bromigos-board.sock; }; then log "the API's socket wasn't made"; end 1; fi
+
+( XDG_DATA_HOME=/var/lib/caddy/data XDG_CONFIG_HOME=/var/lib/caddy/config HOME=/var/lib/caddy as caddy caddy run --config /etc/bromigos-board-container/Caddyfile --adapter caddyfile ) &
+pids+=($!)
+
+# the reader, when the page asks: `wanted` while a signed-in browser is connected, `door` for the door's tiles
+(
+  stamp() { stat -c '%Y.%y' /run/bromigos-board/wanted /run/bromigos-board/door 2>/dev/null | tr '\n' ' '; }
+  seen=$(stamp)
+  while sleep 1; do
+    touch -r /run/bromigos-board/wanted /run/bromigos-labjobs-wanted 2>/dev/null    # what the follower may see of it: its time
+    now=$(stamp)
+    [ "$now" = "$seen" ] && continue
+    nice -n 10 "$board" snapshot >/dev/null 2>&1
+    seen=$(stamp)
+  done
+) &
+pids+=($!)
+
+# the lab follower: it ends itself when nobody has looked for 45 seconds, and starts again when someone does
+if [ -r /etc/bromigos/labjobs.toml ]; then
+  (
+    seen=$(stat -c '%Y.%y' /run/bromigos-labjobs-wanted)
+    while sleep 1; do
+      now=$(stat -c '%Y.%y' /run/bromigos-labjobs-wanted)
+      [ "$now" = "$seen" ] && continue
+      ( umask 0027; as bromigos-labjobs nice -n 10 "$follow" follow --system --idle 45 --wanted /run/bromigos-labjobs-wanted ) || sleep 5
+      seen=$(stat -c '%Y.%y' /run/bromigos-labjobs-wanted)
+    done
+  ) &
+  pids+=($!)
+else
+  log "no /etc/bromigos/labjobs.toml: the lab's creation jobs aren't followed"
+fi
+
+log "the Lab board is on port 8080 ($(tr '\n' ' ' < /etc/bromigos-board-container.versions 2>/dev/null))"
+wait -n
+log "a part of the board ended; stopping"
+end 1

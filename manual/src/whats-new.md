@@ -47,6 +47,12 @@ Run `bromigos update` to get them. The next release notes will include these hig
   people, such as Stripe or Zapier, is refused until you allow it by name. Hermes Agent
   asks you before a service's tool changes anything. See
   [Give an agent a service](lab.md#give-an-agent-a-service).
+- **The Lab board in a container.** A lab that is a Kubernetes cluster can run the Lab
+  board as a workload behind its own ingress: the image
+  `ghcr.io/bromigos-org/bromigos-board`. Activity and the post show the lab's creation
+  jobs there. The pages about one server's drives and apps stay empty for now. A server
+  behind your own reverse proxy can use the same setting, `[board] address`. See
+  [the board's notes](https://github.com/bromigos-org/bromigOS/blob/main/docs/board.md#in-a-container).
 - **The post, on the Lab board's Activity page.** Your lab's jobs are drawn as a small
   space station at work. A crew member walks to each job that is running and works there:
   at the server rack for a picture or a clip, at the press for a backup, at the print

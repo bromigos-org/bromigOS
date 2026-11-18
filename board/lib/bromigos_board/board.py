@@ -6,7 +6,7 @@ nothing else: the one status line, what needs you (the alerts that need a person
 waiting for an answer), what fixed itself (jobs that rolled back) and this machine's row. A part
 whose command couldn't run is null, and the page says it can't check.
 """
-from . import SCHEMA, door
+from . import SCHEMA, door, paths
 
 MAX_AGE_S = 45                       # a reading older than this is stale: the page greys it
 SEVERITY = {"needs_you": "warn", "critical": "critical"}
@@ -160,7 +160,7 @@ def shape(snap, now_ms):
     machine_state = "unknown" if stale else "warn" if needs else "ok"
     doc = {
         "schema": SCHEMA, "at": at, "max_age_s": MAX_AGE_S, "age_s": age, "stale": stale,
-        "lab": door.lab(host),
+        "lab": door.lab(host, paths.address_of(snap.get("settings"))),
         "server": {"name": host, "kind": "server", "roles": roles},
         "status": {"state": state, "words": words, "checked_at": at},
         "machines": [{"name": host, "kind": "server", "here": True, "page": True, "state": machine_state,

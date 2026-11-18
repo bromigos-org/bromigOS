@@ -93,6 +93,7 @@ gathers the readings, the Caddy site, and what the page never shows.
 | `board/web/lib/lamplight-assets.ts` | What the station may draw: its models and STATIC's crew |
 | `board/web/lib/post/` | The post, Activity's station: a module with no React in it, and its stylesheet |
 | `board/web/public/post/` | The post's art: its paintings, clips and loops, `post.json` (where everything stands) and `provenance.jsonl` |
+| `board/container/` | The board as a container image, for a lab that is a cluster: the image's recipe, its start script, its Caddy file and its test |
 | `board/web/lib/holo/` | The hologram renderer |
 | `board/web/styles/` | DRIFTGLASS on the web: the worlds' tokens, the parts, a file per place |
 | `board/web/tests/` | The Playwright tests; `tests/contract/service.json` holds real answers of the service |
@@ -656,6 +657,81 @@ The board replaces the old start page (Homepage). Both answer at `home-<server>.
 the catalogue lists them as conflicting, and the start page is no longer ticked for new
 servers. A server that already runs the start page keeps it. Moving those servers to the
 board is a later change.
+
+### In a container
+
+A lab that is a cluster has no server whose own page the board could be. There the board
+runs as a workload: the image `ghcr.io/bromigos-org/bromigos-board`, behind the lab's own
+ingress. It is the same board. The image holds the published packages `bromigos-board`
+and `bromigos-board-web` and builds nothing, and a start script
+(`board/container/bromigos-board-container`) does what a server's systemd units do, with
+the same users and the same folders:
+
+| Part | As | When |
+|---|---|---|
+| The API | `bromigos-board`, on `/run/bromigos-board.sock` | Always |
+| Caddy, with the package's own site | `caddy`, on port 8080, plain HTTP | Always |
+| The reader | root | When the page asks, as on a server |
+| The lab follower | `bromigos-labjobs` | While a browser is signed in, when `/etc/bromigos/labjobs.toml` names a ComfyUI |
+
+The action helper isn't started, and the settings the script writes allow no action:
+there is no server under a container for the page to act on. If any part ends, the
+container ends, and the cluster starts it again.
+
+```sh
+docker run -p 8080:8080 -e BOARD_ADDRESS=board.mylab.example \
+  -v board:/var/lib/bromigos-board ghcr.io/bromigos-org/bromigos-board:edge
+```
+
+What to give it:
+
+- **Its address.** `BOARD_ADDRESS` is the name people open (`board.mylab.example`). It
+  becomes `[board] address` (below). Without it nobody can sign in through the ingress.
+  Or mount your own `/etc/bromigos/server.toml`.
+- **Its sessions.** A volume at `/var/lib/bromigos-board`, so browsers stay signed in when
+  the container is replaced. It holds a few small files.
+- **The lab's ComfyUIs.** Mount `/etc/bromigos/labjobs.toml` ([activity.md](activity.md#lab-jobs))
+  for the lab's creation jobs to show on Activity and on the post. A relay token is a
+  reference there (`@env:NAME` or `@file:/path`), never the token itself.
+- **HTTPS at the ingress.** The session cookie is for HTTPS only. The ingress holds the
+  certificate and sends plain HTTP to port 8080.
+
+Signing in is the same code, asked for inside the container:
+
+```sh
+kubectl exec deploy/board -- bromigos-board code
+```
+
+**What it shows.** Activity and the post are whole: they are drawn from job records, and
+the follower reads those from the lab's ComfyUIs. The pages about a server (its drives,
+its apps, its updates) read the container itself, which has none, so they show their empty
+states. Reading a cluster's own nodes and apps into those pages is not built yet.
+
+**Who can reach it** is the ingress's to decide, not the board's. Behind an ingress every
+request arrives from the ingress's own address inside the cluster, which is a private one,
+so the board's "home network only" checks pass for everyone the ingress lets through.
+Give the board an entry point that only your home network or your lab's private network
+can reach. Wrong sign-in codes are counted for the ingress as one device: five in a
+minute, for everyone together.
+
+`[board] address` also suits a server behind a reverse proxy of your own:
+
+```toml
+[board]
+address = "board.mylab.example"
+```
+
+It is one whole DNS name in lower case. The board then accepts a sign-in and every other
+change sent to that name as well as to its own two, tells the page that the lab lives
+there, and `bromigos server board code` names it. Only root's file can add a name: nothing
+a browser or a proxy sends can. A value that isn't a plain name is ignored.
+
+`board/container/test.sh IMAGE` starts the image and uses it: the page and the post's art,
+the door, a sign-in at the address and at no other, the signed-in board and its jobs, a
+stand-in ComfyUI followed, each part as its own user, and a restart. CI runs it on every
+pull request that touches the board's library or the image, and again before it publishes
+(`.github/workflows/board-image.yml`). The image is built after `packages` has published
+a main build, tagged with the board package's version and `edge`, and signed with cosign.
 
 ### Who can reach it
 

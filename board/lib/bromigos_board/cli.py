@@ -108,7 +108,7 @@ def cmd_code(a):
         print(json.dumps({"schema": SCHEMA, "code": code, "expires_at": exp}, indent=1))
         return EXIT_OK
     print(f"Sign-in code for the Lab board:  {code}\n")
-    print(f"Open https://{paths.hostname()}.local on your home network and type it in.")
+    print(f"Open https://{paths.home_address(paths.board_settings())} on your home network and type it in.")
     print(f"It works once, until {when(exp)} (10 minutes). Another code doesn't cancel this one.")
     return EXIT_OK
 

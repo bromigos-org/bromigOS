@@ -1,0 +1,42 @@
+# The Lab board in a container (docs/board.md, "In a container"): for a lab that is a cluster,
+# where the board is a workload behind the lab's own ingress and not a server's own page.
+#
+# It is the same board: the packages bromigos-board and bromigos-board-web from [bromigos], signed,
+# with the repository's key checked against the fingerprint install.sh pins. Nothing is built
+# here. What a server's systemd units do, the start script does (bromigos-board-container).
+#
+#   docker build -f board/container/Containerfile -t bromigos-board board/container
+#   docker run -p 8080:8080 -e BOARD_ADDRESS=board.mylab.example -v board:/var/lib/bromigos-board bromigos-board
+FROM archlinux:base
+
+LABEL org.opencontainers.image.source="https://github.com/bromigos-org/bromigOS" \
+      org.opencontainers.image.title="bromigos-board" \
+      org.opencontainers.image.description="The Lab board, bromigOS Server's web page, in a container: for a lab that is a cluster" \
+      org.opencontainers.image.licenses="MIT OR Apache-2.0"
+
+# stable | rc | edge: the channel the packages come from
+ARG CHANNEL=edge
+ARG FPR=393E7D54F7DE58FE75B97214947C9D6193D3DD8B
+ARG REPO=https://pkgs.bromigos.org
+
+RUN set -eu; \
+    case "$CHANNEL" in edge) sub= ;; stable|rc) sub="/$CHANNEL" ;; *) echo "CHANNEL is stable, rc or edge, not $CHANNEL" >&2; exit 2 ;; esac; \
+    pacman-key --init; pacman-key --populate archlinux; \
+    curl -fsSL "$REPO/bromigos/bromigos.asc" -o /tmp/bromigos.asc; \
+    got=$(gpg --batch --with-colons --import-options show-only --import /tmp/bromigos.asc | awk -F: '/^fpr:/ { print $10; exit }'); \
+    [ "$got" = "$FPR" ] || { echo "the repository's key is $got, not bromigOS's $FPR" >&2; exit 1; }; \
+    pacman-key --add /tmp/bromigos.asc; pacman-key --lsign-key "$FPR"; \
+    printf '\n[bromigos]\nSigLevel = Required DatabaseOptional\nServer = %s/$repo%s/$arch\n' "$REPO" "$sub" >> /etc/pacman.conf; \
+    pacman -Syu --noconfirm --needed bromigos-keyring bromigos-board python-pillow; \
+    pacman -Q bromigos-board bromigos-board-web bromigos-core > /etc/bromigos-board-container.versions; \
+    pacman -Scc --noconfirm; rm -rf /var/lib/pacman/sync /tmp/bromigos.asc /etc/pacman.d/gnupg/S.* /var/cache/pacman/pkg
+
+COPY bromigos-board-container /usr/local/bin/bromigos-board-container
+COPY Caddyfile /etc/bromigos-board-container/Caddyfile
+# `kubectl exec … -- bromigos-board code`: the sign-in code, as a server's `bromigos server board code`
+RUN chmod 0755 /usr/local/bin/bromigos-board-container && ln -s /usr/lib/bromigos/board/bromigos-board /usr/local/bin/bromigos-board
+
+# the board's sessions (a browser stays signed in for 30 days): keep them across restarts
+VOLUME /var/lib/bromigos-board
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/bromigos-board-container"]

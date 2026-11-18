@@ -576,6 +576,39 @@ class CsrfTests(Base):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(paths.names(), ("myserver.local", "home-myserver.local"))
 
+    def test_the_address_root_gave_it_and_no_other(self):
+        """[board] address: the board behind the lab's own reverse proxy answers at that name too,
+        once the reader has read it. Nothing else in the request can add a name."""
+        there = TestClient(self.app, base_url="https://board.mylab.example", headers={"x-forwarded-for": LAN})
+        mine = {"x-bromigos-board": "1", "origin": "https://board.mylab.example"}
+        code, _ = auth.new_code()
+        self.snapshot()                                   # no address: that name is anyone's
+        self.assertEqual(there.post("/api/session", json={"code": code}, headers=mine).status_code, 403)
+        self.path("etc/bromigos/server.toml").write_text('[board]\naddress = "Board.MyLab.example"\n')
+        self.assertEqual(there.post("/api/session", json={"code": code}, headers=mine).status_code, 403, "root's file alone: the reader hasn't read it")
+        self.assertEqual(self.snapshot()["settings"]["address"], "board.mylab.example")
+        # another name, the right name with another site's Origin, and a name the proxy made up: still refused
+        other = TestClient(self.app, base_url="https://evil.mylab.example", headers={"x-forwarded-for": LAN})
+        self.assertEqual(other.post("/api/session", json={"code": code}, headers={"x-bromigos-board": "1", "origin": "https://evil.mylab.example"}).status_code, 403)
+        self.assertEqual(there.post("/api/session", json={"code": code}, headers={**mine, "origin": "https://evil.example.org"}).status_code, 403)
+        self.assertEqual(there.post("/api/session", json={"code": code}, headers={**mine, "x-forwarded-host": "myserver.local", "origin": "http://board.mylab.example"}).status_code, 403)
+        self.assertTrue(auth.codes_waiting(), "a refused request doesn't use the code")
+        self.assertEqual(there.post("/api/session", json={"code": code}, headers=mine).status_code, 200)
+        # the server's own names still work, and the page is told where it lives
+        self.assertEqual(self.post_code(**PAGE)[0].status_code, 200)
+        self.assertEqual(there.get("/api/door").json()["lab"], {"name": "myserver", "address": "https://board.mylab.example"})
+        self.assertEqual(there.get("/api/board").json()["lab"]["address"], "https://board.mylab.example")
+
+    def test_an_address_that_isnt_a_name_is_no_address(self):
+        for bad in ('"myserver"', '"https://board.mylab.example"', '"board.mylab.example/x"', '"board.mylab.example:8443"', '"*.mylab.example"',
+                    '"board..example"', '"-board.mylab.example"', '" "', '7', '["board.mylab.example"]', '"' + "a" * 250 + '.example"'):
+            self.path("etc/bromigos/server.toml").write_text(f"[board]\naddress = {bad}\n")
+            self.assertIsNone(paths.board_settings()["address"], bad)
+        self.assertIsNone(paths.address_of(None))
+        self.assertIsNone(paths.address_of({"address": None}))
+        self.assertEqual(paths.home_address({}), "myserver.local")
+        self.assertEqual(paths.home_address({"address": "board.mylab.example"}), "board.mylab.example")
+
     def test_another_site_cant_ask(self):
         for h in ({"origin": "https://evil.example.org"}, {"origin": "http://myserver.local"},
                   {"origin": "https://home-myserver.local"}, {"origin": "null"},

@@ -1,0 +1,130 @@
+# The Lab board's container image (docs/board.md, "In a container"):
+#
+#   ghcr.io/bromigos-org/bromigos-board:edge and :<the board package's version>, signed with cosign
+#
+# The image is the published packages (bromigos-board, bromigos-board-web), nothing built here,
+# plus the start script that does what a server's systemd units do. So it is built after
+# `packages` has published a main build, and on a change to the image's own files.
+#
+# A pull request builds the image from the packages already published and runs this checkout's
+# board library and start script inside it (board/container/test.sh --checkout). GitHub's
+# runners, never the lab's: this repo is public.
+name: board image
+
+on:
+  workflow_run:
+    workflows: [packages]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "board/container/**"
+      - ".github/workflows/board-image.yml"
+  pull_request:
+    paths:
+      - "board/container/**"
+      - "board/lib/**"
+      - "board/caddy/**"
+      - "board/bromigos-board.tmpfiles"
+      - "board/bromigos-board.sysusers"
+      - ".github/workflows/board-image.yml"
+  workflow_dispatch:
+
+# One at a time: a newer build waits for the one before it.
+concurrency:
+  group: board-image-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: The board in a container
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: shellcheck
+        run: shellcheck board/container/bromigos-board-container board/container/test.sh
+      - name: Build from the published packages
+        run: docker build -f board/container/Containerfile -t bromigos-board:test board/container
+      - name: Start it and use it, with this checkout's board
+        run: board/container/test.sh bromigos-board:test --checkout
+
+  publish:
+    name: Build, test and publish
+    if: >-
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read     # whether `packages` is building this commit
+      packages: write
+      id-token: write   # cosign's keyless signature
+    steps:
+      # A commit that changes the board and the image's files starts both `packages` and this
+      # workflow. The image would then hold the packages from before the commit: this run stands
+      # aside, and the one `packages` starts when it has published builds the image.
+      - name: Is a package build for this commit on its way
+        id: wait
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          sleep 30
+          n=$(gh api "repos/$REPO/actions/workflows/packages.yml/runs?head_sha=$SHA&per_page=5" -q '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")] | length')
+          if [ "$n" != 0 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; echo "::notice::packages is building this commit: the image is built when it has published"; fi
+      - uses: actions/checkout@v5
+        if: steps.wait.outputs.skip != 'true'
+        with:
+          sparse-checkout: board/container
+      - name: Build from the published packages
+        id: build
+        if: steps.wait.outputs.skip != 'true'
+        run: |
+          docker build -f board/container/Containerfile -t bromigos-board:built board/container
+          # the tag: the board package's own version (0.1.5.r19.g05a1472), which is the build's
+          version=$(docker run --rm --entrypoint cat bromigos-board:built /etc/bromigos-board-container.versions | awk '$1 == "bromigos-board" { sub(/-[0-9]+$/, "", $2); print $2 }')
+          [[ $version =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::no version to tag the image with: '$version'"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          docker run --rm --entrypoint cat bromigos-board:built /etc/bromigos-board-container.versions
+      - name: Start it and use it
+        if: steps.wait.outputs.skip != 'true'
+        run: board/container/test.sh bromigos-board:built
+      - uses: docker/login-action@v3
+        if: steps.wait.outputs.skip != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push
+        id: push
+        if: steps.wait.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          for tag in "$VERSION" edge; do
+            docker tag bromigos-board:built "ghcr.io/bromigos-org/bromigos-board:$tag"
+            docker push "ghcr.io/bromigos-org/bromigos-board:$tag" | tee /tmp/push.log
+          done
+          echo "digest=$(sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' /tmp/push.log | tail -1)" >> "$GITHUB_OUTPUT"
+      - uses: sigstore/cosign-installer@v3
+        if: steps.wait.outputs.skip != 'true'
+      - name: Sign
+        if: steps.wait.outputs.skip != 'true'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "ghcr.io/bromigos-org/bromigos-board@$DIGEST"
+      - name: What was published
+        if: steps.wait.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.build.outputs.version }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "ghcr.io/bromigos-org/bromigos-board:$VERSION and :edge, $DIGEST" >> "$GITHUB_STEP_SUMMARY"
