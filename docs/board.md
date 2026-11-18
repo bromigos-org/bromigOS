@@ -731,7 +731,9 @@ the door, a sign-in at the address and at no other, the signed-in board and its 
 stand-in ComfyUI followed, each part as its own user, and a restart. CI runs it on every
 pull request that touches the board's library or the image, and again before it publishes
 (`.github/workflows/board-image.yml`). The image is built after `packages` has published
-a main build, tagged with the board package's version and `edge`, and signed with cosign.
+a main build, tagged `edge` and with the two packages' versions (the service's, then the
+page's revision: `0.1.5.r21.gefb41ad-web.r23`), and signed with cosign. A tag with versions
+never names two images; pin a deployment to it, or to the digest in the run's summary.
 
 ### Who can reach it
 

@@ -1,6 +1,6 @@
 # The Lab board's container image (docs/board.md, "In a container"):
 #
-#   ghcr.io/bromigos-org/bromigos-board:edge and :<the board package's version>, signed with cosign
+#   ghcr.io/bromigos-org/bromigos-board:edge and :<the two packages' versions>, signed with cosign
 #
 # The image is the published packages (bromigos-board, bromigos-board-web), nothing built here,
 # plus the start script that does what a server's systemd units do. So it is built after
@@ -90,8 +90,12 @@ jobs:
         if: steps.wait.outputs.skip != 'true'
         run: |
           docker build -f board/container/Containerfile -t bromigos-board:built board/container
-          # the tag: the board package's own version (0.1.5.r19.g05a1472), which is the build's
-          version=$(docker run --rm --entrypoint cat bromigos-board:built /etc/bromigos-board-container.versions | awk '$1 == "bromigos-board" { sub(/-[0-9]+$/, "", $2); print $2 }')
+          # the tag: the service's version and the page's revision (0.1.5.r21.gefb41ad-web.r23). Both,
+          # because a change to the page alone makes a new image, and a tag never names two images
+          version=$(docker run --rm --entrypoint cat bromigos-board:built /etc/bromigos-board-container.versions | awk '
+            $1 == "bromigos-board" { sub(/-[0-9]+$/, "", $2); service = $2 }
+            $1 == "bromigos-board-web" && match($2, /\.r[0-9]+\./) { page = substr($2, RSTART + 1, RLENGTH - 2) }
+            END { if (service != "" && page != "") print service "-web." page }')
           [[ $version =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::no version to tag the image with: '$version'"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
           docker run --rm --entrypoint cat bromigos-board:built /etc/bromigos-board-container.versions
