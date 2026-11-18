@@ -1,6 +1,7 @@
 // The post, Activity's hero: the lab's jobs as a station's crew at work, drawn from the job
 // records alone under the board's Content-Security-Policy. A crew member stands at each job that
-// runs or asks, a ring shows the job's own share done, a finish is shown once and only when the
+// runs or asks, a ring shows the job's own share done, every room wears its own name and no other
+// word is on the picture, a finish is shown once and only when the
 // page saw it, every figure, machine and room opens its job as the list does, and the crew never
 // leave the floor. Nothing here compares pictures: each test reads what the page built.
 import { readFileSync } from "node:fs";
@@ -11,6 +12,8 @@ import { open } from "./helpers";
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/${name}.json`, import.meta.url), "utf8"));
 const pack = sanePack(JSON.parse(readFileSync(new URL("../public/post/post.json", import.meta.url), "utf8")))!;
+/** The words on the picture: each room's own name, far to near, and the pad's. Nothing else is ever text there. */
+const NAMES = [...rooms(pack.map).map((R) => R.name), "landing pad"];
 const idOf = (name: string, kind: string, state: string) => (fixture(name).activity as { id: string; kind: string; state: string }[]).find((j) => j.kind === kind && j.state === state)!.id;
 
 /** Opens Activity on a fixture and waits for the station; `asked` is every path under /post/ the page fetched. */
@@ -60,8 +63,18 @@ test("a crew member at each job that runs or asks: the place, the ring and the h
   await expect(post.locator('.hit.mach[title^="The server rack. The lab\'s creation jobs are worked here"]')).toHaveAttribute("title", /Nothing is running here now\.$/);
   await expect(post.locator(".hit.pad")).toHaveAttribute("title", /^The landing pad\. Updates of the system and downloads arrive here, by shuttle/);
   await expect(post.locator(".ship")).toBeHidden();   // no job at the pad: no shuttle
-  // no words or numbers on the picture, nothing the policy would refuse, and only the loops this lab needs were fetched
-  expect((await post.innerText()).trim()).toBe("");
+  // every room wears its own name, and the pad its own; the plate of a room at work is the record's too
+  expect([...NAMES].sort()).toEqual(["Control room", "Galley", "Greenhouse", "Print shop", "Quarters", "Workshop", "landing pad"]);
+  await expect(post.locator(".sign")).toHaveText(NAMES);
+  await expect(post.locator(".sign.run")).toHaveText(["Print shop"]);
+  await expect(post.locator(".sign.run .sign-fill")).toHaveAttribute("style", /width: 40(\.0)?%/);
+  await expect(post.locator(".sign.ask")).toHaveText(["Workshop"]);
+  await expect(post.locator(".sign.turn")).toHaveCount(0);
+  // a plate is inside the picture, and the pointer goes through it
+  const plates = await post.locator(".sign").evaluateAll((all) => { const s = document.querySelector(".post .station")!.getBoundingClientRect(); return all.map((e) => { const r = e.getBoundingClientRect(); return { inside: r.left >= s.left && r.right <= s.right && r.top >= s.top && r.bottom <= s.bottom, through: getComputedStyle(e).pointerEvents === "none", hidden: e.getAttribute("aria-hidden") === "true" }; }); });
+  expect(plates.every((p) => p.inside && p.through && p.hidden)).toBe(true);
+  // no words on the picture but those names, no numbers, nothing the policy would refuse, and only the loops this lab needs were fetched
+  expect(await post.evaluate((e) => e.textContent)).toBe(NAMES.join(""));
   expect(await page.evaluate(() => document.querySelectorAll(".post style, .post [onclick], .post [src^='data:']").length)).toBe(0);
   const art = [...new Set(asked)];
   expect(art).toEqual(expect.arrayContaining(["/post/post.json", "/post/frame.webp", "/post/owl-pack.webp", "/post/m-press-run.webp", "/post/pod-e-work.mp4"]));

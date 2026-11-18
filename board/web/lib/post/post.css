@@ -13,6 +13,7 @@
 .post [hidden] { display: none !important; }
 /* the station and the top of the list under it share the first screen: as wide as the page allows, no taller than about three fifths of the window */
 .post .station { position: relative; isolation: isolate; overflow: hidden; aspect-ratio: var(--ar, 1.2); width: min(100%, calc(min(62svh, 700px) * var(--ar, 1.2))); }
+.post .station { container-type: inline-size; }
 .post.unknown .station { filter: saturate(.35) brightness(.6); }
 .post canvas.stars { position: absolute; inset: 0; width: 100%; height: 100%; animation: post-breathe var(--d, 3s) ease-in-out var(--w, 0s) infinite alternate; }
 .post .pods { position: absolute; inset: 0; pointer-events: none; }
@@ -68,6 +69,25 @@
 @keyframes post-ask { from { opacity: .45; } to { opacity: 1; } }
 /* a job that asks while all three crew are busy: the same amber ring, alone on the floor at its place */
 .post .mark { position: absolute; pointer-events: none; height: 5%; transform: translateY(-100%); }
+
+/* every room's name, on a plate over the corner where its back walls meet (the pad's hangs under it). It wears what
+   happens there: green while a job runs, with a line that fills with the job's own share done (a job that never said
+   one gets a short bar that slides), amber while one asks. The pointer passes through it. */
+.post .sign { position: absolute; z-index: 39990; pointer-events: none; transform: translate(-50%, -100%); display: grid; gap: .3em; padding: .4em .7em .36em; white-space: nowrap;
+  font: 700 clamp(8px, 1.3cqw, 15px) var(--mono, ui-monospace, monospace); letter-spacing: .1em; text-transform: uppercase; color: var(--white, #e8ffe0);
+  background: rgba(3, 9, 14, .82); border: 1px solid rgba(160, 190, 200, .38); border-radius: 3px; box-shadow: 0 2px 8px rgba(0, 0, 0, .55); }
+.post .sign.top { transform: translate(-50%, 0); }
+.post .sign.low { transform: translate(-100%, 0); }
+.post .sign::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: .9em; background: rgba(160, 190, 200, .38); }
+.post .sign.low::after { top: auto; bottom: 100%; left: 66%; }
+.post .sign-name { display: block; }
+.post .sign-bar { display: block; height: 2px; border-radius: 1px; overflow: hidden; background: rgba(160, 190, 200, .16); }
+.post .sign-fill { display: block; height: 100%; width: 0; background: var(--phosphor); box-shadow: 0 0 5px var(--phosphor); }
+.post .sign.run { color: var(--phosphor); border-color: var(--phosphor); }
+.post .sign.turn .sign-fill { width: 30% !important; animation: post-slide 1.4s ease-in-out infinite alternate; }
+.post .sign.ask { color: var(--amber); border-color: var(--amber); }
+.post .sign.ask .sign-fill { width: 100% !important; background: var(--amber); box-shadow: 0 0 5px var(--amber); animation: post-ask 1.6s ease-in-out infinite alternate; }
+@keyframes post-slide { from { transform: translateX(0); } to { transform: translateX(233%); } }
 
 /* the burst when a job ends, and when the shuttle sets down */
 .post svg.fx { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 40100; pointer-events: none; }
