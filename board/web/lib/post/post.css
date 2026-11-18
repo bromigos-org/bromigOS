@@ -11,8 +11,8 @@
   background: radial-gradient(120% 90% at 30% 20%, #0f1c3a, #070d1c 70%); }
 .post *, .post *::before, .post *::after { box-sizing: border-box; }
 .post [hidden] { display: none !important; }
-/* the whole station shows without scrolling past it: as wide as the page allows, no taller than most of the window */
-.post .station { position: relative; isolation: isolate; overflow: hidden; aspect-ratio: var(--ar, 1.2); width: min(100%, calc(min(78svh, 860px) * var(--ar, 1.2))); }
+/* the station and the top of the list under it share the first screen: as wide as the page allows, no taller than about three fifths of the window */
+.post .station { position: relative; isolation: isolate; overflow: hidden; aspect-ratio: var(--ar, 1.2); width: min(100%, calc(min(62svh, 700px) * var(--ar, 1.2))); }
 .post.unknown .station { filter: saturate(.35) brightness(.6); }
 .post canvas.stars { position: absolute; inset: 0; width: 100%; height: 100%; animation: post-breathe var(--d, 3s) ease-in-out var(--w, 0s) infinite alternate; }
 .post .pods { position: absolute; inset: 0; pointer-events: none; }
