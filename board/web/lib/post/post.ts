@@ -3,9 +3,10 @@
 // record's doing.
 //
 // Under `Content-Security-Policy: default-src 'self'`: every element is made with
-// createElement, text reaches the page only through `title`, `aria-label` and a data attribute
-// (never as markup), every position and size is set through the CSSOM, and every picture and
-// clip is asked for under the art folder's own address, by a name this module made.
+// createElement, a job's words reach the page only through `title`, `aria-label` and a data
+// attribute (never as markup), the only text drawn is a room's own name on its plate (the
+// drawing's word, set as text), every position and size is set through the CSSOM, and every
+// picture and clip is asked for under the art folder's own address, by a name this module made.
 import { CORRIDOR_Z, type Room, band, pad } from "./floor";
 import { type Figure, type Live, type Loop, type News, CRATES, Model } from "./model";
 import { type PlaceId, PLACES, RULES, placeRule } from "./places";
@@ -54,7 +55,10 @@ class Pic {
 }
 
 type Clip = "idle" | "work" | "done";
-interface RoomView { R: Room; glow: HTMLImageElement; clips: Partial<Record<Clip, HTMLVideoElement>>; clip: Clip | null; hit: HTMLElement; after: Element }
+interface Plate { node: HTMLElement; meter: HTMLElement; pct: string }
+interface RoomView { R: Room; glow: HTMLImageElement; clips: Partial<Record<Clip, HTMLVideoElement>>; clip: Clip | null; hit: HTMLElement; after: Element; plate: Plate }
+/** How far above a room's back corner its walls end, and so where its name plate stands, in the station's pixels. */
+const WALL = 86;
 interface MachView { place: PlaceId; pics: Record<"idle" | "run" | "done", Pic>; shown: "idle" | "run" | "done"; hit: HTMLElement; mark: SVGSVGElement }
 interface FigView { c: Figure; node: HTMLElement; pics: Partial<Record<Loop, Pic>>; shown: Loop | null; ring: SVGSVGElement; fill: SVGEllipseElement; hit: HTMLElement; spark: number; crate: HTMLImageElement | null; held: number }
 
@@ -77,6 +81,7 @@ export class Post implements PostHandle {
   private padHit!: HTMLElement;
   private padGlow!: HTMLImageElement;
   private padMark!: SVGSVGElement;
+  private padPlate!: Plate;
   private ship!: { node: HTMLElement; shade: HTMLElement; pics: { idle: Pic; fly: Pic }; fold: HTMLElement; frames: number; frame: number; strip: string | null; warmed: boolean };
   private crates: HTMLImageElement[] = [];
   private lights: Animation[] = [];
@@ -161,7 +166,10 @@ export class Post implements PostHandle {
       pods.append(still, glow);
       const hit = this.hit(hits, "room");
       this.shape(hit, R.poly);
-      this.roomViews.push({ R, glow, clips: {}, clip: null, hit, after: still });
+      // its name, on a plate over the corner where its two back walls meet. A room at the top of the picture has no
+      // space over its walls: its plate hangs from the picture's edge instead, so it is whole at any size
+      const back = R.poly.reduce((a, b) => (b[1] < a[1] ? b : a)), high = back[1] - WALL < 150;
+      this.roomViews.push({ R, glow, clips: {}, clip: null, hit, after: still, plate: this.plate(stage, R.name, [back[0], high ? Math.max(6, back[1] - WALL - 65) : back[1] - WALL], high ? "top" : "") });
     });
 
     // the machines: separate pieces with their own idle, running and finished loops
@@ -192,6 +200,9 @@ export class Post implements PostHandle {
     this.padHit = this.hit(hits, "pad");
     this.shape(this.padHit, map.padPoly);
     this.padMark = this.mark(m.spots.pad.at, CORRIDOR_Z + 1 + Math.round(m.spots.pad.at[1]));
+    // the pad's hangs under it, from the pad's right edge inward: the pad is at the picture's side
+    const low = map.padPoly.reduce((a, b) => (b[1] > a[1] ? b : a));
+    this.padPlate = this.plate(stage, placeRule("pad").name, [Math.max(...map.padPoly.map((q) => q[0])), low[1] + 16], "low");
 
     // the shuttle: parked on its legs, flying with them folded away, and between the two one strip of frames of them folding
     const node = el("div", "ship"), shade = el("div", "shipshade"), fold = el("div", "fold");
@@ -261,6 +272,29 @@ export class Post implements PostHandle {
     h.addEventListener("keydown", (e) => { if (h.dataset.job && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); go(); } });
     layer.append(h);
     return h;
+  }
+
+  /**
+   * A room's name plate (the pad's hangs under it). It is the picture's own label and says nothing
+   * the hints don't, so it is hidden from a screen reader and the pointer passes through it to
+   * whatever is behind.
+   */
+  private plate(stage: HTMLElement, name: string, at: Pt, how: "" | "top" | "low"): Plate {
+    const node = el("div", `sign${how && ` ${how}`}`), words = el("span", "sign-name"), bar = el("span", "sign-bar"), meter = el("span", "sign-fill");
+    words.textContent = name.slice(0, 28);            // text, whatever the drawing called the room, and no longer than a plate
+    node.setAttribute("aria-hidden", "true");
+    css(node, { left: this.left(at), top: this.top(at) });
+    bar.append(meter); node.append(words, bar); stage.append(node);
+    return { node, meter, pct: "" };
+  }
+
+  /** A plate wears what happens at its place: green with the job's own share done while one runs, amber while one asks. */
+  private wear(p: Plate, jobs: Live[]): void {
+    const known = this.model!.known, run = known ? jobs.find((L) => L.mode === "run") : undefined, ask = known && jobs.some((L) => L.mode === "ask");
+    p.node.classList.toggle("run", !!run); p.node.classList.toggle("ask", !run && ask);
+    p.node.classList.toggle("turn", !!run && run.job.pct === null);
+    const pct = run && run.job.pct !== null ? `${run.job.pct.toFixed(1)}%` : "0%";
+    if (pct !== p.pct) { p.pct = pct; css(p.meter, { width: pct }); }
   }
 
   /** A hit area the shape of a patch of floor: its box, cut to its corners. */
@@ -456,6 +490,7 @@ export class Post implements PostHandle {
       v.glow.classList.toggle("flash", m.flash(v.R, "ok"));
       v.hit.classList.toggle("failed", m.flash(v.R, "fail"));
       this.say(v.hit, m.inRoom(v.R), () => this.roomHint(v.R), { R: v.R });
+      this.wear(v.plate, m.inRoom(v.R));
     }
     for (const v of this.machViews) {
       const want = m.machineLook(v.place);
@@ -471,6 +506,7 @@ export class Post implements PostHandle {
     this.padHit.classList.toggle("failed", m.flash(null, "fail"));
     this.toggle(this.padMark, m.asksAlone("pad"));
     this.say(this.padHit, m.at("pad"), () => `The ${padRule.name}. ${padRule.says} Nothing is arriving now.`);
+    this.wear(this.padPlate, m.at("pad"));
     for (const v of this.figViews) {
       const c = v.c, L = c.job ? m.live.get(c.job) : undefined;
       this.say(v.hit, L ? [L] : [], () => (c.haul ? `${c.name} is setting down the last crate on the ${placeRule("pad").name}.` : c.state === "walk" ? `${c.name} is walking back to the ${m.restName}. ${RULES.rest}` : `${c.name}, one of the crew, is resting in the ${m.restName}. ${RULES.rest}`), { c });

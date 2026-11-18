@@ -50,7 +50,8 @@ Run `bromigos update` to get them. The next release notes will include these hig
 - **The post, on the Lab board's Activity page.** Your lab's jobs are drawn as a small
   space station at work. A crew member walks to each job that is running and works there:
   at the server rack for a picture or a clip, at the press for a backup, at the print
-  bench for an app. A ring of light under them fills as the job goes. Press a crew
+  bench for an app. A ring of light under them fills as the job goes. Every room has its
+  name on a plate, which lights while a job runs there. Press a crew
   member, a machine or a room to open its job. It shows only what your jobs really say,
   and the list of jobs is still under it.
 - `bromigos activity` and the Lab board say which AI agent asked for a job, when one did:

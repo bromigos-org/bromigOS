@@ -7,14 +7,18 @@
 // same treatment: it is the page's own file, and it is still checked at the door.
 import { readFileSync, readdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { rooms } from "../lib/post/floor";
+import { sanePack } from "../lib/post/sane";
 import { open } from "./helpers";
 
 const SRC = new URL("../lib/post/", import.meta.url).pathname;
 const PAYLOAD = `x"'><i data-pwn="1"></i><img src=x onerror=1>&lt;`;
 const files = readdirSync(SRC).filter((f) => f.endsWith(".ts"));
+/** The only words the picture ever shows: each room's own name on its plate, far to near, and the pad's. */
+const NAMES = [...rooms(sanePack(JSON.parse(readFileSync(new URL("../public/post/post.json", import.meta.url), "utf8")))!.map).map((R) => R.name), "landing pad"];
 
-// The module makes every element with createElement and hands text to the page only as an
-// attribute's value. No file writes markup, sets a handler or an address from a string, adds a
+// The module makes every element with createElement and hands a job's text to the page only as
+// an attribute's value; the one text it draws is a room's own name, set as text on its plate. No file writes markup, sets a handler or an address from a string, adds a
 // style or a script element, or names another site or a data: URL.
 test("the module writes no markup", ({}, info) => {
   test.skip(info.project.name !== "desktop", "no browser needed: once is enough");
@@ -96,7 +100,7 @@ for (const pass of [1, 2, 3])
       const last = seen[seen.length - 1];
       const out = {
         problems: [...problems].sort(), errors, went,
-        words: seen.map((r) => (r.textContent ?? "").trim()).join(""),
+        words: [...new Set(seen.map((r) => r.textContent ?? ""))],
         titles: [...last.querySelectorAll("[title]")].map((e) => e.getAttribute("title") ?? ""),
         jobs: [...last.querySelectorAll("[data-job]")].map((e) => e.getAttribute("data-job")),
         unknown: last.classList.contains("unknown"),
@@ -107,7 +111,7 @@ for (const pass of [1, 2, 3])
     expect(found.problems, "what the payload did").toEqual([]);
     expect(found.errors, "the station was drawn").toEqual([]);
     expect(thrown, "errors thrown on the page").toEqual([]);
-    expect(found.words, "no words on the picture, hostile or not").toBe("");
+    expect(found.words, "no words on the picture but the rooms' own names, hostile jobs or not").toEqual([NAMES.join("")]);
     expect(found.left, "unmount leaves nothing behind").toBe(0);
     if (pass === 1) {
       // the text is there to read, as text: every drawn job's title in a hint, and its id on the button
@@ -153,7 +157,7 @@ test("hostile job records through the page: the hero and the list", async ({ pag
   await expect(post.locator(".hit.fig[data-job]")).toHaveCount(3);
   await expect(post.locator('.hit.fig[title^="OWL is working at the press: "]')).toHaveAttribute("title", new RegExp(`“${PAYLOAD.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}” \\(step 2 of 2 · `));
   await expect(post.locator('.hit.mach[title^="The terminal: "]')).toHaveCount(1);
-  expect((await post.innerText()).trim()).toBe("");
+  expect(await post.evaluate((e) => e.textContent)).toBe(NAMES.join(""));
   await expect(page.locator(".ac-group .job").first()).toContainText(PAYLOAD);
   expect(await page.locator("[data-pwn], [onerror], img[src='x' i]").count()).toBe(0);
   expect(errors).toEqual([]);
@@ -181,7 +185,9 @@ test("a hostile drawing: its words stay text, and a name that isn't one stops it
   await expect(post.locator(".station")).toBeVisible({ timeout: 30_000 });
   await expect(post.locator(".hit.room").first()).toHaveAttribute("title", new RegExp(`^The ${PAYLOAD.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   expect(await page.locator("[data-pwn], [onerror], img[src='x' i]").count()).toBe(0);
-  expect((await post.innerText()).trim()).toBe("");
+  // each room's plate carries the name as text, cut to a plate's length; the pad's name is the module's own
+  await expect(post.locator(".sign")).toHaveText([...NAMES.slice(0, -1).map(() => PAYLOAD.slice(0, 28)), "landing pad"]);
+  expect(await post.evaluate((e) => e.querySelectorAll(".sign *").length)).toBe(NAMES.length * 3);
   expect(errors).toEqual([]);
   expect(await csp()).toEqual([]);
   // names that would reach another address: the drawing is refused whole, and the plain state stands

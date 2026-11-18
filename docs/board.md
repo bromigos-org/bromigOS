@@ -326,9 +326,14 @@ stops a job.
   given. With a fourth job at once, that job's room and machine run with nobody standing
   there. A job that asks with nobody free gets the amber ring alone at its place.
 - **With no job, the crew rest in the quarters**, and the rooms play their quiet clips.
-- **The picture has no words or numbers on it.** Hover over a crew member, a machine or a
-  room to read what it is. One with a job says the job's own title, its step and its share
-  done. Press it to open that job, as the list under it does.
+- **Every room wears its name.** A plate over each room says what it is (QUARTERS,
+  CONTROL ROOM, GREENHOUSE, WORKSHOP, PRINT SHOP, GALLEY), and one under the pad says
+  LANDING PAD. A plate turns green while a job runs in its room, with a line under the
+  name that fills with the job's own share done, and amber while a job there asks.
+- **Those names are the only words on the picture, and there are no numbers.** Hover
+  over a crew member, a machine or a room to read what it is. One with a job says the
+  job's own title, its step and its share done. Press it to open that job, as the list
+  under it does. A job's words are never drawn on the picture.
 
 ### Which job goes where
 
@@ -559,7 +564,8 @@ Content-Security-Policy.
 - **The post** (`tests/post.spec.ts`, `tests/post-unit.spec.ts`,
   `tests/post-hostile.spec.ts`):
   - On the page: a crew member at each job that runs or asks, with the record's own
-    share done on its ring and its title in the hint; a figure, a machine and a room
+    share done on its ring and its title in the hint; every room's name on its plate,
+    inside the picture, and no other word on it; a figure, a machine and a room
     opening the job; a job that finishes or fails while the page is open, shown once;
     nothing replayed on load; four jobs for three crew; the loop stopping off screen and
     while the page is hidden; reduced motion; and the plain state when the script or the
