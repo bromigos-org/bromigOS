@@ -79,7 +79,8 @@ function dock(map: PostMap, d: Dock): Room | null {
   };
   T.anchors.forEach((a, n) => {
     const kind = machines[n];
-    if (kind) out.machines.push({ kind, n, at: G(a), stand: G([a[0] + 1.3, a[1] + 0.5]), tall: map.machTall[kind] ?? 0.07 });
+    // a machine's front faces the lower left of the picture: whoever works it stands just in front of it
+    if (kind) out.machines.push({ kind, n, at: G(a), stand: G([a[0] + 0.4, a[1] + 1.4]), tall: map.machTall[kind] ?? 0.07 });
   });
   return out;
 }

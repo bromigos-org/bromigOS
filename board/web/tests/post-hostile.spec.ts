@@ -186,12 +186,15 @@ test("a hostile drawing: its words stay text, and a name that isn't one stops it
   expect(await csp()).toEqual([]);
   // names that would reach another address: the drawing is refused whole, and the plain state stands
   mode = "addresses";
+  asked.length = 0;
   await page.reload();
   await expect(page.locator(".post-wait .post-line")).toHaveText("1 JOB RUNNING · 1 NEEDS YOU");
   await page.waitForTimeout(800);
   await expect(page.locator(".post-hero.on")).toHaveCount(0);
   await expect(page.locator(".post .station")).toHaveCount(0);
-  const origin = new URL(page.url()).origin;
-  expect(asked.filter((u) => !u.startsWith(origin) || u.includes("..") || u.includes("example.invalid"))).toEqual([]);
+  // nothing was asked of another site, and of the art folder only the drawing itself: no picture by a name from it
+  const origin = new URL(page.url()).origin, urls = asked.map((u) => new URL(u));
+  expect(urls.filter((u) => u.origin !== origin).map(String)).toEqual([]);
+  expect([...new Set(urls.map((u) => u.pathname).filter((p) => p.startsWith("/post/") || /\.(webp|mp4)$/.test(p)))]).toEqual(["/post/post.json"]);
   expect(await csp()).toEqual([]);
 });

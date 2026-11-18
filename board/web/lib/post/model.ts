@@ -124,7 +124,7 @@ export class Model {
       for (const m of R.machines) {
         const id = m.kind as PlaceId;
         if (spots[id]) continue;
-        spots[id] = { place: id, room: R, machine: m, stops: [stopId.machine(R.id, m.n), stopId.spot(R.id), stopId.inside(R.id)], face: R.flip ? 1 : -1, at: m.stand };
+        spots[id] = { place: id, room: R, machine: m, stops: [stopId.machine(R.id, m.n), stopId.spot(R.id), stopId.inside(R.id)], face: R.flip ? -1 : 1, at: m.stand };
       }
     this.spots = spots;
     // the crew rest in the first quarters there is, or out on the pad
