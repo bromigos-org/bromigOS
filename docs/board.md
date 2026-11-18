@@ -350,8 +350,8 @@ A job that is a part of another, such as one app's update inside "update every a
 drawn as the whole job, not beside it. Two jobs at one place stand apart: the second crew
 member takes the room's own spot.
 
-At every place the crew member stands at the thing, faces it and does the task. On the
-pad the task is carried. Once the shuttle is down, the crew member reaches into it with
+At a machine the crew member stands beside it, facing it, in that work's own loop. On the
+pad the work is carried. Once the shuttle is down, the crew member reaches into it with
 their back to you, walks a crate over to a stack, bends to set it down and goes back for
 the next. The trips go on for as long as the job runs. They say nothing about how far it
 is: the ring still shows the record's own share. When the job ends, the crate in hand is
