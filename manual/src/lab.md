@@ -127,6 +127,24 @@ equipment uses no electricity. An outlet shared by several devices measures thei
 combined load. A new PDU needs to be installed, adopted and configured
 before these readings are available.
 
+There are two places the readings can come from. Pick one in the `[power]` table of
+`~/.config/bromigos/homelab.toml`:
+
+- **Your metrics.** If your lab already exports its UniFi network to Prometheus with
+  unpoller, the PDU's readings are there, and bromigOS needs no key for the controller:
+
+  ```toml
+  [power]
+  readings = "metrics"
+  # device = "Rack PDU"    # only when your metrics hold more than one PDU: its name
+  ```
+
+  The readings are what the controller last reported, so they can be a few minutes
+  old, and they don't say whether an outlet is switched on. USB outlets show as
+  **not metered**.
+- **The controller.** Set `endpoint` and an API key reference, as described in the
+  developer notes (`docs/lab.md`). This also shows each outlet's switch state.
+
 **Shut the operating system down cleanly before switching its outlet off.** An outlet
 turning on supplies electricity; the machine only boots automatically if its firmware
 is configured to do so. Outlet numbers do not establish a safe shutdown or startup

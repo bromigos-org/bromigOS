@@ -33,6 +33,11 @@ Run `bromigos update` to get them. The next release notes will include these hig
   before it's used, and upgrades keep the model they replace for 14 days. Tick it in the
   Server installer, Add it on the Lab board, or see
   [The Creation studio](lab.md#the-creation-studio).
+- `bromigos lab power status` can read a rack PDU from your lab's metrics. If your lab
+  already exports its UniFi network to Prometheus with unpoller, set
+  `readings = "metrics"` under `[power]` and it shows every outlet's watts, amps and
+  volts and the total, with no controller key on your computer. See
+  [PDU power](lab.md#pdu-power).
 - `bromigos activity` shows what your lab's ComfyUI is making, beside the computer's own
   jobs: each generation with its workflow, its stage and the queue behind it, and the runs of
   tools that make assets in several steps. `bromigos activity watch` follows them live, with

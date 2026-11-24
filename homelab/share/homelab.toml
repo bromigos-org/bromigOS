@@ -91,6 +91,13 @@ show_hosts = []
 # join_bundle = ""       # only after `join --stick`: one join code the next Field Kit stick carries
 #                        # (docs/lab-network.md)
 
+# A rack PDU for `bromigos lab power status` (manual: The lab, "PDU power"). With unpoller
+# exporting your UniFi network to a metrics source above, no controller key is needed:
+#
+#   [power]
+#   readings = "metrics"
+#   # device = "Rack PDU"    # only when the metrics hold more than one PDU
+
 # Panels with no code (docs/homelab.md, "Panels without code"): a [[panel]] is a desktop widget built
 # from a capability. kind = gauge | sparkline | stat | status | table.
 #
