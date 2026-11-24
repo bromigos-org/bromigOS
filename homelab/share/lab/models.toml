@@ -9,9 +9,9 @@
 # and MTEB leaderboards, OmniDocBench and olmOCR-bench, vendor and community benchmarks (each
 # model's `cite`). Figures marked est. in vram_note are computed, not measured.
 format = 1
-version = 9
+version = 10
 researched = "2026-10-09"
-refreshed = "2026-11-16"
+refreshed = "2026-11-24"
 
 [licence.apache-2]
 hub = ["apache-2.0"]
@@ -10596,6 +10596,7 @@ dismissed = "a robot action model (Hub pipeline: robotics), not an image model; 
 
 
 
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-action-so101"
 kind = "newer in family"
@@ -10610,6 +10611,7 @@ review = true
 found = "2026-10-09"
 state = "dismissed"
 dismissed = "a robot action model (Hub pipeline: robotics), not an image model; FLUX.2 [dev] stays"
+
 
 
 
@@ -10630,6 +10632,7 @@ dismissed = "a robot action model (Hub pipeline: robotics), not an image model; 
 
 
 
+
 [[pending]]
 id = "hf:Aleph-Alpha/Kolibri-1-BF16"
 kind = "new model"
@@ -10643,6 +10646,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 
 
@@ -10662,6 +10666,7 @@ state = "pending review"
 
 
 
+
 [[pending]]
 id = "hf:NaiveAI/Naive-N0.5-Flash"
 kind = "new model"
@@ -10678,6 +10683,7 @@ state = "pending review"
 
 
 
+
 [[pending]]
 id = "hf:TaichuAI/ZDTaichu5.0-9B"
 kind = "new model"
@@ -10690,6 +10696,7 @@ stack = "needs support: no vLLM, llama.cpp, Ollama or MLX support on the Hub yet
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 
 
@@ -10709,6 +10716,7 @@ state = "pending review"
 
 
 
+
 [[pending]]
 id = "hf:m-a-p/MERT-v2-FullSong"
 kind = "new model"
@@ -10722,6 +10730,7 @@ licence = "cc-by-nc-4.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 
 
@@ -10741,6 +10750,7 @@ state = "pending review"
 
 
 
+
 [[pending]]
 id = "hf:SupraLabs/Supra2-IMG"
 kind = "new model"
@@ -10754,6 +10764,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 
 
@@ -10773,6 +10784,7 @@ state = "pending review"
 
 
 
+
 [[pending]]
 id = "hf:Cactus-Compute/whistle"
 kind = "new model"
@@ -10786,6 +10798,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 
 
@@ -10805,6 +10818,7 @@ state = "pending review"
 
 
 
+
 [[pending]]
 id = "hf:moondream/parakeet-ultra"
 kind = "new model"
@@ -10818,6 +10832,7 @@ licence = "cc-by-4.0"
 review = true
 found = "2026-10-09"
 state = "pending review"
+
 
 
 
@@ -10836,6 +10851,7 @@ found = "2026-10-09"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:AxiomicLabs/GPT-X3-150M"
 kind = "new model"
@@ -10849,6 +10865,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 
 
 [[pending]]
@@ -10866,6 +10883,7 @@ found = "2026-10-12"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:tencent/Youtu-Parsing-Omni"
 kind = "new model"
@@ -10879,6 +10897,7 @@ licence = "other"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 
 
 [[pending]]
@@ -10896,6 +10915,7 @@ found = "2026-10-12"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:speridlabs/iris-3b"
 kind = "new model"
@@ -10909,6 +10929,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-12"
 state = "pending review"
+
 
 
 [[pending]]
@@ -10926,6 +10947,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-image-klein-pup"
 kind = "newer in family"
@@ -10939,6 +10961,7 @@ model = "flux2-dev"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -10956,6 +10979,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:black-forest-labs/flux-3-image-klein"
 kind = "newer in family"
@@ -10969,6 +10993,7 @@ model = "flux2-dev"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -10986,6 +11011,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:tencent/Hy-Memory-30B-A3B"
 kind = "new model"
@@ -10999,6 +11025,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11016,6 +11043,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16"
 kind = "new model"
@@ -11029,6 +11057,7 @@ licence = "other"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11046,6 +11075,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:meta-models/Muse-Spark-Open-816B-A42B"
 kind = "new model"
@@ -11059,6 +11089,7 @@ licence = "other"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11076,6 +11107,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:OpenMOSS-Team/MOSS-Image-Base"
 kind = "new model"
@@ -11089,6 +11121,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11106,6 +11139,7 @@ found = "2026-10-19"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:cloud0day3/antalia-mini"
 kind = "new model"
@@ -11119,6 +11153,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-19"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11136,6 +11171,7 @@ found = "2026-10-26"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:InternScience/Sage-A1.5"
 kind = "new model"
@@ -11149,6 +11185,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11166,6 +11203,7 @@ found = "2026-10-26"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:ornith-ai/Ornith-1.5-122B"
 kind = "new model"
@@ -11179,6 +11217,7 @@ licence = "mit"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11196,6 +11235,7 @@ found = "2026-10-26"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:nvidia/Nemotron-3.5-Parse"
 kind = "new model"
@@ -11209,6 +11249,7 @@ licence = "openmdw-1.1"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11226,6 +11267,7 @@ found = "2026-10-26"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:inclusionAI/Ming-3.0-asr-tiny"
 kind = "new model"
@@ -11239,6 +11281,7 @@ licence = "mit"
 review = true
 found = "2026-10-26"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11256,6 +11299,7 @@ found = "2026-10-26"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:LiquidAI/LFM3-1.7B-Base"
 kind = "new model"
@@ -11269,6 +11313,7 @@ licence = "other"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11286,6 +11331,7 @@ found = "2026-11-02"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:sensenova/SenseNova-Loop-9B-Preview"
 kind = "new model"
@@ -11299,6 +11345,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11316,6 +11363,7 @@ found = "2026-11-02"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:alibaba-pai/MiniMax-H3-Fun-Controlnet-Union-2.0"
 kind = "new model"
@@ -11329,6 +11377,7 @@ licence = "other"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11346,6 +11395,7 @@ found = "2026-11-02"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:third-intelligence/Haas-ja-v1.0"
 kind = "new model"
@@ -11359,6 +11409,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-02"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11376,6 +11427,7 @@ found = "2026-11-09"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:moonshotai/Kimi-K3.1-Pro"
 kind = "new model"
@@ -11389,6 +11441,7 @@ licence = "other"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11406,6 +11459,7 @@ found = "2026-11-09"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:maritaca-ai/S5-nano"
 kind = "new model"
@@ -11419,6 +11473,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 
 
 [[pending]]
@@ -11436,6 +11491,7 @@ found = "2026-11-09"
 state = "pending review"
 
 
+
 [[pending]]
 id = "hf:hyz317/HairDeck"
 kind = "new model"
@@ -11449,6 +11505,7 @@ licence = "apache-2.0"
 review = true
 found = "2026-11-09"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:hunyuan3d-v3-api"
@@ -11465,6 +11522,7 @@ tier_reason = "Published Output must be labelled as AI-generated (HY 3D ToS s.6.
 in_use = "nolgia (credits): the workstation and Wick (vector assets/holo), 2026-10-04; the rack made with it (bromigOS homelab/holo) was remade in Blender on 2026-11-11"
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:direct3d-s2"
@@ -11493,6 +11551,7 @@ name = "torchsparse"
 licence = "mit"
 licence_url = "https://github.com/mit-han-lab/torchsparse/blob/master/LICENSE"
 
+
 [[pending]]
 id = "survey:holopart"
 kind = "survey"
@@ -11510,6 +11569,7 @@ memory_gb = 10.0
 parts = true
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:qwen3.5-4b-glb-3d-coder"
@@ -11534,6 +11594,7 @@ name = "Qwen/Qwen3.5-4B"
 licence = "apache-2"
 licence_url = "https://huggingface.co/Qwen/Qwen3.5-4B"
 
+
 [[pending]]
 id = "survey:hi3d-1.0"
 kind = "survey"
@@ -11550,6 +11611,7 @@ tier_reason = "'Powered by Hi3D 1.0' label required in integrated products; noti
 memory_gb = 96.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:ultrashape-1.0"
@@ -11572,6 +11634,7 @@ state = "pending review"
 name = "Hunyuan3D-2.1 (base model; coarse stage)"
 licence = "tencent"
 licence_url = "https://huggingface.co/tencent/Hunyuan3D-2.1/blob/main/LICENSE"
+
 
 [[pending]]
 id = "survey:omnipart"
@@ -11601,6 +11664,7 @@ name = "PartField (NVIDIA)"
 licence = "nvidia-nc"
 licence_url = "https://github.com/nv-tlabs/PartField"
 
+
 [[pending]]
 id = "survey:hi3dgen"
 kind = "survey"
@@ -11628,6 +11692,7 @@ name = "Stable-X/yoso-normal-v1-8-1 (tagged Apache-2.0; a Stable Diffusion UNet 
 licence = "openrail-m"
 licence_url = "https://huggingface.co/Stable-X/yoso-normal-v1-8-1"
 
+
 [[pending]]
 id = "survey:hunyuan3d-part"
 kind = "survey"
@@ -11645,6 +11710,7 @@ memory_gb = 16.0
 parts = true
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:qwen-image-edit-2511-multiple-angles"
@@ -11667,6 +11733,7 @@ state = "pending review"
 name = "Qwen-Image-Edit-2511"
 licence = "apache-2"
 licence_url = "https://huggingface.co/Qwen/Qwen-Image-Edit-2511"
+
 
 [[pending]]
 id = "survey:moss-image"
@@ -11695,6 +11762,7 @@ name = "FLUX.2 VAE"
 licence = "apache-2"
 licence_url = "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/LICENSE.md"
 
+
 [[pending]]
 id = "survey:minimax-h3-image"
 kind = "survey"
@@ -11710,6 +11778,7 @@ tier = "no"
 tier_reason = "Excludes the US (and EU, UK, KR); name shown in the UI."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:moge-3-vitl"
@@ -11733,6 +11802,7 @@ name = "DINOv2"
 licence = "apache-2"
 licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
 
+
 [[pending]]
 id = "survey:da3-mono-large"
 kind = "survey"
@@ -11755,6 +11825,7 @@ name = "DINOv2"
 licence = "apache-2"
 licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
 
+
 [[pending]]
 id = "survey:depth-pro"
 kind = "survey"
@@ -11770,6 +11841,7 @@ tier = "no"
 tier_reason = "Research purposes only."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:flashvsr-plus"
@@ -11798,6 +11870,7 @@ name = "Wan 2.1 VAE"
 licence = "apache-2"
 licence_url = "https://github.com/Wan-Video/Wan2.2/blob/main/LICENSE.txt"
 
+
 [[pending]]
 id = "survey:relayvsr-x2"
 kind = "survey"
@@ -11820,6 +11893,7 @@ name = "Wan + FlashVSR"
 licence = "apache-2"
 licence_url = "https://www.apache.org/licenses/LICENSE-2.0"
 
+
 [[pending]]
 id = "survey:rife-4.26-native"
 kind = "survey"
@@ -11837,6 +11911,7 @@ memory_gb = 1.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:gimm-vfi"
 kind = "survey"
@@ -11851,6 +11926,7 @@ tier = "no"
 tier_reason = "Non-commercial."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:ming-3.0-tts-tiny"
@@ -11884,6 +11960,7 @@ name = "Ming-omni-tts tokenizer"
 licence = "mit"
 licence_url = "https://huggingface.co/inclusionAI"
 
+
 [[pending]]
 id = "survey:moss-soundeffect-v2"
 kind = "survey"
@@ -11911,6 +11988,7 @@ name = "DAC-type 48k VAE (origin unstated)"
 licence = "unknown"
 licence_url = ""
 
+
 [[pending]]
 id = "survey:ace-step-1.5"
 kind = "survey"
@@ -11933,6 +12011,7 @@ name = "Qwen3 0.6B-4B planners"
 licence = "apache-2"
 licence_url = "https://huggingface.co/Qwen"
 
+
 [[pending]]
 id = "survey:magenta-realtime-2"
 kind = "survey"
@@ -11949,6 +12028,7 @@ tier_reason = "CC-BY with simple credit."
 memory_gb = 6.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:rf-detr-m"
@@ -11972,6 +12052,7 @@ name = "DINOv2"
 licence = "apache-2"
 licence_url = "https://github.com/facebookresearch/dinov2/blob/main/LICENSE"
 
+
 [[pending]]
 id = "survey:d-fine"
 kind = "survey"
@@ -11987,6 +12068,7 @@ tier_reason = "Apache-2.0; Objects365 weights may carry dataset terms."
 memory_gb = 1.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:owlv2"
@@ -12005,6 +12087,7 @@ memory_gb = 2.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:yunet-sface"
 kind = "survey"
@@ -12020,6 +12103,7 @@ tier_reason = "MIT / Apache-2.0; training data unnamed."
 memory_gb = 0.1
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:siglip2"
@@ -12037,6 +12121,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 3.8
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:minicpm-v-4.6"
@@ -12065,6 +12150,7 @@ name = "SigLIP2-400M"
 licence = "apache-2"
 licence_url = "https://huggingface.co/google/siglip2-so400m-patch14-384"
 
+
 [[pending]]
 id = "survey:nuextract3"
 kind = "survey"
@@ -12087,6 +12173,7 @@ name = "Qwen3.5-4B"
 licence = "apache-2"
 licence_url = "https://huggingface.co/Qwen/Qwen3.5-4B"
 
+
 [[pending]]
 id = "survey:qwen3-reranker-0.6b"
 kind = "survey"
@@ -12104,6 +12191,7 @@ memory_gb = 1.5
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:ettin-reranker"
 kind = "survey"
@@ -12120,6 +12208,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 0.5
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:nemotron-3.5-rerank-8b"
@@ -12143,6 +12232,7 @@ name = "Ministral-3-8B"
 licence = "apache-2"
 licence_url = "https://huggingface.co/mistralai"
 
+
 [[pending]]
 id = "survey:chronos-2"
 kind = "survey"
@@ -12159,6 +12249,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 0.5
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:tspulse"
@@ -12177,6 +12268,7 @@ memory_gb = 0.1
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:toto-open-base"
 kind = "survey"
@@ -12193,6 +12285,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 0.6
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:shieldstral-1.0-3b"
@@ -12216,6 +12309,7 @@ name = "Ministral-3-3B"
 licence = "apache-2"
 licence_url = "https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512"
 
+
 [[pending]]
 id = "survey:qwen3guard-gen-0.6b"
 kind = "survey"
@@ -12233,6 +12327,7 @@ memory_gb = 1.5
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:granite-guardian-3.3-8b"
 kind = "survey"
@@ -12249,6 +12344,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 9.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:personaplex-7b"
@@ -12272,6 +12368,7 @@ name = "Moshi"
 licence = "cc-by-4"
 licence_url = "https://huggingface.co/kyutai/moshiko-pytorch-bf16"
 
+
 [[pending]]
 id = "survey:audioseal"
 kind = "survey"
@@ -12288,6 +12385,7 @@ tier_reason = "MIT."
 memory_gb = 0.2
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:dots-tts-soar"
@@ -12316,6 +12414,7 @@ name = "CAM++"
 licence = "apache-2"
 licence_url = "https://github.com/modelscope/3D-Speaker"
 
+
 [[pending]]
 id = "survey:nemotron-3-diarization"
 kind = "survey"
@@ -12332,6 +12431,7 @@ tier_reason = "OpenMDW-1.1 (between tiers; treated as clean). Avoid the -preview
 memory_gb = 0.4
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:pyannote-community-1"
@@ -12350,6 +12450,7 @@ memory_gb = 1.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:ced-base"
 kind = "survey"
@@ -12366,6 +12467,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 0.5
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:clap-music-speech"
@@ -12384,6 +12486,7 @@ memory_gb = 1.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:moonshine-streaming"
 kind = "survey"
@@ -12401,6 +12504,7 @@ memory_gb = 0.2
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:microwakeword"
 kind = "survey"
@@ -12416,6 +12520,7 @@ tier_reason = "Apache-2.0."
 memory_gb = 0.01
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:gemma-4-e2b"
@@ -12434,6 +12539,7 @@ memory_gb = 3.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:seed-x-ppo-7b"
 kind = "survey"
@@ -12451,6 +12557,7 @@ memory_gb = 5.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:pyscenedetect"
 kind = "survey"
@@ -12465,6 +12572,7 @@ tier = "clean"
 tier_reason = "BSD-3."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:ettin-encoder-phishing"
@@ -12483,6 +12591,7 @@ memory_gb = 0.1
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:isolation-forest-flows"
 kind = "survey"
@@ -12497,6 +12606,7 @@ tier = "clean"
 tier_reason = "BSD-3."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:insightface-buffalo_l"
@@ -12515,6 +12625,7 @@ in_use = "bromigOS Server's Immich (photos) ML defaults"
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:blender-projection-bake"
 kind = "survey"
@@ -12529,6 +12640,7 @@ tier = "clean"
 tier_reason = "No model; our own paintings (made on Apache-2.0 models)."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:trellis-v1-textured"
@@ -12556,6 +12668,7 @@ name = "diff-gaussian-rasterization"
 licence = "inria-nc"
 licence_url = "https://github.com/graphdeco-inria/diff-gaussian-rasterization/blob/main/LICENSE.md"
 
+
 [[pending]]
 id = "survey:step1x-3d-texture"
 kind = "survey"
@@ -12582,6 +12695,7 @@ name = "Hunyuan3D-2 custom_rasterizer / differentiable_renderer code"
 licence = "tencent"
 licence_url = "https://github.com/Tencent-Hunyuan/Hunyuan3D-2/blob/main/LICENSE"
 
+
 [[pending]]
 id = "survey:hunyuan3d-2.1-paint"
 kind = "survey"
@@ -12597,6 +12711,7 @@ tier_reason = "Territory excludes EU/UK/KR; 1M MAU cap."
 memory_gb = 21.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:mv-adapter"
@@ -12624,6 +12739,7 @@ name = "Stable Diffusion 2.x"
 licence = "openrail-m"
 licence_url = "https://huggingface.co/stabilityai/stable-diffusion-2-1"
 
+
 [[pending]]
 id = "survey:seqtex"
 kind = "survey"
@@ -12650,6 +12766,7 @@ name = "nvdiffrast"
 licence = "nvidia-nc"
 licence_url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
 
+
 [[pending]]
 id = "survey:marigold-iid"
 kind = "survey"
@@ -12671,6 +12788,7 @@ name = "Stable Diffusion 2.x"
 licence = "openrail-m"
 licence_url = "https://huggingface.co/stabilityai/stable-diffusion-2-1"
 
+
 [[pending]]
 id = "survey:rgb-x"
 kind = "survey"
@@ -12686,6 +12804,7 @@ tier_reason = "Non-commercial."
 memory_gb = 8.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:materialanything"
@@ -12708,6 +12827,7 @@ name = "Stable Diffusion 2.x"
 licence = "openrail-m"
 licence_url = "https://huggingface.co/stabilityai/stable-diffusion-2-1"
 
+
 [[pending]]
 id = "survey:blender-remesh-uv"
 kind = "survey"
@@ -12722,6 +12842,7 @@ tier = "clean"
 tier_reason = "No model."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:instant-meshes"
@@ -12738,6 +12859,7 @@ tier_reason = "BSD-3."
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:autoremesher-1.0"
 kind = "survey"
@@ -12752,6 +12874,7 @@ tier = "clean"
 tier_reason = "MIT (its Blender bridge is GPL-3)."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:meshanything-v2"
@@ -12769,6 +12892,7 @@ memory_gb = 8.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:fastmesh"
 kind = "survey"
@@ -12785,6 +12909,7 @@ memory_gb = 12.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:bpt"
 kind = "survey"
@@ -12800,6 +12925,7 @@ tier_reason = "Territory excludes EU/UK/KR."
 memory_gb = 12.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:deepmesh"
@@ -12822,6 +12948,7 @@ name = "BPT"
 licence = "tencent"
 licence_url = "https://github.com/Tencent-Hunyuan/bpt"
 
+
 [[pending]]
 id = "survey:partuv"
 kind = "survey"
@@ -12843,6 +12970,7 @@ name = "PartField (NVIDIA)"
 licence = "nvidia-nc"
 licence_url = "https://github.com/nv-tlabs/PartField"
 
+
 [[pending]]
 id = "survey:blender-part-split"
 kind = "survey"
@@ -12859,6 +12987,7 @@ parts = true
 in_use = "the mascot's static-cast builds (scripts, parts/*.parts.json)"
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:sampart3d"
@@ -12887,6 +13016,7 @@ name = "SAM (v1)"
 licence = "apache-2"
 licence_url = "https://github.com/facebookresearch/segment-anything/blob/main/LICENSE"
 
+
 [[pending]]
 id = "survey:find3d"
 kind = "survey"
@@ -12903,6 +13033,7 @@ memory_gb = 8.0
 parts = true
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:partllm"
@@ -12927,6 +13058,7 @@ name = "Qwen3-VL"
 licence = "apache-2"
 licence_url = "https://huggingface.co/Qwen"
 
+
 [[pending]]
 id = "survey:segvigen"
 kind = "survey"
@@ -12949,6 +13081,7 @@ name = "TRELLIS.2 / DINOv3"
 licence = "dinov3"
 licence_url = "https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md"
 
+
 [[pending]]
 id = "survey:partfield"
 kind = "survey"
@@ -12966,6 +13099,7 @@ parts = true
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:blender-rigid-rig"
 kind = "survey"
@@ -12981,6 +13115,7 @@ tier_reason = "No model; rigid parts need no skin weights."
 in_use = "static-cast Blender builds (joint Empties)"
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:unirig"
@@ -13003,6 +13138,7 @@ name = "Michelangelo"
 licence = "gpl-3"
 licence_url = "https://github.com/NeuralCarver/Michelangelo"
 
+
 [[pending]]
 id = "survey:magicarticulate"
 kind = "survey"
@@ -13018,6 +13154,7 @@ tier_reason = "Apache-2.0 code; lineage below the code unverified."
 memory_gb = 4.6
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:puppeteer"
@@ -13039,6 +13176,7 @@ state = "pending review"
 name = "PartField (NVIDIA)"
 licence = "nvidia-nc"
 licence_url = "https://github.com/nv-tlabs/PartField"
+
 
 [[pending]]
 id = "survey:anigen"
@@ -13067,6 +13205,7 @@ name = "nvdiffrast"
 licence = "nvidia-nc"
 licence_url = "https://github.com/NVlabs/nvdiffrast/blob/main/LICENSE.txt"
 
+
 [[pending]]
 id = "survey:riganything"
 kind = "survey"
@@ -13083,6 +13222,7 @@ memory_gb = 8.0
 found = "2026-11-10"
 state = "pending review"
 
+
 [[pending]]
 id = "survey:procedural-idles"
 kind = "survey"
@@ -13097,6 +13237,7 @@ tier = "clean"
 tier_reason = "No model."
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:hy-motion-1.0"
@@ -13114,6 +13255,7 @@ tier_reason = "Territory exclusion; humanoid only."
 memory_gb = 26.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:momask"
@@ -13136,6 +13278,7 @@ name = "SMPL / AMASS / HumanML3D body data"
 licence = "smpl-nc"
 licence_url = "https://smpl.is.tue.mpg.de/modellicense.html"
 
+
 [[pending]]
 id = "survey:gvhmr"
 kind = "survey"
@@ -13157,6 +13300,7 @@ name = "SMPL / AMASS / HumanML3D body data"
 licence = "smpl-nc"
 licence_url = "https://smpl.is.tue.mpg.de/modellicense.html"
 
+
 [[pending]]
 id = "survey:unimate"
 kind = "survey"
@@ -13172,6 +13316,7 @@ tier_reason = "Non-commercial checkpoints."
 memory_gb = 12.0
 found = "2026-11-10"
 state = "pending review"
+
 
 [[pending]]
 id = "survey:mocapanything-v2"
@@ -13194,6 +13339,7 @@ name = "BRIA RMBG-1.4"
 licence = "bria-nc"
 licence_url = "https://huggingface.co/briaai/RMBG-1.4"
 
+
 [[pending]]
 id = "hf:KRAFTON/Raon-1-nano"
 kind = "new model"
@@ -13210,6 +13356,7 @@ downloads = 1510
 params_b = 3.53
 found = "2026-11-16"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:MinimaLabs/KLM-1.6"
@@ -13228,6 +13375,7 @@ params_b = 0.1
 found = "2026-11-16"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:StarpowerTechnology/WVY-Blender-5m"
 kind = "new model"
@@ -13242,6 +13390,7 @@ likes = 45
 downloads = 435
 found = "2026-11-16"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:thinkingmachines/Inkling-2-Small"
@@ -13260,6 +13409,7 @@ params_b = 594.05
 found = "2026-11-16"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:meituan-longcat/LongCat-2.5"
 kind = "new model"
@@ -13277,6 +13427,7 @@ params_b = 1779.75
 found = "2026-11-16"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:facebook/meta-encoder-v1"
 kind = "new model"
@@ -13292,6 +13443,7 @@ downloads = 417
 params_b = 28.43
 found = "2026-11-16"
 state = "pending review"
+
 
 [[pending]]
 id = "hf:Oomni/mithi-v1-flash"
@@ -13309,6 +13461,7 @@ downloads = 1085
 found = "2026-11-16"
 state = "pending review"
 
+
 [[pending]]
 id = "hf:owensong/Inflect-Mini-v3"
 kind = "new model"
@@ -13325,6 +13478,142 @@ downloads = 498
 found = "2026-11-16"
 state = "pending review"
 
+
+[[pending]]
+id = "hf:maxwell-model/Maxwell-V1-Flash"
+kind = "new model"
+capability = "llm"
+title = "maxwell-model/Maxwell-V1-Flash: trending text-generation"
+why = "new in the last 60 days (41 days old), 391 likes, 3639 downloads"
+repo = "maxwell-model/Maxwell-V1-Flash"
+evidence = ["https://huggingface.co/maxwell-model/Maxwell-V1-Flash"]
+stack = "needs support: no vLLM, llama.cpp, Ollama or MLX support on the Hub yet"
+licence = "apache-2.0"
+review = true
+likes = 391
+downloads = 3639
+params_b = 36.81
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:microsoft/Aion-1.0-Instruct-2.3B"
+kind = "new model"
+capability = "llm"
+title = "microsoft/Aion-1.0-Instruct-2.3B: trending text-generation"
+why = "new in the last 60 days (5 days old), 277 likes, 4747 downloads"
+repo = "microsoft/Aion-1.0-Instruct-2.3B"
+evidence = ["https://huggingface.co/microsoft/Aion-1.0-Instruct-2.3B"]
+stack = "ready (vllm, sglang)"
+licence = "mit"
+review = true
+likes = 277
+downloads = 4747
+params_b = 2.29
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:thinkingmachines/Inkling-2-Mini"
+kind = "new model"
+capability = "llm"
+title = "thinkingmachines/Inkling-2-Mini: trending image-text-to-text"
+why = "new in the last 60 days (7 days old), 5490 likes, 41888 downloads"
+repo = "thinkingmachines/Inkling-2-Mini"
+evidence = ["https://huggingface.co/thinkingmachines/Inkling-2-Mini"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+likes = 5490
+downloads = 41888
+params_b = 26.39
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:tencent/Hy4-flash"
+kind = "new model"
+capability = "llm"
+title = "tencent/Hy4-flash: trending image-text-to-text"
+why = "new in the last 60 days (6 days old), 649 likes, 7696 downloads"
+repo = "tencent/Hy4-flash"
+evidence = ["https://huggingface.co/tencent/Hy4-flash"]
+stack = "ready (vllm, sglang)"
+licence = "other"
+review = true
+likes = 649
+downloads = 7696
+params_b = 220.25
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:sensenova/SenseNova-Loop-9B"
+kind = "new model"
+capability = "llm"
+title = "sensenova/SenseNova-Loop-9B: trending image-text-to-text"
+why = "new in the last 60 days (6 days old), 643 likes, 2036 downloads"
+repo = "sensenova/SenseNova-Loop-9B"
+evidence = ["https://huggingface.co/sensenova/SenseNova-Loop-9B"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+likes = 643
+downloads = 2036
+params_b = 9.66
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:tencent/Hy4"
+kind = "new model"
+capability = "llm"
+title = "tencent/Hy4: trending image-text-to-text"
+why = "new in the last 60 days (25 days old), 286 likes, 1815 downloads"
+repo = "tencent/Hy4"
+evidence = ["https://huggingface.co/tencent/Hy4"]
+stack = "ready (vllm, sglang)"
+licence = "other"
+review = true
+likes = 286
+downloads = 1815
+params_b = 774.43
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:thinkingmachines/TML-d24-varloop-research"
+kind = "new model"
+capability = "llm"
+title = "thinkingmachines/TML-d24-varloop-research: trending image-text-to-text"
+why = "new in the last 60 days (5 days old), 72 likes, 1755 downloads"
+repo = "thinkingmachines/TML-d24-varloop-research"
+evidence = ["https://huggingface.co/thinkingmachines/TML-d24-varloop-research"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+likes = 72
+downloads = 1755
+params_b = 26.39
+found = "2026-11-24"
+state = "pending review"
+
+[[pending]]
+id = "hf:Pinkstack/LiliPixel-V1-190M"
+kind = "new model"
+capability = "image"
+title = "Pinkstack/LiliPixel-V1-190M: trending text-to-image"
+why = "new in the last 60 days (4 days old), 69 likes, 330 downloads"
+repo = "Pinkstack/LiliPixel-V1-190M"
+evidence = ["https://huggingface.co/Pinkstack/LiliPixel-V1-190M"]
+stack = "needs support: no ComfyUI-native repackage (Comfy-Org) yet"
+licence = "openmdw-1.1"
+review = true
+likes = 69
+downloads = 330
+params_b = 0.19
+found = "2026-11-24"
+state = "pending review"
 [[archived]]
 id = "survey:trellis-image-large"
 kind = "survey"
