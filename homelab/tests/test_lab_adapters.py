@@ -29,6 +29,11 @@ def statuses(findings):
     return {f["id"]: f["status"] for f in findings}
 
 
+def only_uuid(rows, uuid):
+    """{metric: rows} narrowed to one GPU."""
+    return {m: [r for r in rs if r["labels"].get("UUID") == uuid] for m, rs in rows.items()}
+
+
 class CommonTest(unittest.TestCase):
     def test_cron_minutes(self):
         self.assertEqual(L.cron_minutes("*/5 * * * *"), 5)
@@ -122,6 +127,91 @@ class GPUTest(unittest.TestCase):
         self.assertEqual(g["holds"], ["voice/voice"])
         self.assertEqual(g["vram_total"], 2 * 2 ** 30)
         self.assertEqual(g["state"], "ok")
+
+    # DCGM Exporter 4.9.0 renamed its metrics, reports utilisation as a ratio and memory in bytes
+    # (fixtures: "dcgm_4_9", the same GPUs and readings as "dcgm"). A lab can run both.
+    def rows_4_9(self):
+        return {k: v for k, v in FX["dcgm_4_9"].items() if k.startswith("DCGM")}
+
+    def records(self, rows):
+        gpus = labgpu.gpus_from(rows, labgpu.gpu_pods_from_limits(FX["dcgm"]["limits"]))
+        return [{k: round(v, 6) if isinstance(v, float) else v for k, v in g.items()} for g in gpus]
+
+    def test_records_from_the_renamed_metrics(self):
+        new = self.records(self.rows_4_9())
+        self.assertEqual(new, self.records(self.rows()))                       # the same records as the old names give
+        g = {x["host"]: x for x in new}["gpu-node"]
+        self.assertEqual(g["util_pct"], 37.0)                                  # a ratio of 0.37
+        self.assertEqual((g["vram_used"], g["vram_total"]), (31000 * 2 ** 20, 31500 * 2 ** 20))    # from bytes
+        self.assertEqual((g["temp_c"], g["power_w"], g["driver"]), (91.0, 64.9, "580.1"))
+        st = statuses(labgpu.gpu_findings(labgpu.gpus_from(self.rows_4_9())))
+        self.assertEqual((st["gpus.gpu-node.0.temp"], st["gpus.gpu-node.0.vram"]), ("fail", "warn"))
+
+    def test_old_and_new_exporters_in_one_lab(self):
+        mixed = {**only_uuid(self.rows(), "GPU-aaaa"), **only_uuid(self.rows_4_9(), "GPU-bbbb")}     # a node on each
+        self.assertEqual(self.records(mixed), self.records(self.rows()))
+        stale = {m: [dict(r, value=1.0) for r in rs] for m, rs in self.rows().items()}     # one GPU, reported by both:
+        both = self.records({**stale, **self.rows_4_9()})                                  # the new exporter's reading
+        self.assertEqual(both, self.records(self.rows()))
+        self.assertEqual(len(both), 2)
+
+    def test_from_a_4_9_exporter_endpoint(self):
+        text = "\n".join(f'{m}{{UUID="GPU-aaaa",gpu="0",hostname="gpu-node",modelName="NVIDIA GeForce RTX 5090",'
+                         f'namespace="voice",pod="voice-7d9f8c6b5d-x2x9q"}} {v}'
+                         for m, v in (("DCGM_FI_DEV_GPU_UTIL_RATIO", 0.05), ("DCGM_FI_DEV_FB_USED_BYTES", 2 ** 30),
+                                      ("DCGM_FI_DEV_FB_FREE_BYTES", 2 ** 30), ("DCGM_FI_DEV_GPU_TEMP_CELSIUS", 40),
+                                      ("DCGM_FI_DEV_BOARD_POWER_WATTS", 30)))
+        a = labgpu.DCGM({"name": "dcgm", "type": "dcgm", "endpoint": "http://gpu-node:9400"})
+        with mock.patch.object(a, "request", return_value=text.encode()), mock.patch.object(L, "mq_soft", return_value=[]), \
+                mock.patch.object(L, "kube", return_value=None):
+            self.assertTrue(a.probe())
+            (g,) = a.gpus()
+        self.assertEqual((g["host"], g["holds"]), ("gpu-node", ["voice/voice"]))
+        self.assertAlmostEqual(g["util_pct"], 5.0)
+        self.assertEqual((g["vram_used"], g["vram_total"]), (2 ** 30, 2 * 2 ** 30))
+        self.assertEqual((g["temp_c"], g["power_w"], g["state"]), (40, 30, "ok"))
+
+    def test_through_the_metrics_source_asks_for_both_generations(self):
+        rows = {**only_uuid(self.rows(), "GPU-aaaa"), **only_uuid(self.rows_4_9(), "GPU-bbbb")}
+        asked = []
+
+        def mq(q, timeout=6):
+            asked.append(q)
+            return rows.get(q, [])
+        a = labgpu.DCGM({"name": "dcgm", "type": "dcgm"})
+        with mock.patch.object(L, "mq", mq), mock.patch.object(L, "kube", return_value=None):
+            by = {g["host"]: g for g in a.gpus()}
+        self.assertEqual(by["gpu-node"]["util_pct"], 37.0)                     # the old exporter's percent
+        self.assertAlmostEqual(by["spark-1"]["util_pct"], 93.0)                # the new one's ratio
+        self.assertEqual(by["gpu-node"]["vram_total"], 31500 * 2 ** 20)
+        for name in ("DCGM_FI_DEV_GPU_UTIL", "DCGM_FI_DEV_GPU_UTIL_RATIO", "DCGM_FI_DEV_FB_USED_BYTES",
+                     "DCGM_FI_DEV_BOARD_POWER_WATTS", "DCGM_FI_DEV_XID_ERRORS", "DCGM_FI_DEV_POWER_MGMT_LIMIT"):
+            self.assertIn(name, asked)
+
+    def test_the_shared_names_and_queries(self):
+        self.assertEqual(L.dcgm_names("fb_used"), ("DCGM_FI_DEV_FB_USED", "DCGM_FI_DEV_FB_USED_BYTES"))
+        self.assertEqual(L.dcgm_expr("util_pct"), "(DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL)")
+        self.assertEqual(L.dcgm_expr("fb_free"), "(DCGM_FI_DEV_FB_FREE_BYTES / 1048576 or DCGM_FI_DEV_FB_FREE)")
+        self.assertEqual(L.dcgm_expr("temp_c"), "(DCGM_FI_DEV_GPU_TEMP_CELSIUS or DCGM_FI_DEV_GPU_TEMP)")
+        self.assertEqual(L.dcgm_expr("power_w", '{gpu="0"}'),
+                         '(DCGM_FI_DEV_BOARD_POWER_WATTS{gpu="0"} or DCGM_FI_DEV_POWER_USAGE{gpu="0"})')
+        for field in ("xid", "power_limit_w"):                                 # their new names aren't known: old only
+            self.assertEqual(len(L.dcgm_names(field)), 1)
+            self.assertEqual(L.dcgm_expr(field), L.dcgm_names(field)[0])
+
+    def test_gpu_use_of_a_namespace(self):
+        lb = {"UUID": "GPU-aaaa", "gpu": "0", "modelName": "NVIDIA RTX 5090"}
+        old = {'DCGM_FI_DEV_FB_USED{exported_namespace="voice"}': [{"labels": dict(lb, Hostname="gpu-node"), "value": 1024.0}]}
+        new = {'DCGM_FI_DEV_FB_USED_BYTES{exported_namespace="voice"}':
+               [{"labels": dict(lb, hostname="gpu-node"), "value": 2.0 * 2 ** 30}]}
+        unified = {'DCGM_FI_DEV_GPU_UTIL_RATIO{exported_namespace="voice"}':
+                   [{"labels": {"UUID": "GPU-bbbb", "hostname": "spark-1", "modelName": "NVIDIA GB10"}, "value": 0.5}]}
+        for answers, want in ((old, (2 ** 30, "RTX 5090 on gpu-node")), (new, (2 * 2 ** 30, "RTX 5090 on gpu-node")),
+                              ({**old, **new}, (2 * 2 ** 30, "RTX 5090 on gpu-node")),     # both: the new one, once
+                              (unified, (None, "GB10 on spark-1")), ({}, (None, ""))):
+            with mock.patch.object(L, "have_metrics", return_value=True), \
+                    mock.patch.object(L, "mq_soft", lambda q, timeout=6: answers.get(q, [])):
+                self.assertEqual(L.gpu_use("voice"), want)
 
 
 class LogsTest(unittest.TestCase):

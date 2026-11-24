@@ -59,11 +59,12 @@ def dashboard(name, expressions):
 
 
 def dashboards():
+    from .adapters.labcommon import dcgm_expr      # NVIDIA's exporter before and since 4.9.0: (NEW * scale or OLD)
     return {name: dashboard(name, rows) for name, rows in {
         'nodes': [('CPU use', '100*(1-avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])))'),
                   ('Available memory', 'node_memory_MemAvailable_bytes'), ('Available disk', 'node_filesystem_avail_bytes')],
         'kubernetes': [('Ready nodes', 'kube_node_status_condition{condition="Ready",status="true"}'), ('Pending pods', 'sum(kube_pod_status_phase{phase="Pending"})')],
-        'gpu': [('GPU use', 'DCGM_FI_DEV_GPU_UTIL'), ('GPU memory', 'DCGM_FI_DEV_FB_USED')],
+        'gpu': [('GPU use', dcgm_expr('util_pct')), ('GPU memory', dcgm_expr('fb_used'))],
         'apps': [('Scrape targets', 'up'), ('Service probes', 'probe_success'), ('Recent backup', 'lab_backup_last_success_timestamp_seconds')],
     }.items()}
 

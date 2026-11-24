@@ -16,10 +16,11 @@ import re
 from ..registry import register
 from . import labcommon as L
 
-FIELDS = {"DCGM_FI_DEV_GPU_UTIL": "util_pct", "DCGM_FI_DEV_FB_USED": "fb_used", "DCGM_FI_DEV_FB_FREE": "fb_free",
-          "DCGM_FI_DEV_FB_RESERVED": "fb_reserved", "DCGM_FI_DEV_GPU_TEMP": "temp_c",
-          "DCGM_FI_DEV_POWER_USAGE": "power_w", "DCGM_FI_DEV_POWER_MGMT_LIMIT": "power_limit_w",
-          "DCGM_FI_DEV_XID_ERRORS": "xid"}
+# What is read per GPU. The metric names, old and new (DCGM Exporter 4.9.0 renamed them and
+# changed two units), are labcommon's DCGM_METRICS; the power limit and the XID errors are read
+# by their old names only.
+FIELDS = ("util_pct", "fb_used", "fb_free", "fb_reserved", "temp_c", "power_w", "power_limit_w", "xid")
+NAMES = tuple(n for f in FIELDS for n in L.dcgm_names(f))
 MIB = 1024 ** 2
 
 
@@ -43,18 +44,18 @@ def _user(lb):
 
 
 def gpus_from(rows, gpu_pods=None):
-    """GPU records from DCGM rows ({metric: [{labels, value}]}) and {node: ["ns/pod", …]} of the
-    running pods that ask for a GPU."""
+    """GPU records from DCGM rows ({metric: [{labels, value}]}, under the exporter's old names,
+    its new ones or both) and {node: ["ns/pod", …]} of the running pods that ask for a GPU."""
     out = {}
-    for metric, field in FIELDS.items():
-        for r in rows.get(metric) or []:
+    for field in FIELDS:
+        for r in L.dcgm_rows(field, rows):
             lb = r.get("labels") or {}
             host = _host(lb)
             key = lb.get("UUID") or f"{host}:{lb.get('gpu', '0')}"
             model = lb.get("modelName") or "GPU"
             g = out.setdefault(key, {"name": re.sub(r"^NVIDIA\s+|GeForce\s+", "", model).replace("GeForce ", ""),
                                      "host": host, "model": model, "uuid": lb.get("UUID"), "index": lb.get("gpu"),
-                                     "driver": lb.get("DCGM_FI_DRIVER_VERSION"), "holds": []})
+                                     "driver": L.dcgm_driver(lb), "holds": []})
             g[field] = r.get("value")
             ns, pod = _user(lb)
             if pod:
@@ -140,21 +141,20 @@ class DCGM(L.LabAdapter):
     provides = ("gpus",)
     default_ports = (9400,)
 
-    def probe(self):
+    def probe(self):                            # the new name (…_GPU_UTIL_RATIO) starts with the old one
         return b"DCGM_FI_DEV_GPU_UTIL" in self.request("/metrics", timeout=3, raw=True)
 
     @classmethod
     def detect(cls, d):
-        return [{"type": "dcgm"}] if d.has_metric("DCGM_FI_DEV_GPU_UTIL") else []
+        return [{"type": "dcgm"}] if d.has_metric(L.dcgm_expr("util_pct")) else []
 
     def _rows(self):
         if self.has_web():
             samples = L.parse_prom(self.fetch("/metrics", raw=True))
-            return {m: L.rows_of(samples, m) for m in FIELDS}
-        out = {"DCGM_FI_DEV_GPU_UTIL": L.mq("DCGM_FI_DEV_GPU_UTIL")}
-        for m in FIELDS:
-            if m not in out:
-                out[m] = L.mq_soft(m)
+            return {m: L.rows_of(samples, m) for m in NAMES}
+        out = {NAMES[0]: L.mq(NAMES[0])}        # the one query that says the metrics source is down
+        for m in NAMES[1:]:
+            out[m] = L.mq_soft(m)
         return out
 
     def _gpu_pods(self):

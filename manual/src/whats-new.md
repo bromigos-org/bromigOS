@@ -83,6 +83,11 @@ Run `bromigos update` to get them. The next release notes will include these hig
 - On a computer whose network runs on iwd or systemd-networkd, NetworkManager no longer
   starts as well. It changed the Wi-Fi card's address every few minutes, so routers warned
   that several devices were using the same IP address. The fix takes effect at the next start.
+- Your lab's graphics cards show their memory, use, temperature and power again with
+  version 4.9.0 of NVIDIA's DCGM exporter. That version renamed its measurements and
+  changed two of their units, so every GPU reading in bromigOS was empty. bromigOS now
+  reads the old exporter and the new one, and a lab can run both. From a 4.9.0 exporter,
+  `bromigos lab doctor` does not report a card's driver errors (XID) yet.
 
 <!-- /unreleased -->
 

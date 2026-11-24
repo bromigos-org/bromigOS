@@ -3,9 +3,10 @@
     PYTHONPATH=lib:../lib python -m unittest discover -s tests
 """
 import unittest
+import urllib.parse
 
 import labfake
-from bromigos_homelab import console, labmodels, registry
+from bromigos_homelab import console, labmodels, registry, snapshot
 from bromigos_homelab.registry import Adapter, register
 
 
@@ -98,6 +99,66 @@ class StatusTest(unittest.TestCase):
             self.assertIsNotNone(lab)
         self.assertFalse(doc["configured"])
         self.assertEqual(doc["cards"], [])
+
+
+class GPUExporterGenerationsTest(unittest.TestCase):
+    """DCGM Exporter 4.9.0 renamed its metrics and reports utilisation as a ratio and memory in
+    bytes (labfake's dcgm_4_9). The readings are the same from the old exporter, the new one,
+    and a lab that runs both."""
+    UTIL = "/api/v1/query?query=DCGM_FI_DEV_GPU_UTIL"
+
+    def gpus(self, change=None):
+        with labfake.Lab() as lab:
+            for r in lab.http["prometheus"][self.UTIL]["data"]["result"]:
+                if r["metric"]["hostname"] == "gpu-node":
+                    r["value"][1] = "37"                                # the recording is of an idle lab
+            if change:
+                change(lab)
+            got = labmodels.gpus()
+            c = card(console.status(), "gpus")
+        return [{k: round(v, 6) if isinstance(v, float) else v for k, v in g.items()} for g in got], c
+
+    def test_old_exporter(self):
+        gpus, c = self.gpus()
+        g = next(x for x in gpus if x["host"] == "gpu-node")
+        self.assertEqual((g["util_pct"], g["temp_c"], g["power_w"]), (37.0, 49.0, 76.82))
+        self.assertEqual((g["vram_used"], g["vram_total"]), (14317 * 2**20, (14317 + 17784) * 2**20))
+        self.assertIn("37% busy, 49 °C, 77 W", next(i for i in c["items"] if i["host"] == "gpu-node")["hint"])
+
+    def test_new_exporter(self):
+        old, new = self.gpus(), self.gpus(lambda lab: lab.dcgm_4_9())
+        self.assertEqual(new[0], old[0])
+        self.assertEqual(new[1]["items"], old[1]["items"])
+        self.assertEqual(len(new[0]), 4)
+
+    def test_a_lab_with_both(self):
+        old = self.gpus()
+        mixed = self.gpus(lambda lab: lab.dcgm_4_9(hosts={"gpu-node"}))       # the Sparks stay on the old exporter
+        self.assertEqual(mixed[0], old[0])
+
+        def both(lab):                                                        # every GPU reported twice: the new
+            lab.dcgm_4_9(keep_old=True)                                       # exporter's readings, each GPU once
+            for name in labfake.DCGM_4_9:
+                for r in lab.http["prometheus"]["/api/v1/query?query=" + name]["data"]["result"]:
+                    r["value"][1] = "1"
+        twice = self.gpus(both)
+        self.assertEqual(twice[0], old[0])
+        self.assertEqual(twice[1]["items"], old[1]["items"])
+
+    def test_snapshot_asks_for_both_generations(self):
+        answers = {"count((DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL))": "4",
+                   "avg((DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL))": "37",
+                   "sum((DCGM_FI_DEV_FB_USED_BYTES / 1048576 or DCGM_FI_DEV_FB_USED))": "14317",
+                   "sum((DCGM_FI_DEV_FB_FREE_BYTES / 1048576 or DCGM_FI_DEV_FB_FREE))": "17784",
+                   "max((DCGM_FI_DEV_GPU_TEMP_CELSIUS or DCGM_FI_DEV_GPU_TEMP))": "49",
+                   "sum((DCGM_FI_DEV_BOARD_POWER_WATTS or DCGM_FI_DEV_POWER_USAGE))": "111.1"}
+        with labfake.Lab() as lab:
+            for q, v in answers.items():
+                lab.http["prometheus"]["/api/v1/query?" + urllib.parse.urlencode({"query": q})] = {
+                    "status": "success", "data": {"resultType": "vector", "result": [{"metric": {}, "value": [0, v]}]}}
+            gpu = snapshot()["gpu"]                                           # assembled from the capabilities
+        self.assertEqual(gpu, {"count": 4, "utilNow": 37.0, "utilSeries": [], "vramUsed": 14317 * 2**20,
+                               "vramTotal": (14317 + 17784) * 2**20, "tempC": 49.0, "powerW": 111.1})
 
 
 class GenericCardTest(unittest.TestCase):

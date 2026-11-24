@@ -105,7 +105,8 @@ show_hosts = []
 #   name = "gpu"
 #   title = "GPU"
 #   kind = "gauge"
-#   metric = "avg(DCGM_FI_DEV_GPU_UTIL)"     # through the metrics capability
+#   metric = "avg(DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL)"   # through the metrics capability:
+#                                           # NVIDIA's DCGM exporter from 4.9.0 (a ratio, 0 to 1), or an older one (percent)
 #   unit = "%"
 #   max = 100
 #   warn = 70

@@ -144,6 +144,75 @@ def rows_of(samples, name):
     return [{"labels": s["labels"], "value": s["value"]} for s in samples if s["name"] == name]
 
 
+# ------------------------------------------------------------------ NVIDIA's DCGM exporter
+# DCGM Exporter 4.9.0 (the first with DCGM 4.7, whose names it takes) renamed its metrics and
+# changed two units here: utilisation became a ratio (0-1) where it was a percentage, and
+# framebuffer memory is in bytes where it was in MiB. A lab can run both generations at once (an
+# exporter per GPU node), so every reader asks for both names and gets the old unit, the one the
+# code downstream expects.
+#   field: (the name before 4.9.0, the name since (None: not read), new value * this = old unit)
+DCGM_METRICS = {
+    "util_pct": ("DCGM_FI_DEV_GPU_UTIL", "DCGM_FI_DEV_GPU_UTIL_RATIO", 100),                       # percent
+    "fb_used": ("DCGM_FI_DEV_FB_USED", "DCGM_FI_DEV_FB_USED_BYTES", 1 / 1024 ** 2),                # MiB
+    "fb_free": ("DCGM_FI_DEV_FB_FREE", "DCGM_FI_DEV_FB_FREE_BYTES", 1 / 1024 ** 2),
+    "fb_reserved": ("DCGM_FI_DEV_FB_RESERVED", "DCGM_FI_DEV_FB_RESERVED_BYTES", 1 / 1024 ** 2),
+    "temp_c": ("DCGM_FI_DEV_GPU_TEMP", "DCGM_FI_DEV_GPU_TEMP_CELSIUS", 1),
+    "power_w": ("DCGM_FI_DEV_POWER_USAGE", "DCGM_FI_DEV_BOARD_POWER_WATTS", 1),
+    # These two are read by their old names only, so a 4.9.0 exporter gives no power limit and
+    # no XID errors yet. NVIDIA's metric list for 4.9.0 has DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS
+    # and DCGM_FI_DEV_XID_ERROR in their place; neither has been checked against a running
+    # exporter, so neither is read until one has.
+    "power_limit_w": ("DCGM_FI_DEV_POWER_MGMT_LIMIT", None, 1),
+    "xid": ("DCGM_FI_DEV_XID_ERRORS", None, 1),
+}
+
+
+def dcgm_names(field):
+    """A DCGM field's metric names: the old one, then the new one when it is known."""
+    old, new, _ = DCGM_METRICS[field]
+    return (old, new) if new else (old,)
+
+
+def dcgm_expr(field, selector=""):
+    """PromQL for a DCGM field in the old unit, whichever generation each exporter is:
+    (NEW{selector} * 100 or OLD{selector}). A GPU both generations report (two exporters on
+    one node, or the minutes after an upgrade) comes out twice."""
+    old, new, factor = DCGM_METRICS[field]
+    if not new:
+        return old + selector
+    scale = "" if factor == 1 else f" * {factor:g}" if factor > 1 else f" / {round(1 / factor)}"
+    return f"({new}{selector}{scale} or {old}{selector})"
+
+
+def dcgm_driver(labels):
+    """The driver's version from a DCGM series' labels: 4.9.0 renamed that label too."""
+    return labels.get("DCGM_FI_SYSTEM_DRIVER_VERSION") or labels.get("DCGM_FI_DRIVER_VERSION")
+
+
+def _dcgm_gpu(row):
+    lb = row.get("labels") or {}
+    return lb.get("UUID") or (lb.get("Hostname") or lb.get("hostname") or lb.get("node") or lb.get("instance"),
+                              lb.get("gpu"))
+
+
+def dcgm_rows(field, rows):
+    """A DCGM field's rows ([{labels, value}]) out of {metric name: rows}, which may hold either
+    generation's names or both: the values in the old unit, and a GPU both generations report
+    read from the new one."""
+    old, new, factor = DCGM_METRICS[field]
+    fresh = [dict(r, value=r["value"] * factor if r.get("value") is not None else None)
+             for r in (rows.get(new) or [])] if new else []
+    have = {_dcgm_gpu(r) for r in fresh}
+    return [r for r in rows.get(old) or [] if _dcgm_gpu(r) not in have] + fresh
+
+
+def dcgm_mq(field, selector="", fetch=None):
+    """A DCGM field's rows from the metrics source, both generations (dcgm_rows). `fetch` reads
+    one query's rows (mq_soft)."""
+    fetch = fetch or mq_soft
+    return dcgm_rows(field, {n: fetch(n + selector) for n in dcgm_names(field)})
+
+
 # ------------------------------------------------------------------ the kubernetes source
 
 
@@ -332,8 +401,11 @@ def gpu_use(namespace):
     pods, or (None, ""). A time-sliced GPU's memory is the whole card's, shared."""
     if not namespace or not have_metrics():
         return None, ""
-    rows = mq_soft(f'DCGM_FI_DEV_FB_USED{{exported_namespace="{namespace}"}}') or \
-        mq_soft(f'DCGM_FI_DEV_GPU_UTIL{{exported_namespace="{namespace}"}}')
+    sel = f'{{exported_namespace="{namespace}"}}'
+    rows = dcgm_mq("fb_used", sel)
+    memory = bool(rows)                     # else a unified-memory GPU: no framebuffer, its use names it
+    if not rows:
+        rows = dcgm_mq("util_pct", sel)
     used, where, seen = None, [], set()
     for r in rows:
         lb = r["labels"]
@@ -341,7 +413,7 @@ def gpu_use(namespace):
         if key in seen:
             continue
         seen.add(key)
-        if "FB_USED" in (lb.get("__name__") or "DCGM_FI_DEV_FB_USED") and r.get("value") is not None:
+        if memory and r.get("value") is not None:
             used = (used or 0) + r["value"] * 1024 ** 2
         where.append(f"{(lb.get('modelName') or 'GPU').replace('NVIDIA ', '')} on "
                      f"{lb.get('Hostname') or lb.get('hostname') or '?'}")
