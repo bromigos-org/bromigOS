@@ -39,6 +39,87 @@ class Power(unittest.TestCase):
     def configured(self):
         self.settings.update(endpoint='https://console.example.org', auth_ref='EXAMPLE-KEY', site='default')
 
+    def metrics(self, series, ok=True):
+        """Answer power.py's metrics queries from {metric name: [(labels, value), ...]}; record what was asked."""
+        self.asked = []
+
+        def answer(query, timeout=8):
+            self.asked.append(query)
+            name = query.split('{')[0]
+            return dict(ok=ok, sources=['metrics'], errors={}, items=[dict(labels=dict(labels), value=value, t=1.0) for labels, value in series.get(name, [])] if ok else [])
+        for target, replacement in (('metrics', answer), ('available', lambda cap: True)):
+            patch = mock.patch.object(P.caps, target, side_effect=replacement); patch.start(); self.addCleanup(patch.stop)
+
+    @staticmethod
+    def exported(device='Example PDU', model='USPPDUP'):
+        def outlet(index, name):
+            return dict(name=device, outlet_index=str(index), outlet_name=name, site_name='Example site')
+        return {
+            'unpoller_device_outlet_ac_power_consumption': [(dict(name=device, type='pdu'), 96.0)],
+            'unpoller_device_info': [(dict(name=device, type='pdu', model=model), 1.0)],
+            'unpoller_device_outlet_outlet_caps': [(outlet(1, 'USB Outlet 1'), 1.0), (outlet(5, 'Example compute'), 3.0), (outlet(6, 'Outlet 6'), 3.0)],
+            'unpoller_device_outlet_outlet_power': [(outlet(1, 'USB Outlet 1'), 0.0), (outlet(5, 'Example compute'), 96.0), (outlet(6, 'Outlet 6'), 0.0)],
+            'unpoller_device_outlet_outlet_current': [(outlet(5, 'Example compute'), 0.8), (outlet(6, 'Outlet 6'), 0.0)],
+            'unpoller_device_outlet_outlet_voltage': [(outlet(1, 'USB Outlet 1'), 0.0), (outlet(5, 'Example compute'), 120.4), (outlet(6, 'Outlet 6'), 120.4)],
+        }
+
+    def test_metrics_readings_need_no_controller_and_claim_no_relay_state(self):
+        self.settings.update(readings='metrics')
+        self.metrics(self.exported())
+        with mock.patch.object(P, '_fetch', side_effect=AssertionError('the controller must not be asked')):
+            result = P.status()
+        self.assertEqual((result['state'], result['source']), ('reported', 'metrics'))
+        device = result['device']
+        self.assertEqual((device['name'], device['model'], device['total_power_w']), ('Example PDU', 'USPPDUP', 96.0))
+        usb, compute, idle = device['outlets']
+        self.assertEqual((usb['index'], usb['has_metering'], usb['has_relay'], usb['power_w'], usb['voltage_v']), (1, False, True, None, None))
+        self.assertEqual((compute['name'], compute['power_w'], compute['current_a'], compute['voltage_v']), ('Example compute', 96.0, 0.8, 120.4))
+        self.assertEqual((idle['power_w'], idle['current_a']), (0.0, 0.0))     # a real zero stays zero
+        self.assertTrue(all(row['relay_state'] is None for row in device['outlets']))
+        self.assertIn('no relay state', result['note'])
+        self.assertEqual(P.main(['status']), 0)
+        shown = self.out.getvalue()
+        self.assertIn('5. Example compute · 96 W · 0.8 A · 120.4 V', shown)
+        self.assertIn('1. USB Outlet 1 · not metered', shown)
+        self.assertNotIn('relay', shown.split('\n', 2)[2])
+
+    def test_metrics_readings_missing_ambiguous_or_unreachable(self):
+        self.settings.update(readings='metrics')
+        self.metrics({})
+        self.assertEqual(P.status()['state'], 'not found')
+        two = self.exported()
+        two['unpoller_device_outlet_ac_power_consumption'].append((dict(name='Second PDU', type='pdu'), 10.0))
+        self.metrics(two)
+        with self.assertRaisesRegex(P.PowerError, 'more than one PDU'):
+            P.status()
+        self.settings['device'] = 'Example PDU'
+        self.asked.clear()
+        self.assertEqual(P.status()['device']['name'], 'Example PDU')
+        self.assertTrue(all('name="Example PDU"' in query for query in self.asked[1:]))
+        self.settings['device'] = 'Absent PDU'
+        self.assertEqual(P.status()['state'], 'not found')
+        self.settings['device'] = 'Example PDU'
+        self.metrics(self.exported(), ok=False)
+        with self.assertRaisesRegex(P.PowerError, 'metrics source'):
+            P.status()
+        with mock.patch.object(P.caps, 'available', return_value=False), self.assertRaisesRegex(P.PowerError, 'Add a metrics source'):
+            P.status()
+        self.settings['readings'] = 'guess'
+        with self.assertRaisesRegex(P.PowerError, 'controller.*metrics'):
+            P.status()
+
+    def test_metrics_readings_quote_the_device_name_and_drop_bad_values(self):
+        name = 'Rack "A" \\ PDU'
+        series = self.exported(device=name)
+        series['unpoller_device_outlet_outlet_power'][1] = (series['unpoller_device_outlet_outlet_power'][1][0], float('nan'))
+        series['unpoller_device_outlet_outlet_caps'].append((dict(name=name, outlet_index='zero', outlet_name='Broken'), 3.0))
+        self.settings.update(readings='metrics')
+        self.metrics(series)
+        device = P.status()['device']
+        self.assertEqual([row['index'] for row in device['outlets']], [1, 5, 6])
+        self.assertIsNone(device['outlets'][1]['power_w'])
+        self.assertTrue(all(json.dumps(name) in query for query in self.asked[1:]))
+
     def control_profile(self, action='off', steps=None):
         repo = self.root / 'repo'; repo.mkdir(exist_ok=True)
         (repo / 'inventory.ini').write_text('[workers]\nworker.example.org\n')

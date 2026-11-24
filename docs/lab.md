@@ -154,6 +154,31 @@ supported PDU. Initial support is limited to the USP-PDU-Pro model codes
 uses recorded controller data in tests; physical hardware compatibility still needs
 checking after installation.
 
+### Readings from a metrics source
+
+`readings = "metrics"` reads the outlets from the lab's `metrics` capability (the
+Prometheus adapter) instead of the controller, so the computer needs no controller key
+and no TLS trust for the console:
+
+```toml
+[power]
+readings = "metrics"
+# device = "Rack PDU"    # required only when the metrics hold more than one PDU
+```
+
+It uses unpoller's export of the controller's outlet table:
+`unpoller_device_outlet_ac_power_consumption{type="pdu"}` picks the device and gives the
+total; `unpoller_device_outlet_outlet_power`, `_outlet_current`, `_outlet_voltage` and
+`_outlet_caps` (bit 1 relay, bit 2 metering) give each outlet, keyed by the
+`outlet_index` and `outlet_name` labels; `unpoller_device_info` gives the model code. The
+device name is quoted into the selectors with `json.dumps`. The result has
+`source: "metrics"`, `relay_state: null` for every outlet (the export has no relay
+state) and the same shape otherwise. Values are as old as the last scrape, at most the
+metrics server's staleness window. `readings = "controller"` is the default, and any
+other value is an error. Checked against a real USP-PDU-Pro (`USPPDUP`, 4 USB and 16 AC
+outlets) on 2026-11-24. `plan`, `run` and `resume` are unchanged: they never read
+measurements.
+
 Each `[power.targets.NAME]` maps a named target to a private maintenance profile.
 `profile_file` supplies both directions; `on_profile_file` and `off_profile_file`
 can select separate files. The profile’s startup list is used for `on`, and shutdown

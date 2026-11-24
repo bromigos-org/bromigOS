@@ -1,4 +1,4 @@
-"""Read UniFi PDU measurements; review private Ansible outlet-control plans."""
+"""Read UniFi PDU measurements (from the controller, or from a metrics source); review private Ansible outlet-control plans."""
 import argparse
 import json
 import math
@@ -10,7 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import config, maintenance as M
+from . import caps, config, maintenance as M
 
 # NetworkOptimizer's UniFiProductDatabase maps both controller codes to USP-PDU-Pro.
 SUPPORTED_MODELS = {'USPPDUP', 'USPED18', 'USP-PDU-Pro'}
@@ -113,8 +113,71 @@ def _parse_device(device):
     return dict(id=str(device.get('_id') or ''), name=str(device.get('name') or 'PDU'), model=device['model'], controller_device_state=device.get('state') if type(device.get('state')) is int else None, connected=connected, total_power_w=reported, outlets=sorted(outlets, key=lambda row: row['index']))
 
 
+# unpoller (the UniFi exporter for Prometheus) publishes the controller's outlet
+# table: one series per outlet, labelled with the device's name, the outlet's
+# index and its name. It carries no relay state.
+_OUTLET_METRICS = (('power_w', 'unpoller_device_outlet_outlet_power'), ('current_a', 'unpoller_device_outlet_outlet_current'),
+                   ('voltage_v', 'unpoller_device_outlet_outlet_voltage'), ('caps', 'unpoller_device_outlet_outlet_caps'))
+_METRICS_NOTE = ('Outlet measurements from your metrics source, which holds what the controller last reported; they can be a few '
+                 'minutes old and carry no relay state. They do not verify operating-system shutdown or service readiness. '
+                 'A shared outlet measures its whole attached load.')
+
+
+def _metric(query):
+    result = caps.metrics(query, timeout=8)
+    if not result['ok']:
+        raise PowerError('Cannot read power measurements from the metrics source; check that it is reachable')
+    return [row for row in result['items'] if isinstance(row.get('labels'), dict)]
+
+
+def _status_from_metrics(settings):
+    if not caps.available('metrics'):
+        raise PowerError('Add a metrics source before reading power measurements from metrics')
+    wanted = settings.get('device')
+    if wanted is not None and (not isinstance(wanted, str) or not wanted.strip()):
+        raise PowerError('Set device to the PDU\'s name as the metrics source labels it')
+    totals = {row['labels'].get('name'): _number(row['value']) for row in _metric('unpoller_device_outlet_ac_power_consumption{type="pdu"}') if row['labels'].get('name')}
+    names = sorted(name for name in totals if wanted is None or name == wanted)
+    if not names:
+        return dict(state='not found', source='metrics', device=None, note='The metrics source holds no PDU outlet measurements' + (' for that device' if wanted else '') + '. unpoller exports them once the PDU is adopted. Missing measurements do not mean equipment is powered off.')
+    if len(names) != 1:
+        raise PowerError('The metrics source holds more than one PDU; set device to the one to read')
+    name = names[0]
+    selector = '{name=' + json.dumps(name) + '}'
+    outlets = {}
+    for field, metric in _OUTLET_METRICS:
+        for row in _metric(metric + selector):
+            try:
+                index = int(row['labels'].get('outlet_index'))
+            except (TypeError, ValueError):
+                continue
+            if index < 1:
+                continue
+            outlet = outlets.setdefault(index, dict(index=index, name=str(row['labels'].get('outlet_name') or f'Outlet {index}')))
+            outlet[field] = _number(row['value'])
+    if not outlets:
+        return dict(state='not found', source='metrics', device=None, note='The metrics source names that PDU but holds no outlet measurements for it. Missing measurements do not mean equipment is powered off.')
+    rows = []
+    for index in sorted(outlets):
+        outlet = outlets[index]
+        bits = outlet.get('caps')
+        bits = int(bits) if bits is not None and bits == int(bits) else None
+        metering = None if bits is None else bool(bits & 2)
+        rows.append(dict(index=index, name=outlet['name'], relay_state=None, has_relay=None if bits is None else bool(bits & 1), has_metering=metering,
+                         power_w=outlet.get('power_w') if metering is not False else None, current_a=outlet.get('current_a') if metering is not False else None,
+                         voltage_v=outlet.get('voltage_v') if metering is not False else None))
+    model = next((str(row['labels']['model']) for row in _metric('unpoller_device_info{type="pdu",name=' + json.dumps(name) + '}') if row['labels'].get('model')), 'PDU')
+    device = dict(id='', name=name, model=model, controller_device_state=None, connected=True, total_power_w=totals[name], outlets=rows)
+    return dict(state='reported', source='metrics', device=device, note=_METRICS_NOTE)
+
+
 def status():
     settings = config.table('power')
+    readings = settings.get('readings', 'controller')
+    if readings == 'metrics':
+        return _status_from_metrics(settings)
+    if readings != 'controller':
+        raise PowerError('Set readings to "controller" or "metrics"')
     if not settings.get('endpoint'):
         return dict(state='not configured', device=None, note='Configure a supported PDU after installation and adoption. No hardware has been checked.')
     devices = [device for device in _fetch(settings) if isinstance(device, dict) and device.get('model') in SUPPORTED_MODELS]
@@ -201,9 +264,15 @@ def _display_status(result):
     def number(value, unit):
         return 'unknown' if value is None else f'{value:g} {unit}'
     print(f"{device['name']} ({device['model']}) · total: {number(device['total_power_w'], 'W')}")
+    from_metrics = result.get('source') == 'metrics'
     for outlet in device['outlets']:
         relay = 'unknown' if outlet['relay_state'] is None else ('on' if outlet['relay_state'] else 'off')
-        print(f"{outlet['index']}. {outlet['name']} · relay {relay} · {number(outlet['power_w'], 'W')} · {number(outlet['current_a'], 'A')} · {number(outlet['voltage_v'], 'V')}")
+        # A metrics source carries no relay state, so say nothing about it rather than "unknown" twenty times.
+        switch = '' if from_metrics else f' · relay {relay}'
+        if from_metrics and outlet['has_metering'] is False:
+            print(f"{outlet['index']}. {outlet['name']} · not metered")
+            continue
+        print(f"{outlet['index']}. {outlet['name']}{switch} · {number(outlet['power_w'], 'W')} · {number(outlet['current_a'], 'A')} · {number(outlet['voltage_v'], 'V')}")
 
 
 def main(argv=None):
