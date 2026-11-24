@@ -14,7 +14,8 @@ A declared panel, no code:
     name = "gpu"                    # unique; the widget's name (layout.json "plugins" places it)
     title = "GPU"
     kind = "gauge"                  # gauge | sparkline | stat | status | table
-    metric = "avg(DCGM_FI_DEV_GPU_UTIL)"   # a metrics query (the source's language: PromQL)
+    metric = "avg(DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL)"   # a metrics query (the source's
+                                    # language: PromQL). NVIDIA's exporter from 4.9.0 (a ratio), or an older one
     unit = "%"
     max = 100                       # gauge: full scale
     warn = 70                       # colours: amber from warn, red from crit (lower = worse:

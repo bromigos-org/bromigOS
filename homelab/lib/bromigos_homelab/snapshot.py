@@ -80,14 +80,15 @@ def assemble():
                              "load1": x.get("load1"), "cores": x.get("cores")} for x in _merge_hosts(h["items"])),
                            key=lambda n: str(n["name"]))
     if m:
-        gpus = q("count(DCGM_FI_DEV_GPU_UTIL)")
+        from .adapters.labcommon import dcgm_expr as dcgm      # old and new exporters: (NEW * scale or OLD)
+        gpus = q(f"count({dcgm('util_pct')})")
         if gpus:
-            used, free = q("sum(DCGM_FI_DEV_FB_USED)"), q("sum(DCGM_FI_DEV_FB_FREE)")
-            snap["gpu"] = {"count": int(gpus), "utilNow": q("avg(DCGM_FI_DEV_GPU_UTIL)"),
-                           "utilSeries": caps.series("avg(DCGM_FI_DEV_GPU_UTIL)", 60, 60),
-                           "vramUsed": used * 2**20 if used is not None else None,          # DCGM reports MiB
+            used, free = q(f"sum({dcgm('fb_used')})"), q(f"sum({dcgm('fb_free')})")
+            snap["gpu"] = {"count": int(gpus), "utilNow": q(f"avg({dcgm('util_pct')})"),
+                           "utilSeries": caps.series(f"avg({dcgm('util_pct')})", 60, 60),
+                           "vramUsed": used * 2**20 if used is not None else None,          # dcgm() gives MiB
                            "vramTotal": (used + free) * 2**20 if used is not None and free is not None else None,
-                           "tempC": q("max(DCGM_FI_DEV_GPU_TEMP)"), "powerW": q("sum(DCGM_FI_DEV_POWER_USAGE)")}
+                           "tempC": q(f"max({dcgm('temp_c')})"), "powerW": q(f"sum({dcgm('power_w')})")}
         rps = q("sum(rate(traefik_entrypoint_requests_total[1m]))")
         if rps is not None:
             snap["traefik"] = {"rpsNow": rps, "rpsSeries": caps.series("sum(rate(traefik_entrypoint_requests_total[1m]))", 60, 60)}

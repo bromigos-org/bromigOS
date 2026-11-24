@@ -331,7 +331,7 @@ import bromigos_homelab as H
 
 H.models()                                           # a Result
 H.workloads(namespace="ai", name="vllm.*", state="running")
-H.metrics('avg(DCGM_FI_DEV_GPU_UTIL)')
+H.metrics('avg(DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL)')    # GPU use in percent
 H.snapshot(); H.models_level(); H.status()
 ```
 
@@ -577,7 +577,9 @@ finding ids start with the area: `gpus.*`, `logs.*`, `routes.*`, `certs.*`, `ddn
 `network.*`, `nas.*`, `apps.*`, `s3.*`, `games.*`, `library.*`, `models.*`, `ocr.*`,
 `runners.*`, `packages.*`, `backups.*` and `youtube.*`. For example:
 
-- `dcgm` warns about temperature, nearly full VRAM and XID errors.
+- `dcgm` warns about temperature, nearly full VRAM and XID errors. DCGM Exporter 4.9.0
+  renamed its metrics. `dcgm` reads the names from before that version and since. From
+  4.9.0 on, it does not read XID errors or the power limit yet.
 - `cert-manager` warns about certificates close to expiry, or not ready.
 - `backups` warns when nothing backs up the lab, when volumes on a node's own disk have no
   backup job, when shares have snapshots off, and when no copy leaves the lab.
@@ -722,7 +724,7 @@ does.
 name = "gpu"
 title = "GPU"
 kind = "gauge"                          # gauge, sparkline, stat, status or table
-metric = "avg(DCGM_FI_DEV_GPU_UTIL)"
+metric = "avg(DCGM_FI_DEV_GPU_UTIL_RATIO * 100 or DCGM_FI_DEV_GPU_UTIL)"
 unit = "%"
 max = 100
 warn = 70                               # amber from here, red from crit
@@ -766,6 +768,11 @@ title = "ComfyUI"
 kind = "status"
 capability = "media"                    # up while the ComfyUI source answers
 ```
+
+The GPU query works with any version of NVIDIA's DCGM exporter. From version 4.9.0 the
+exporter calls the metric `DCGM_FI_DEV_GPU_UTIL_RATIO` and reports a ratio from 0 to 1,
+so the query multiplies it by 100. An older exporter reports `DCGM_FI_DEV_GPU_UTIL`,
+already a percentage.
 
 Each panel binds to one thing:
 

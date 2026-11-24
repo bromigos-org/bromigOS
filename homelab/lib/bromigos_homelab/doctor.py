@@ -169,17 +169,19 @@ def tls():
 def gpu():
     found = False
     if caps.available("metrics"):
-        r = caps.metrics("DCGM_FI_DEV_GPU_TEMP", timeout=6)
-        if r["ok"] and r["items"]:
+        from .adapters import labcommon as L
+        answers = {n: caps.metrics(n, timeout=6) for n in L.dcgm_names("temp_c")}     # the exporter's old name, and its new one
+        temps = L.dcgm_rows("temp_c", {n: a["items"] for n, a in answers.items()})
+        if temps:
             found = True
-            for x in r["items"]:
+            for x in temps:
                 lb = x["labels"]
                 host = lb.get("Hostname") or lb.get("hostname") or lb.get("instance") or "?"
                 name = f"{lb.get('modelName', 'GPU')} on {host}"
-                drv = lb.get("DCGM_FI_DRIVER_VERSION")
+                drv = L.dcgm_driver(lb)
                 yield finding(f"gpu.{host}.{lb.get('gpu', '0')}", name, "ok",
                               f"the driver sees it ({'driver ' + drv if drv else 'DCGM reports it'}), {x['value']:.0f} °C")
-        elif r["ok"]:
+        elif all(a["ok"] for a in answers.values()):
             n = caps.scalar("count(nvidia_smi_gpu_info) or count(node_drm_card_info)", None)
             if n:
                 found = True

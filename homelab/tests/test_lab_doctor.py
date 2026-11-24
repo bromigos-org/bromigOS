@@ -71,6 +71,20 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("RTX 5090", f["gpu.comfyui"]["detail"])
         self.assertEqual(len([x for x in doc["findings"] if "the driver sees it" in x["detail"]]), 4)
 
+    def test_gpu_from_either_generation_of_the_dcgm_exporter(self):
+        """DCGM Exporter 4.9.0 renamed the temperature metric; a lab can run both exporters."""
+        def seen(change=None):
+            with labfake.Lab() as lab:
+                if change:
+                    change(lab)
+                doc = self.run_doctor({"gpu"})
+            return sorted((x["id"], x["title"], x["detail"]) for x in doc["findings"] if "the driver sees it" in x["detail"])
+        old = seen()
+        self.assertEqual(len(old), 4)
+        self.assertEqual(seen(lambda lab: lab.dcgm_4_9()), old)                            # the new exporter only
+        self.assertEqual(seen(lambda lab: lab.dcgm_4_9(hosts={"gpu-node"})), old)          # a node on each
+        self.assertEqual(seen(lambda lab: lab.dcgm_4_9(keep_old=True)), old)               # both report it: once
+
     def test_dns_failure_says_what_to_do(self):
         def gai(host, *a, **k):
             if host.startswith("tts."):

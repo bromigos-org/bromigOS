@@ -62,6 +62,14 @@ type = "ollama"
 endpoint = "http://gpu-box.lab.example:11434"
 """
 
+# The recorded GPU metrics are an older DCGM Exporter's. 4.9.0 renamed them and changed two units:
+# old name: (4.9.0's name, a recorded value * this = 4.9.0's value).
+DCGM_4_9 = {"DCGM_FI_DEV_GPU_UTIL": ("DCGM_FI_DEV_GPU_UTIL_RATIO", 0.01),             # percent -> a ratio
+            "DCGM_FI_DEV_FB_USED": ("DCGM_FI_DEV_FB_USED_BYTES", 2 ** 20),            # MiB -> bytes
+            "DCGM_FI_DEV_FB_FREE": ("DCGM_FI_DEV_FB_FREE_BYTES", 2 ** 20),
+            "DCGM_FI_DEV_GPU_TEMP": ("DCGM_FI_DEV_GPU_TEMP_CELSIUS", 1),
+            "DCGM_FI_DEV_POWER_USAGE": ("DCGM_FI_DEV_BOARD_POWER_WATTS", 1)}
+
 
 def fixture():
     with open(os.path.join(HERE, "fixtures", "lab.json")) as f:
@@ -77,6 +85,22 @@ class Lab:
         self.posts = []          # (source, path, data) of every POST
         self.extra = extra_toml
         self._patches = []
+
+    def dcgm_4_9(self, hosts=None, keep_old=False):
+        """Report the GPUs as DCGM Exporter 4.9.0 does (DCGM_4_9): under its new names, in its units,
+        the driver's version under its new label.
+        hosts: only these nodes run the new exporter, the others stay as recorded. keep_old: the
+        old exporter's series stay beside the new ones."""
+        prom, q = self.http["prometheus"], "/api/v1/query?query="
+        for old, (new, k) in DCGM_4_9.items():
+            result = prom[q + old]["data"]["result"]
+            moved = [r for r in result if hosts is None or r["metric"].get("hostname") in hosts]
+            if not keep_old:
+                result[:] = [r for r in result if r not in moved]
+            prom[q + new] = {"status": "success", "data": {"resultType": "vector", "result": [
+                {"metric": {"DCGM_FI_SYSTEM_DRIVER_VERSION" if label == "DCGM_FI_DRIVER_VERSION" else label: v
+                            for label, v in dict(r["metric"], __name__=new).items()},
+                 "value": [r["value"][0], repr(float(r["value"][1]) * k)]} for r in moved]}}
 
     def _answer(self, adapter, path, data=None, method=None, timeout=8, headers=None, raw=False):
         from bromigos_homelab.registry import Unreachable

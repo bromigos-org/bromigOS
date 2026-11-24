@@ -23,6 +23,26 @@
       {"labels": {"namespace": "imagegen", "pod": "imagegen-6594b5cb6f-v5tg4", "node": "gpu-node", "resource": "nvidia_com_gpu"}, "value": 1.0}
     ]
   },
+  "dcgm_4_9": {
+    "_about": "The same two GPUs with the same readings, as DCGM Exporter 4.9.0 reports them: renamed metrics, utilisation as a ratio (0-1), memory in bytes, the driver's version under DCGM_FI_SYSTEM_DRIVER_VERSION, the host under a lower-case hostname label.",
+    "DCGM_FI_DEV_GPU_UTIL_RATIO": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090", "DCGM_FI_SYSTEM_DRIVER_VERSION": "580.1", "exported_namespace": "imagegen", "exported_pod": "imagegen-6594b5cb6f-v5tg4"}, "value": 0.37},
+      {"labels": {"UUID": "GPU-bbbb", "gpu": "0", "hostname": "spark-1", "modelName": "NVIDIA GB10", "exported_namespace": "llm", "exported_pod": "llm-head-74786996d8-m5sb7"}, "value": 0.93}
+    ],
+    "DCGM_FI_DEV_FB_USED_BYTES": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 32505856000.0}
+    ],
+    "DCGM_FI_DEV_FB_FREE_BYTES": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 524288000.0}
+    ],
+    "DCGM_FI_DEV_GPU_TEMP_CELSIUS": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 91.0},
+      {"labels": {"UUID": "GPU-bbbb", "gpu": "0", "hostname": "spark-1", "modelName": "NVIDIA GB10"}, "value": 45.0}
+    ],
+    "DCGM_FI_DEV_BOARD_POWER_WATTS": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 64.9}
+    ]
+  },
   "loki": {
     "errors": {"status": "success", "data": {"resultType": "vector", "result": [
       {"metric": {"namespace": "media"}, "value": [1791540000, "39"]},

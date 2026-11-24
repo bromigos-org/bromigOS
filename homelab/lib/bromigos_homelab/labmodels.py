@@ -45,17 +45,15 @@ def gpus():
         return [dict(g, holds=list(g.get("holds") or [])) for g in r["items"]]
     out = {}
     if caps.available("metrics"):
-        fields = {"DCGM_FI_DEV_FB_USED": "fb_used", "DCGM_FI_DEV_FB_FREE": "fb_free", "DCGM_FI_DEV_GPU_UTIL": "util_pct",
-                  "DCGM_FI_DEV_GPU_TEMP": "temp_c", "DCGM_FI_DEV_POWER_USAGE": "power_w"}
-        for q, f in fields.items():
-            r = caps.metrics(q, timeout=6)
-            for x in r["items"]:
+        from .adapters import labcommon as L
+        for f in ("fb_used", "fb_free", "util_pct", "temp_c", "power_w"):      # by the exporter's old names and its new ones
+            for x in L.dcgm_mq(f, fetch=lambda q: caps.metrics(q, timeout=6)["items"]):
                 lb = x["labels"]
                 host = lb.get("Hostname") or lb.get("hostname") or lb.get("instance") or "?"
                 key = lb.get("UUID") or f"{host}:{lb.get('gpu', '0')}"
                 g = out.setdefault(key, {"name": f"{(lb.get('modelName') or 'GPU').replace('NVIDIA ', '')}",
                                          "host": host, "model": lb.get("modelName"), "uuid": lb.get("UUID"),
-                                         "index": lb.get("gpu"), "driver": lb.get("DCGM_FI_DRIVER_VERSION"),
+                                         "index": lb.get("gpu"), "driver": L.dcgm_driver(lb),
                                          "holds": [], "source": "metrics"})
                 g[f] = _num(x["value"])
                 pod = lb.get("exported_pod") or lb.get("pod_name")
