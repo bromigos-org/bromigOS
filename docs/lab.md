@@ -22,6 +22,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab run KIND [PRESET] …` | Queue a job on the lab's GPUs. |
 | `bromigos lab jobs` | List, follow, cancel and retry jobs. |
 | `bromigos lab doctor [--json]` | Run checks. Each problem comes with a fix in plain words. |
+| `bromigos lab tasks [--json]` | Show what your fleet of coding agents is doing, task by task ([below](#tasks)). |
 | `bromigos lab youtube` | Show Pinchflat's YouTube downloads card ([below](#youtube-downloads)). |
 | `bromigos lab youtube add`, `list`, `remove`, `pause`, `resume`, `refresh`, `status`, `quality`, `cookies` | Control Pinchflat without its web page ([below](#youtube-downloads)). |
 | `bromigos lab youtube sync` | Turn Pinchflat's playlists into playlists in Jellyfin and Plex. |
@@ -252,6 +253,7 @@ need attention also list their items.
 | Alerts | firing and pending alerts | `alerts` |
 | Jobs | the lab's job queue | the queue's state |
 | Vault | up or sealed, never a secret | `secrets` |
+| Tasks | what a fleet of coding agents is doing: the tasks that need you, then the ones being worked on ([below](#tasks)) | `tasks` |
 | others | every other capability a source provides gets a card of its own | the registry |
 
 A few details:
@@ -627,6 +629,251 @@ and content, monitor, profile, open, search and request, and filter and sort. Wi
 (`homelab/tests/mediafake.py`): one local server that answers like Seerr, Sonarr, Radarr,
 Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, qBittorrent, SABnzbd and slskd. It uses the apps'
 recorded answer shapes, with made-up titles and values.
+
+## Tasks
+
+A *fleet* is a set of coding agents that work through the issues of one business's
+repositories by themselves. The Tasks card and `bromigos lab tasks` show what a fleet is
+doing: which *tasks* need you, which are being worked on, which wait and which are done.
+Both only read. The manual's [Lab console](../manual/src/lab.md#tasks-from-your-coding-agents)
+page shows how to use them.
+
+`fleet.py` holds the reading, the words and the picture. `adapters/labfleet.py` is the
+source type.
+
+### Where the tasks come from
+
+A fleet has a *control repository*: the repository that holds its settings and its
+scheduled job. That job keeps one issue there, titled exactly `Status`, with the label
+`agent-state`. The issue's body is Markdown for people, then a `<details>` block with one
+fenced `json` block. That block is the *feed*. bromigOS reads the feed and nothing else.
+
+Name the control repository in `homelab.toml`:
+
+```toml
+[[source]]
+name = "tasks"
+type = "fleet"
+repo = "my-org/agents"
+```
+
+| Option | What it does |
+|---|---|
+| `repo` | The control repository, as `owner/name`. |
+| `label` | The label the Status issue carries. The default is `agent-state`. |
+| `name` | The source's name. Give each `fleet` source its own. |
+
+bromigOS asks GitHub through `gh`, with the login `gh` already has. It runs one `gh api`
+call, which lists the repository's issues that carry the label. It takes the issue titled
+`Status` that the job opened, as `github-actions[bot]`. bromigOS never stores a token and
+never passes one. It keeps each answer for a minute, so the dashboard's 15-second refresh
+doesn't ask GitHub that often.
+
+For several businesses, add one source per control repository. The card then has a section
+for each business, and `bromigos lab tasks` prints them one after another.
+
+When the feed can't be read, the card is *unreachable* and says why in plain words:
+
+- `gh` isn't installed. Install `github-cli`.
+- `gh` isn't signed in. Run `gh auth login`.
+- Your login can't read the repository, or the repository doesn't exist.
+- The repository has no Status issue yet. The fleet's job writes it on its first run.
+- The feed has a newer `schema` than this bromigOS reads. Update bromigOS.
+
+### The words
+
+Every surface uses the same words, and they all come from `fleet.py`. The noun is *task*.
+A task sits in one of five *lanes*, in this order, and its *phrase* says where it is:
+
+| Lane | From the feed's | Phrase |
+|---|---|---|
+| Needs you | `needs_person` | "Stuck · *why*" or "Blocked · *why*" |
+| Proposed | `proposed`, when the feed has it | "Proposed · *why*" |
+| Working | `working` | by its stage, in the next table |
+| Waiting | `waiting` | "Queued · *why*" |
+| Done | `recent`, the merged ones | "Merged" |
+
+A working task's phrase comes from its `stage` and `step`:
+
+| `stage` | Phrase |
+|---|---|
+| `agent` | "Writing". "Starting" while `step` is `queued`. |
+| `checks` | "Checks running" |
+| `review` | "Reviewing". "Second review" when `step` is `second_review`. |
+| `fixing` | "Fixing · round N". N is `attempt` minus one, since `attempt` counts the run that wrote the change too. |
+| `merging` | "Merging" |
+
+Two more rules:
+
+- A reviewer turning an attempt down is an event, not a lane. It shows as a line under
+  Done: "Not merged · *why*".
+- A feed can name a row's `lane` and `phrase` itself. bromigOS then shows them as given. A
+  lane it doesn't know goes after the five.
+
+The *headline* is one sentence, such as "2 need you · 3 working · 1 waiting · 4 merged
+today". It says "Nothing needs you" only when the feed was read and is fresh. An account
+the agents work through reads "Available" or "Resting until 15:45". Times are in the
+feed's `timezone`.
+
+### Fresh, stale and switched off
+
+The feed says when it was written (`generated_at`) and when it goes stale (`stale_after`,
+90 minutes later). `fleet.check` compares that with the clock:
+
+| State | When | Headline |
+|---|---|---|
+| fresh | the clock is before `stale_after` | the counts |
+| stale | the clock is past `stale_after` | "No update for 1 h 40 min" |
+| off | the feed says `enabled` is false | "SWITCHED OFF" |
+
+*Stale* means the fleet's job hasn't written for longer than it ever would while it runs.
+Either someone switched the fleet off, or its job is disabled, or it's failing. A
+switched-off fleet's job doesn't run, so it can't say so itself. From here, switched off
+looks stale. A stale card still lists the last tasks the job wrote, and it's `warn`.
+
+### What the card shows
+
+For each business, the card has:
+
+1. one row for the business, with its headline, when the feed was written and its accounts;
+2. the tasks that need you, then the proposed ones, then the ones being worked on, at most
+   eight in all;
+3. a "+N more" row for the rest, the waiting ones included.
+
+Each task row has `repo#number`, the phrase, the title and since when. Every row has a
+hover hint with the task's link. The card is `warn` while a task needs you, or while a feed
+is stale or switched off. `[console] hide` patterns match a task's `repo#number`.
+
+The card needs no code of its own in the other views. The dashboard's STATUS tab, the Lab
+deck and Settings › Lab draw every card of `bromigos lab status --json`, so they show
+Tasks too.
+
+### The command
+
+`bromigos lab tasks` prints every task, lane by lane, with its links, 80 columns wide:
+
+```text
+EXAMPLE · 2 need you · 3 working · 1 waiting · 4 merged today
+Updated 12:40 (Europe/Berlin) · my-org/agents
+Accounts: 1 Available · 2 Resting until 15:45
+
+NEEDS YOU (2)
+  app#41  Stuck · 3 fix rounds and a clean restart did not make it green
+      Checkout: totals are wrong when a coupon is applied
+      since 09:12
+      https://github.com/my-org/app/issues/41
+      PR #44: https://github.com/my-org/app/pull/44
+```
+
+| Option | What it does |
+|---|---|
+| `--json` | Print the document below instead. |
+| `--all` | List every finished task with its links. Without it, Done is a count and a line each for the newest. |
+| `--width N` | Wrap at N columns instead of 80. |
+| `--repo OWNER/NAME` | Read this control repository, whatever `homelab.toml` says. |
+| `--url URL` | Read this [mirror](#an-in-lab-mirror), whatever `homelab.toml` says. |
+
+It exits 0 when every feed was read, is fresh and nothing needs you. It exits 1 when a task
+needs you, a feed is stale or switched off, or one couldn't be read. With `--json` it exits
+0 and the document says the rest, as `bromigos lab status --json` does.
+
+`--json` prints `{"schema", "generatedAt", "configured", "state", "fleets", "errors"}`.
+`state` is `ok`, `warn`, `unreachable` or `empty`. `errors` maps a source to why it
+couldn't be read. Each entry of `fleets` is one business's picture, from `fleet.view`:
+
+```json
+{"source": "tasks", "business": "Example", "control_repo": "my-org/agents",
+ "state": "fresh | stale | off", "fresh": true,
+ "headline": "2 need you · 3 working · 1 waiting · 4 merged today",
+ "generated_at": "2026-11-28T11:40:03Z", "updated": "12:40", "timezone": "Europe/Berlin",
+ "lanes": [{"id": "needs_you", "title": "Needs you", "count": 2, "omitted": 0,
+            "rows": [{"label": "app#41", "repo": "app", "number": 41, "title": "…",
+                      "phrase": "Stuck · …", "when": "09:12", "url": "https://…",
+                      "links": [{"text": "PR #44", "url": "https://…"}]}],
+            "events": []}],
+ "counts": {"needs_you": 2, "working": 3, "today": {"merged": 4}, "seven_days": {"merged": 9}},
+ "accounts": [{"number": 2, "state": "resting", "phrase": "Resting until 15:45"}],
+ "warnings": ["…"]}
+```
+
+A lane's `count` includes the tasks the feed left out for room (`omitted`). Done's `rows`
+are the merged tasks, and its `events` are the attempts that were turned down.
+
+### The feed
+
+The feed is one JSON object with `"schema": 1`. `fleet.parse_body` takes it out of the
+issue's body, and refuses a body that doesn't hold exactly one line reading `` ```json ``.
+It never searches a body for JSON, and it never reads the Markdown part. It also refuses
+JSON that isn't an object, and any other `schema` number.
+
+These are the fields bromigOS reads:
+
+| Field | What it holds |
+|---|---|
+| `generated_at`, `stale_after` | when the feed was written and when it goes stale, in UTC |
+| `business`, `control_repo`, `timezone` | the business's name, its control repository and its time zone |
+| `enabled` | false when the fleet is switched off |
+| `accounts` | each account's `number`, `state` (available or resting) and `until` |
+| `working` | tasks on their way: `stage`, `step`, `attempt`, `account`, `started_at` |
+| `waiting` | tasks left where they are, with `why` |
+| `needs_person` | tasks that stopped: `kind` (stuck or blocked), `why`, `since` |
+| `recent` | what ended in the last seven days: `outcome` and `at` |
+| `proposed` | tasks the fleet suggests. Optional. |
+| `counts` | `today` and `seven_days`: started, merged, stuck, blocked, rejected |
+| `warnings`, `omitted` | what the job couldn't read, and how many rows each list left out for room |
+
+Every task has `repo`, `issue`, `pr`, `title` and its addresses (`url`, `issue_url`,
+`pr_url`, `run_url`), and may have `lane` and `phrase`.
+
+bromigOS ignores a field it doesn't know. When an expected field is missing, the picture
+leaves that part out and says so under `warnings`. Nothing crashes.
+
+### Text other people wrote
+
+A task's title, a reason and a warning are text someone else wrote. Before any of it
+reaches a terminal or a card, `fleet.clean` does four things:
+
+- it removes terminal escape sequences and control characters;
+- it removes invisible characters, such as zero-width ones and the controls that reverse
+  the direction of text;
+- it puts the text on one line;
+- it cuts it to a fixed length, with "…" where it was cut.
+
+Nothing reads that text as markup. The dashboard shows a card's cells and row hints as
+plain text, so `[bold]` stays `[bold]`. An address is shown only when it's a plain `http`
+or `https` one.
+
+### An in-lab mirror
+
+This part is optional. A lab can keep a *mirror*: a small service of its own that holds
+the feeds, so the desktop doesn't ask GitHub. bromigOS doesn't ship one. A `fleet` source
+with `url` reads a mirror instead of a repository:
+
+```toml
+[[source]]
+name = "tasks"
+type = "fleet"
+url = "https://board.mylab.example/api/fleet"
+```
+
+The mirror answers a GET with `{"schema": 1, "feeds": [{"business", "received_at",
+"feed"}, …]}`, where each `feed` is a feed as above. The card gets one section per
+business. `business = "Example"` keeps one of them. `auth_ref` and `tls_ca` work as for
+any [source](homelab.md#a-source).
+
+### Tests for tasks
+
+`homelab/tests/test_lab_fleet.py` reads a recorded issue body with made-up names
+(`tests/fixtures/fleet-status-body.txt`). It runs a stand-in `gh` and a stand-in mirror on
+this machine, so it needs no network and no GitHub login. It covers:
+
+- the refusals: no fence, two fences, JSON that isn't an object, another schema;
+- fresh, stale and switched off;
+- the phrase of every stage, and `lane` and `phrase` given by the feed;
+- missing fields, one at a time;
+- hostile titles: escape sequences, line breaks, direction controls, very long ones;
+- the card through the console, and the command's text (`tests/golden/lab-tasks.txt`) and
+  JSON.
 
 ## Models
 
@@ -1414,6 +1661,7 @@ The unit tests run against answers recorded from a real lab and scrubbed
   checks and the queue. That includes generic cards, unreachable sources, Vault read for
   metadata only, the VRAM gate with the voice reserve, heavy jobs in order, light jobs not
   blocked, cancel, retry, recovery, measured peaks and notifications.
+- `test_lab_fleet.py` covers the Tasks card and `bromigos lab tasks` ([above](#tests-for-tasks)).
 - `test_lab_tui.py` drives the dashboard with Textual's pilot. It compares the first
   screen with `tests/snapshots/lab-tui.svg`, on the Textual version it was made with.
 

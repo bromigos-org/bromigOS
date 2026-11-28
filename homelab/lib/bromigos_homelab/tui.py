@@ -136,6 +136,13 @@ def cell(v):
     return str(v)
 
 
+def literal(text):
+    """Text shown as it is. A plain str in a table cell or a hover hint is read as markup ([bold],
+    [link=…]), and a card's cells can hold text other people wrote (a task's or a pull request's title)."""
+    from rich.text import Text
+    return Text(str(text))
+
+
 def marked(state, text=""):
     m = MARK.get(state, "·")
     style = {"ok": "green", "warn": "yellow", "crit": "red", "unreachable": "red", "fail": "red"}.get(state, "dim")
@@ -176,7 +183,8 @@ class HintTable(DataTable):
     def watch_hover_coordinate(self, old, new):
         super().watch_hover_coordinate(old, new)
         r = new.row if new is not None else -1
-        self.tooltip = (self.hints[r] if 0 <= r < len(self.hints) and self.hints[r] else self.base_hint) or None
+        hint = (self.hints[r] if 0 <= r < len(self.hints) and self.hints[r] else self.base_hint) or None
+        self.tooltip = literal(hint) if hint else None
 
     def fill(self, columns, rows, hints, base_hint=""):
         """Replace everything, keeping the cursor's row where it can."""
@@ -782,10 +790,10 @@ class LabApp(UXApp):
         cols = [k for k in (c.get("columns") or []) if k != "state"]
         rows, hints = [], []
         for it in c.get("items", []):
-            rows.append([marked(it.get("state", "unknown"))] + [cell(it.get(k)) for k in cols])
+            rows.append([marked(it.get("state", "unknown"))] + [literal(cell(it.get(k))) for k in cols])
             hints.append(it.get("hint") or ", ".join(f"{k}: {cell(it.get(k))}" for k in cols[:6]))
         for s, e in (c.get("errors") or {}).items():
-            rows.append([marked("crit")] + [s] + [e] + [""] * max(0, len(cols) - 2))
+            rows.append([marked("crit")] + [literal(s)] + [literal(e)] + [""] * max(0, len(cols) - 2))
             hints.append(f"{s} didn't answer: {e}")
         t = self.query_one("#detail", HintTable)
         t.fill([""] + [k.replace("_", " ") for k in cols] if cols else ["", "source", "error"], rows, hints,

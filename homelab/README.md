@@ -73,6 +73,7 @@ The main modules in `lib/bromigos_homelab/`:
 | `infrastructure.py` | multi-node plans, storage inventory, approved growth and worker draining |
 | `observability.py` | required monitoring, dashboards, alerts and read-only connections |
 | `maintenance.py` | saved shutdown and startup plans, step confirmations and resumable run journals |
+| `fleet.py` | `bromigos lab tasks` and the Tasks card: a fleet of coding agents read from its control repository's Status issue, with the words every surface uses ([docs/lab.md](../docs/lab.md#tasks)) |
 | `power.py` | read-only PDU status and named power plans using private maintenance profiles |
 | `labnet.py` | `bromigos lab network`: the lab's own private network (Headscale), as a reviewed plan, and its verbs ([docs/lab-network.md](../docs/lab-network.md)) |
 | `reach.py` | Reach it from anywhere: the join bundle, joining a machine, and the installer's step. Standard library only |

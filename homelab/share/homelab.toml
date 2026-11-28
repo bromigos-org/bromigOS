@@ -23,6 +23,8 @@
 #   vault            secrets (status only)            https://host:8200
 #   herdr            agents                           — (the herdr CLI on this machine)
 #   github           ci                               — (your `gh` login); orgs = […], repos = […]
+#   fleet            tasks (a fleet of coding agents) — (your `gh` login); repo = "my-org/agents", its control
+#                                                     repository (docs/lab.md, "Tasks")
 #   lab              snapshot, hosts                  a Lab API serving GET /api/status
 #   enphase          energy (solar, the house, grid)  https://envoy.local (firmware 7+: auth_ref = an owner
 #                                                     token, tls_verify = false); history_metric = "…" (optional)

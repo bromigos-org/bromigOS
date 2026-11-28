@@ -1,0 +1,98 @@
+**Agents: on** · as of Sat 28 Nov 2026, 12:40 CET · Example
+
+- **Today:** 6 started, 4 merged, 1 stuck, 0 blocked, 1 rejected
+- **7 days:** 19 started, 9 merged, 1 stuck, 1 blocked, 3 rejected
+
+### Working now
+
+- **agent** · [app#57](https://github.com/my-org/app/issues/57) · `Add CSV export to the orders page` · step agent · attempt 1 · account 1 · since 12:31 · [run](https://github.com/my-org/agents/actions/runs/7000000091)
+- **fixing** · [app#49](https://github.com/my-org/app/issues/49) · `Search: an empty query returns a server error` · step verify · attempt 3 · account 1 · since 12:20 · [PR #55](https://github.com/my-org/app/pull/55) · [run](https://github.com/my-org/agents/actions/runs/7000000088)
+- **checks** · [site#14](https://github.com/my-org/site/issues/14) · `Footer links point at the old domain` · attempt 1 · `waiting for 2 check(s): build, test` · [PR #15](https://github.com/my-org/site/pull/15)
+
+### Waiting
+
+- **queued** · [site#12](https://github.com/my-org/site/issues/12) · `Docs: explain what '--json' prints & where <details> goes` · `ready; no free account this tick`
+
+### Needs a person
+
+- **stuck** · [app#41](https://github.com/my-org/app/issues/41) · `Checkout: totals are wrong when a coupon is applied` · since 09:12 · `3 fix rounds and a clean restart did not make it green` · [PR #44](https://github.com/my-org/app/pull/44)
+- **blocked** · [site#9](https://github.com/my-org/site/issues/9) · `Rotate the newsletter provider's key` · since Fri 27 Nov 17:03 · `the task needs a production credential the agents do not hold`
+
+### Recently finished
+
+- **merged** · [app#52](https://github.com/my-org/app/issues/52) · `Fix the date picker on small screens` · 11:58 · [PR #53](https://github.com/my-org/app/pull/53)
+- **rejected** · [app#49](https://github.com/my-org/app/issues/49) · `Search: an empty query returns a server error` · 11:20 · [PR #55](https://github.com/my-org/app/pull/55) · [run](https://github.com/my-org/agents/actions/runs/7000000079)
+- **merged** · [site#11](https://github.com/my-org/site/issues/11) · `Add a sitemap` · 10:41 · [PR #13](https://github.com/my-org/site/pull/13)
+- **stuck** · [app#41](https://github.com/my-org/app/issues/41) · `Checkout: totals are wrong when a coupon is applied` · 09:12 · [PR #44](https://github.com/my-org/app/pull/44)
+- **merged** · [app#50](https://github.com/my-org/app/issues/50) · `Orders page: sort by date` · 09:05 · [PR #51](https://github.com/my-org/app/pull/51)
+- **merged** · [app#47](https://github.com/my-org/app/issues/47) · `Remove the unused export endpoint` · 08:30 · [PR #48](https://github.com/my-org/app/pull/48)
+- **blocked** · [site#9](https://github.com/my-org/site/issues/9) · `Rotate the newsletter provider's key` · Fri 27 Nov 17:03
+- **merged** · [site#7](https://github.com/my-org/site/issues/7) · `Compress the hero image` · Thu 26 Nov 16:00 · [PR #8](https://github.com/my-org/site/pull/8)
+
+### Schedules
+
+- **weekly-review** · Weekly review · mondays 07:00 · next Mon 30 Nov 07:00 · last run Mon 23 Nov 07:00: success · not due yet today · [digest](https://github.com/my-org/agents/issues/31) · [run](https://github.com/my-org/agents/actions/runs/7000000001)
+
+### Accounts
+
+- **account 1** · available
+- **account 2** · resting until 15:45
+
+### Warnings
+
+- **warning** · `the checks of site#14 could not be read this tick: HTTP 502`
+
+---
+The tick rewrites this when something changed, and at least once an hour. If it is past 14:10 and this still shows the time above, the tick is not running: the kill switch is off, the tick is disabled, or it is failing. [The run that wrote this](https://github.com/my-org/agents/actions/runs/7000000100).
+
+<details>
+<summary>The feed (JSON, schema 1): what the screens read</summary>
+
+```json
+{
+"schema":1,
+"generated_at":"2026-11-28T11:40:03Z",
+"stale_after":"2026-11-28T13:10:03Z",
+"business":"Example",
+"control_repo":"my-org/agents",
+"timezone":"Europe/Berlin",
+"enabled":true,
+"tick_url":"https://github.com/my-org/agents/actions/runs/7000000100",
+"counts":{"today":{"started":6,"merged":4,"stuck":1,"blocked":0,"rejected":1},"seven_days":{"started":19,"merged":9,"stuck":1,"blocked":1,"rejected":3}},
+"accounts":[
+{"number":1,"state":"available","until":null},
+{"number":2,"state":"resting","until":"2026-11-28T14:45:00Z"}
+],
+"working":[
+{"repo":"app","issue":57,"pr":null,"title":"Add CSV export to the orders page","issue_url":"https://github.com/my-org/app/issues/57","pr_url":null,"run_url":"https://github.com/my-org/agents/actions/runs/7000000091","url":"https://github.com/my-org/app/issues/57","stage":"agent","step":"agent","why":null,"attempt":1,"account":1,"started_at":"2026-11-28T11:31:10Z"},
+{"repo":"app","issue":49,"pr":55,"title":"Search: an empty query returns a server error","issue_url":"https://github.com/my-org/app/issues/49","pr_url":"https://github.com/my-org/app/pull/55","run_url":"https://github.com/my-org/agents/actions/runs/7000000088","url":"https://github.com/my-org/app/issues/49","stage":"fixing","step":"verify","why":null,"attempt":3,"account":1,"started_at":"2026-11-28T11:20:41Z"},
+{"repo":"site","issue":14,"pr":15,"title":"Footer links point at the old domain","issue_url":"https://github.com/my-org/site/issues/14","pr_url":"https://github.com/my-org/site/pull/15","run_url":null,"url":"https://github.com/my-org/site/issues/14","stage":"checks","step":null,"why":"waiting for 2 check(s): build, test","attempt":1,"account":null,"started_at":null}
+],
+"waiting":[
+{"repo":"site","issue":12,"pr":null,"title":"Docs: explain what \u0060--json\u0060 prints \u0026 where \u003cdetails\u003e goes","issue_url":"https://github.com/my-org/site/issues/12","pr_url":null,"run_url":null,"url":"https://github.com/my-org/site/issues/12","kind":"queued","why":"ready; no free account this tick"}
+],
+"needs_person":[
+{"repo":"app","issue":41,"pr":44,"title":"Checkout: totals are wrong when a coupon is applied","issue_url":"https://github.com/my-org/app/issues/41","pr_url":"https://github.com/my-org/app/pull/44","run_url":null,"url":"https://github.com/my-org/app/issues/41","kind":"stuck","why":"3 fix rounds and a clean restart did not make it green","since":"2026-11-28T08:12:44Z"},
+{"repo":"site","issue":9,"pr":null,"title":"Rotate the newsletter provider's key","issue_url":"https://github.com/my-org/site/issues/9","pr_url":null,"run_url":null,"url":"https://github.com/my-org/site/issues/9","kind":"blocked","why":"the task needs a production credential the agents do not hold","since":"2026-11-27T16:03:00Z"}
+],
+"recent":[
+{"repo":"app","issue":52,"pr":53,"title":"Fix the date picker on small screens","issue_url":"https://github.com/my-org/app/issues/52","pr_url":"https://github.com/my-org/app/pull/53","run_url":null,"url":"https://github.com/my-org/app/issues/52","outcome":"merged","at":"2026-11-28T10:58:20Z"},
+{"repo":"app","issue":49,"pr":55,"title":"Search: an empty query returns a server error","issue_url":"https://github.com/my-org/app/issues/49","pr_url":"https://github.com/my-org/app/pull/55","run_url":"https://github.com/my-org/agents/actions/runs/7000000079","url":"https://github.com/my-org/agents/actions/runs/7000000079","outcome":"rejected","at":"2026-11-28T10:20:05Z"},
+{"repo":"site","issue":11,"pr":13,"title":"Add a sitemap","issue_url":"https://github.com/my-org/site/issues/11","pr_url":"https://github.com/my-org/site/pull/13","run_url":null,"url":"https://github.com/my-org/site/issues/11","outcome":"merged","at":"2026-11-28T09:41:00Z"},
+{"repo":"app","issue":41,"pr":44,"title":"Checkout: totals are wrong when a coupon is applied","issue_url":"https://github.com/my-org/app/issues/41","pr_url":"https://github.com/my-org/app/pull/44","run_url":null,"url":"https://github.com/my-org/app/issues/41","outcome":"stuck","at":"2026-11-28T08:12:44Z"},
+{"repo":"app","issue":50,"pr":51,"title":"Orders page: sort by date","issue_url":"https://github.com/my-org/app/issues/50","pr_url":"https://github.com/my-org/app/pull/51","run_url":null,"url":"https://github.com/my-org/app/issues/50","outcome":"merged","at":"2026-11-28T08:05:30Z"},
+{"repo":"app","issue":47,"pr":48,"title":"Remove the unused export endpoint","issue_url":"https://github.com/my-org/app/issues/47","pr_url":"https://github.com/my-org/app/pull/48","run_url":null,"url":"https://github.com/my-org/app/issues/47","outcome":"merged","at":"2026-11-28T07:30:12Z"},
+{"repo":"site","issue":9,"pr":null,"title":"Rotate the newsletter provider's key","issue_url":"https://github.com/my-org/site/issues/9","pr_url":null,"run_url":null,"url":"https://github.com/my-org/site/issues/9","outcome":"blocked","at":"2026-11-27T16:03:00Z"},
+{"repo":"site","issue":7,"pr":8,"title":"Compress the hero image","issue_url":"https://github.com/my-org/site/issues/7","pr_url":"https://github.com/my-org/site/pull/8","run_url":null,"url":"https://github.com/my-org/site/issues/7","outcome":"merged","at":"2026-11-26T15:00:00Z"}
+],
+"schedules":[
+{"id":"weekly-review","name":"Weekly review","when":"mondays 07:00","next_at":"2026-11-30T06:00:00Z","note":"not due yet today","last_run_at":"2026-11-23T06:00:20Z","last_outcome":"success","last_run_url":"https://github.com/my-org/agents/actions/runs/7000000001","digest_at":"2026-11-23T06:04:10Z","digest_url":"https://github.com/my-org/agents/issues/31"}
+],
+"warnings":[
+"the checks of site#14 could not be read this tick: HTTP 502"
+],
+"omitted":{"working":0,"waiting":0,"needs_person":0,"recent":0,"warnings":0}
+}
+```
+
+</details>

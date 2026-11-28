@@ -1,11 +1,12 @@
 """bromigOS's own console cards (console.py has the card format and how to add one).
 
 Orders: 10 nodes, 20 gpus, 30 services, 40 models, 50 deployments, 55 workloads, 60 storage,
-70 alerts, 80 jobs, 90 secrets; every other capability a generic card at 100+.
+70 alerts, 80 jobs, 90 secrets; every other capability a generic card at 100+ (120 agents, 125 tasks,
+130 ci).
 """
 import os
 
-from . import caps, config, registry
+from . import caps, config, fleet, registry
 from .console import _visible, hidden, register_card, worst
 
 GIB = 1024 ** 3
@@ -403,6 +404,17 @@ register_card("secrets", title="Vault", order=90, columns=("name", "initialized"
 
 register_card("agents", title="Agents", order=120, columns=("name", "status", "model", "gateways", "connectors", "activity", "cwd"),
               hint="Lab agents and local coding agents. Lab rows show health, model, gateways, connectors and activity metadata; no messages or secrets are read.")
+
+
+# ------------------------------------------------------------------ tasks (a fleet of coding agents)
+def _tasks(res):
+    pats = hidden()
+    return fleet.card(res, visible=lambda rec: _visible(rec, pats))
+
+
+# the words, the picture and the hover hint are fleet.py's, so every surface says the same
+register_card("tasks", title="Tasks", order=125, capability="tasks", needs=("tasks",), covers=("tasks",),
+              hint=fleet.HINT, build=_tasks)
 register_card("ci", title="CI and pull requests", order=130,
               columns=("repo", "kind", "number", "title", "status", "conclusion"),
               hint="Open pull requests and the latest CI runs of the repos you named (GitHub)")
