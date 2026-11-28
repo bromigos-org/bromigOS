@@ -1005,12 +1005,13 @@ def list_jobs(env, limit=None, states=None, lab=None, server=True):
     return out[:limit] if limit else out
 
 
-_LAB_ID = re.compile(r"(comfy-[a-z0-9]{1,24}-[0-9a-f-]{36}|feed-[a-z0-9][a-z0-9._-]{0,63})\Z")
+_LAB_ID = re.compile(r"(comfy-[a-z0-9]{1,24}-[0-9a-f-]{36}|feed-[a-z0-9][a-z0-9._-]{0,63}"
+                     r"|task\.[a-z0-9][a-z0-9-]{0,39}\.[a-z0-9][a-z0-9._-]{0,99}\.[0-9]{1,9})\Z")
 
 
 def is_lab(text):
-    """Whether `text` is a lab job's id (comfy-…, feed-…): bromigos_labjobs.is_lab_id's rule,
-    without loading it."""
+    """Whether `text` is a lab job's id (comfy-…, feed-…, or a fleet's task.…):
+    bromigos_labjobs.is_lab_id's rule, without loading it."""
     return bool(isinstance(text, str) and _LAB_ID.match(text))
 
 
@@ -1791,6 +1792,8 @@ def plain_show(rec, tail, now_ms):
     lines += control_lines(rec)
     if rec.get("lab"):
         return shown(lines + _labjobs().plain_lab(rec, now_ms))
+    if rec.get("task"):                              # a fleet's task: no command, unit or log of this machine's
+        return shown(lines + _labjobs().plain_task(rec, now_ms))
     lines += ["", f"Command  {shlex.join(rec['command'])}", f"Unit     {rec['unit'] or 'none: it ran in the foreground'}",
               f"Log      {rec['log']}"]
     if rec.get("locks"):

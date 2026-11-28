@@ -14,6 +14,9 @@ on:
       - "bin/bromigos-activity"
       - "bin/bromigos-welcome-console"
       - "tests/activity/**"
+      # what reads a fleet's feed for the job follower (docs/activity.md, "A fleet's tasks")
+      - "homelab/lib/bromigos_homelab/fleet.py"
+      - "homelab/tests/fixtures/fleet-mirror.json"
       # the commands whose progress lines the parser must know
       - "homelab/lib/bromigos_homelab/localprovision.py"
       - "iso/profile/airootfs/usr/local/**"

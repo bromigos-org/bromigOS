@@ -7,20 +7,27 @@
 # the post's art are served; the door says where the board lives; a code from inside the
 # container signs a browser in at that address and at no other; the signed-in board, its jobs
 # and the lab follower answer; the follower reads a ComfyUI named in labjobs.toml (a stand-in
-# that answers /queue and /history, inside the container); and the parts run as their own users.
-# --checkout runs this checkout's board library over the package's (a change that isn't
-# published yet). Needs docker and python3. Nothing is left behind.
+# that answers /queue and /history, inside the container) and a fleet's status mirror (a stand-in
+# that answers /v1/feed, inside the container too), whose tasks then show on the board; and the
+# parts run as their own users.
+# --checkout runs this checkout's board library over the package's, and its job follower and
+# feed reader over bromigos-core's and bromigos-lab's (a change that isn't published yet). Needs
+# docker and python3. Nothing is left behind.
 set -euo pipefail
 image=${1:?the image to test}; here=$(cd "$(dirname "$0")" && pwd); repo=$(cd "$here/../.." && pwd)
 name=board-test-$$; work=$(mktemp -d); addr=board.mylab.example
 fail() { echo "FAIL: $*" >&2; echo "--- the container said:" >&2; docker logs "$name" 2>&1 | tail -30 >&2; exit 1; }
 trap 'docker rm -f "$name" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
-printf '[[comfyui]]\nname = "standin"\nurl = "http://127.0.0.1:8188"\n' > "$work/labjobs.toml"; chmod 0644 "$work/labjobs.toml"
+printf '[[comfyui]]\nname = "standin"\nurl = "http://127.0.0.1:8188"\n\n[[fleet]]\nname = "tasks"\nurl = "http://127.0.0.1:8082/v1/feed"\n' > "$work/labjobs.toml"; chmod 0644 "$work/labjobs.toml"
 mounts=(-v "$work/labjobs.toml:/etc/bromigos/labjobs.toml:ro")
 if [ "${2:-}" = --checkout ]; then
   mounts+=(-v "$repo/board/lib/bromigos_board:/usr/lib/bromigos/lib/bromigos_board:ro" -v "$repo/board/caddy/site.caddy:/usr/share/bromigos-board/caddy/site.caddy:ro"
-           -v "$here/bromigos-board-container:/usr/local/bin/bromigos-board-container:ro" -v "$here/Caddyfile:/etc/bromigos-board-container/Caddyfile:ro")
+           -v "$here/bromigos-board-container:/usr/local/bin/bromigos-board-container:ro" -v "$here/Caddyfile:/etc/bromigos-board-container/Caddyfile:ro"
+           # the job follower (bromigos-core) and the feed's reader (bromigos-lab), which the board's API and follower use
+           -v "$repo/lib/bromigos_labjobs.py:/usr/lib/bromigos/lib/bromigos_labjobs.py:ro" -v "$repo/lib/bromigos_activity.py:/usr/lib/bromigos/lib/bromigos_activity.py:ro"
+           -v "$repo/bin/bromigos-activity:/usr/lib/bromigos/bin/bromigos-activity:ro"
+           -v "$repo/homelab/lib/bromigos_homelab/fleet.py:/usr/lib/bromigos/lib/bromigos_homelab/fleet.py:ro")
 fi
 docker run -d --name "$name" -e BOARD_ADDRESS="$addr" -e PYTHONDONTWRITEBYTECODE=1 -p 127.0.0.1::8080 "${mounts[@]}" "$image" >/dev/null
 port=$(docker port "$name" 8080/tcp | sed -n '1s/.*://p'); url="http://127.0.0.1:$port"
@@ -33,6 +40,23 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", 8188), H).serve_forever()'
+# a fleet's status mirror: one business, one task that needs a person and one being written, reported just now
+docker exec -d "$name" python3 -I -c '
+import http.server, json, time
+def at(s): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + s))
+def task(n, title, **more): return dict({"repo": "app", "issue": n, "pr": None, "title": title, "url": "https://github.com/my-org/app/issues/%d" % n, "issue_url": "https://github.com/my-org/app/issues/%d" % n}, **more)
+feed = {"schema": 1, "generated_at": at(0), "stale_after": at(5400), "business": "Example", "control_repo": "my-org/agents", "timezone": "UTC", "enabled": True,
+        "headline": "1 needs you \u00b7 1 working \u00b7 0 waiting \u00b7 0 merged today", "counts": {"today": {"merged": 0}, "seven_days": {"merged": 0}}, "accounts": [],
+        "working": [task(57, "Add CSV export to the orders page", stage="agent", step="agent", lane="working", phrase="Writing", started_at=at(-300))],
+        "needs_person": [task(41, "Checkout totals are wrong", kind="stuck", why="it did not go green", lane="needs_you", phrase="Stuck \u00b7 it did not go green", since=at(-900))],
+        "waiting": [], "recent": [], "warnings": [], "omitted": {}}
+body = json.dumps({"schema": 1, "feeds": [{"business": "example", "received_at": at(0), "feed": feed}]}).encode()
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        ok = self.path.split("?")[0] == "/v1/feed"
+        self.send_response(200 if ok else 404); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body) if ok else 0)); self.end_headers(); self.wfile.write(body if ok else b"")
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", 8082), H).serve_forever()'
 
 get() { curl -s --max-time "${wait:-10}" -o "$work/body" -w '%{http_code}' -H "Host: $addr" "${@:2}" "$url$1" || true; }
 json() { python3 -I -c 'import json, sys; d = json.load(open(sys.argv[1])); print(eval(sys.argv[2], {"d": d}))' "$work/body" "$1"; }
@@ -68,6 +92,25 @@ for _ in $(seq 40); do
   sleep 1
 done
 [ -n "$ok" ] || fail "the follower never read the stand-in ComfyUI: $(cat "$work/body")"
+
+# a fleet's tasks: the follower reads the stand-in status mirror, and the board has its report,
+# counts what needs you on Home and carries the tasks on the jobs' stream
+ok=
+for _ in $(seq 40); do
+  [ "$(get /api/fleet "${cookie[@]}")" = 200 ] || fail "the fleet's document didn't answer: $(cat "$work/body")"
+  if [ "$(json '[(f["business"], f["state"], f["counts"]["needs_you"], f["counts"]["working"]) for f in d["fleets"]] == [("Example", "fresh", 1, 1)] and d["state"] == "warn"')" = True ]; then ok=1; break; fi
+  sleep 1
+done
+[ -n "$ok" ] || fail "the follower never read the stand-in status mirror: $(cat "$work/body")"
+ok=
+for _ in $(seq 20); do
+  [ "$(get /api/board "${cookie[@]}")" = 200 ] || fail "the signed-in board stopped answering"
+  if [ "$(json '[(n["job"], n["machine"]) for n in d["needs_you"] if n["job"]]')" = "[('task.example.app.41', 'Example')]" ]; then ok=1; break; fi
+  sleep 1
+done
+[ -n "$ok" ] || fail "the task that needs you isn't on Home: $(json 'd["needs_you"]')"
+wait=3 get /api/activity "${cookie[@]}" >/dev/null
+{ grep -q '"task\.example\.app\.57"' "$work/body" && grep -q '"task\.example\.app\.41"' "$work/body" && grep -q '"kind":"agent\.task"' "$work/body"; } || fail "the fleet's tasks aren't on the jobs' stream: $(head -c 400 "$work/body")"
 
 # each part as its own user, and none of them root but the reader
 who=$(docker exec "$name" ps -eo user:20,args --no-headers)

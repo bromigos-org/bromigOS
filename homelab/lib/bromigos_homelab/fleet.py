@@ -16,16 +16,18 @@ module reads that feed and makes the one picture every surface prints: the Tasks
     check(feed, now)      fresh, stale or switched off
     view(feed, now)       the picture: a headline, lanes of rows, counts, accounts, warnings
     read_github(repo)     the feed, through `gh api` and your own gh login (ReadError says why not)
-    read_url(url)         the feeds of an in-lab mirror, over HTTP (optional)
+    read_url(url)         the feeds your lab's status mirror holds, over HTTP (optional)
     cached(key, read)     one read a minute, however often a view refreshes
     card(result)          the Tasks card, from the `tasks` capability's records
     render_text(view)     the picture in plain text, 80 columns
     main(argv)            bromigos lab tasks [--json]
 
-The words are here and nowhere else, so every surface says the same thing. The noun is *task*.
-The lanes, in this order: Needs you, Proposed, Working, Waiting, Done. A row's `phrase` says
-where its task is ("Stuck · …", "Writing", "Checks running", "Fixing · round 2", "Queued · …",
-"Merged"). A feed that names a row's `lane` or `phrase` itself is shown as it says.
+The words are the fleet's own, so every surface says the same thing: a feed gives each task its
+`lane` and its `phrase` ("Stuck · …", "Writing", "Checks running", "Fixing · round 2", "Queued ·
+…", "Merged"), the lanes' counts and a `headline`, and this module shows them as given. The noun
+is *task*. The lanes, in this order: Needs you, Proposed, Working, Waiting, Done. A feed written
+before it carried those words gets them from the mapping here (working_phrase, _derive), and
+nowhere else.
 
 Titles, reasons and warnings in a feed are text other people wrote. clean() puts each on one
 line, without control characters, terminal escape sequences or invisible characters, and caps
@@ -58,13 +60,17 @@ CACHE_SECONDS = 60
 CARD_ROWS = 8                           # tasks a business shows on the card before "+N more"
 DONE_ROWS = 3                           # merged tasks `bromigos lab tasks` lists before "+N more"
 MAX_BYTES = 2 * 1024 * 1024             # of a mirror's answer
+NO_REPORT = ("no report yet: your lab's status mirror holds no feed until the fleet's next run, about ten minutes "
+             "after the mirror started")
 
 LANES = (("needs_you", "Needs you"), ("proposed", "Proposed"), ("working", "Working"), ("waiting", "Waiting"),
          ("done", "Done"))
 _LANE_WORDS = {title.lower(): lane for lane, title in LANES}
-# the feed's lists, the lane each fills, and the field that says since when
-_LISTS = (("needs_person", "needs_you", "since"), ("proposed", "proposed", "since"), ("working", "working", "started_at"),
-          ("waiting", "waiting", None), ("recent", "done", "at"))
+SEP = " \u00b7 "                          # between a phrase's words and its reason, and the headline's parts
+# the feed's lists, the lane each fills when an entry names none, and the field that says since when
+_LISTS = (("needs_person", "needs_you", "since"), ("proposed", "proposed", "filed_at"),
+          ("working", "working", "started_at"), ("waiting", "waiting", None), ("recent", "done", "at"))
+NOT_MERGED = ("stuck", "blocked", "rejected")       # how work in `recent` ended without a merge: events, not tasks
 # what a feed holds today; one that lacks any of these says so in the view's warnings
 _EXPECTED = {"generated_at": str, "stale_after": str, "business": str, "enabled": bool, "timezone": str,
              "accounts": list, "working": list, "waiting": list, "needs_person": list, "recent": list, "counts": dict,
@@ -217,20 +223,26 @@ def check(feed, now=None):
             "age": span(age) if age is not None else None}
 
 
-def headline(counts, chk):
+def headline(counts, chk, said=None):
     """The one sentence: "2 need you · 3 working · 1 waiting · 4 merged today". "Nothing needs you"
     only for a feed that was read and is fresh; a stale one says for how long, a switched-off one
-    says SWITCHED OFF."""
+    says SWITCHED OFF. said: the feed's own `headline`, used as it is for a fresh feed. Without
+    it the sentence is made as the fleet makes it: proposals only when there are any, the merges
+    left out when their count isn't known."""
     if chk["state"] == "off":
         return "SWITCHED OFF" + (f" · no update for {chk['age']}" if chk["stale"] and chk["age"] else "")
     if chk["state"] == "stale":
         return f"No update for {chk['age']}" if chk["age"] else "No update: the feed doesn't say when it was written"
+    if said:
+        return said
     need = counts.get("needs_you") or 0
     parts = [f"{need} need{'s' if need == 1 else ''} you" if need else "Nothing needs you"]
-    parts += [f"{counts[k]} {word}" for k, word in (("proposed", "proposed"), ("working", "working"),
-                                                    ("waiting", "waiting"), ("merged_today", "merged today"))
-              if counts.get(k)]
-    return " · ".join(parts)
+    if counts.get("proposed"):
+        parts.append(f"{counts['proposed']} proposed")
+    parts += [f"{counts.get('working') or 0} working", f"{counts.get('waiting') or 0} waiting"]
+    if counts.get("merged_today") is not None:
+        parts.append(f"{counts['merged_today']} merged today")
+    return SEP.join(parts)
 
 
 # ------------------------------------------------------------------ the canonical words
@@ -242,37 +254,42 @@ def _with(word, why):
     return f"{word} · {why}" if why else word
 
 
+# what the job a work run is in is called (`stage` agent)
+_STEP_WORDS = {"queued": "Starting", "prepare": "Starting", "agent": "Writing", "verify": "Checking the change",
+               "review": "Reviewing", "second_review": "Second review", "finish": "Opening the pull request"}
+
+
 def working_phrase(entry):
-    """A working task's phrase from its `stage` and `step`; None for a stage this version doesn't know."""
+    """A working task's phrase from its `stage` and `step`, for a feed that gives none; None for a
+    stage this version doesn't know. A fix run's round is the fleet's to count, so without the
+    feed's phrase it is just "Fixing"."""
     stage, step = entry.get("stage"), entry.get("step")
     if stage == "agent":
-        return "Starting" if step == "queued" else "Writing"
+        return _STEP_WORDS.get(step, "Working")
     if stage == "checks":
-        return "Checks running"
+        return "Waiting for checks" if str(entry.get("why") or "").startswith("no checks") else "Checks running"
     if stage == "review":
         return "Second review" if step == "second_review" else "Reviewing"
     if stage == "fixing":
-        # `attempt` counts every start on the task, the first one that wrote the change included
-        n = _int(entry.get("attempt"))
-        return f"Fixing · round {max(1, n - 1)}" if n else "Fixing"
+        return "Fixing"
     if stage == "merging":
         return "Merging"
     return None
 
 
 def _derive(key, entry):
-    """(phrase, where its reason went) for a row of the feed's list `key`: the mapping every surface uses."""
+    """The phrase of a row of the feed's list `key`, for a feed that gives none."""
     if key == "needs_person":
-        return _with({"stuck": "Stuck", "blocked": "Blocked"}.get(entry.get("kind"), "Needs you"), _why(entry)), True
+        return _with({"stuck": "Stuck", "blocked": "Blocked"}.get(entry.get("kind"), "Needs you"), _why(entry))
     if key == "proposed":
-        return _with("Proposed", _why(entry)), True
+        return "Proposed"
     if key == "working":
-        return working_phrase(entry) or "Working", False
+        return working_phrase(entry) or "Working"
     if key == "waiting":
-        return _with("Queued", _why(entry)), True
+        return _with("Queued" if entry.get("kind") == "queued" else "Waiting", _why(entry))
     if entry.get("outcome") == "merged":
-        return "Merged", False
-    return _with("Not merged", _why(entry)), True
+        return "Merged"
+    return _with("Not merged", _why(entry) or (entry["outcome"] if entry.get("outcome") in ("stuck", "blocked") else ""))
 
 
 # ------------------------------------------------------------------ the picture
@@ -306,8 +323,11 @@ def _row(key, lane, at_field, entry, now, zone):
     repo = entry.get("repo") if isinstance(entry.get("repo"), str) and _NAME.fullmatch(entry["repo"]) else \
         clean(entry.get("repo"), 60) or "?"
     number = issue or pr
-    phrase, used_why = _derive(key, entry)
-    given = clean(entry.get("phrase"), 200) if isinstance(entry.get("phrase"), str) else ""
+    given = clean(entry.get("phrase"), 300) if isinstance(entry.get("phrase"), str) else ""
+    phrase = given or _derive(key, entry)
+    # the reason is said once: a phrase that ends in it carries it already
+    why, tail = clean(entry.get("why"), 300).rstrip("…"), phrase.partition(SEP)[2].rstrip("…")
+    said = bool(why and tail and (why.startswith(tail) or tail.startswith(why)))
     at = _moment(entry.get(at_field)) if at_field else None
     first = _link(entry.get("issue_url")) if issue else _link(entry.get("pr_url"))
     links = []
@@ -315,11 +335,32 @@ def _row(key, lane, at_field, entry, now, zone):
         links.append({"text": f"PR #{pr}", "url": entry["pr_url"]})
     if _link(entry.get("run_url")):
         links.append({"text": "run", "url": entry["run_url"]})
+    minutes = entry.get("minutes")
+    reviewers = entry.get("reviewers")
     return {"lane": lane, "label": f"{repo}#{number}" if number else repo, "repo": repo, "number": number,
-            "issue": issue, "pr": pr, "title": clean(entry.get("title"), 160), "phrase": given or phrase,
-            "why": "" if used_why and not given else _why(entry), "at": _iso(at), "when": _when(at, now, zone),
+            "issue": issue, "pr": pr, "title": clean(entry.get("title"), 160), "phrase": phrase,
+            "why": "" if said else _why(entry), "at": _iso(at), "when": _when(at, now, zone),
+            "today": bool(at and at.astimezone(zone).date() == now.astimezone(zone).date()),
             "url": first or _link(entry.get("url")), "links": links, "account": _int(entry.get("account")),
-            "attempt": _int(entry.get("attempt"))}
+            "attempt": _int(entry.get("attempt")), "turns": _int(entry.get("turns")),
+            "minutes": round(float(minutes), 1) if isinstance(minutes, (int, float)) and not isinstance(minutes, bool)
+            and 0 <= minutes < 1e6 else None,
+            "reviewers": [r for r in (clean(x, 40) for x in reviewers[:4]) if r] if isinstance(reviewers, list) else None}
+
+
+def _schedule(entry, now, zone):
+    """One scheduled job of the fleet, as a screen says it."""
+    nxt, last = _moment(entry.get("next_at")), _moment(entry.get("last_run_at"))
+    said = clean(entry.get("last_words"), 80) or clean(str(entry.get("last_outcome") or "").replace("_", " "), 40)
+    tickets = []
+    for t in _entries(entry, "tickets")[:10]:
+        repo = t.get("repo") if isinstance(t.get("repo"), str) and _NAME.fullmatch(t["repo"]) else clean(t.get("repo"), 60)
+        if repo and _int(t.get("issue")):
+            tickets.append({"label": f"{repo}#{t['issue']}", "url": _link(t.get("url"))})
+    return {"id": clean(entry.get("id"), 60) or "?", "name": clean(entry.get("name"), 80), "when": clean(entry.get("when"), 60),
+            "next_at": _iso(nxt), "next": _when(nxt, now, zone), "last_run_at": _iso(last), "last": _when(last, now, zone),
+            "last_words": said, "url": _link(entry.get("last_run_url")), "digest_url": _link(entry.get("digest_url")),
+            "tickets": tickets}
 
 
 def _account(entry, now, zone):
@@ -338,18 +379,24 @@ def view(feed, now=None):
 
       {"schema": 1, "noun": "task", "business", "control_repo", "url" (the run that wrote the feed),
        "state": fresh | stale | off, "fresh", "headline", "generated_at", "stale_after", "updated",
-       "age_s", "age", "timezone",
+       "age_s", "age", "timezone", "driver": heartbeat | schedule | None, "ignored",
        "lanes": [{"id", "title", "count", "omitted", "rows": [row, …], "events": [row, …]}, …],
        "counts": {"needs_you", "proposed", "working", "waiting", "merged_today",
                   "today": {started, merged, stuck, blocked, rejected}, "seven_days": {…}},
-       "accounts": [{"number", "state", "until", "phrase"}], "warnings": ["…"]}
+       "accounts": [{"number", "state", "until", "phrase"}],
+       "schedules": [{"id", "name", "when", "next_at", "next", "last_run_at", "last", "last_words",
+                      "url", "digest_url", "tickets": [{"label", "url"}]}],
+       "warnings": ["…"]}
 
     A row: {"lane", "label" (repo#number), "repo", "number", "issue", "pr", "title", "phrase", "why",
-    "at", "when", "url", "links": [{"text", "url"}], "account", "attempt"}. `count` is the lane's
-    tasks, the ones the feed left out for room (`omitted`) included. Done's rows are the merged
-    tasks; its `events` are attempts a reviewer turned down ("Not merged · …"), which aren't a lane.
-    Times are in the feed's time zone. Unknown fields are ignored; a missing one is named in
-    `warnings` and its part is left out. This never raises on a feed validate() accepted."""
+    "at", "when", "today", "url", "links": [{"text", "url"}], "account", "attempt", "turns", "minutes",
+    "reviewers"}. Its lane and phrase are the feed's own when it gives them. `count` is the lane's
+    tasks as the feed counts them (before it left any out for room, `omitted`). Done's rows are
+    the merged tasks; its `events` are work that ended without a merge ("Not merged · …": stuck,
+    blocked, turned down by a reviewer), which stand under Done and aren't tasks of their own.
+    `ignored` counts what the fleet leaves alone, shown in no lane. Times are in the feed's time
+    zone. Unknown fields are ignored; a missing one is named in `warnings` and its part is left
+    out. This never raises on a feed validate() accepted."""
     now = _now(now)
     notes = []
     zone, zone_name = _zone(feed, notes)
@@ -359,21 +406,26 @@ def view(feed, now=None):
         notes.append("The feed is missing " + ", ".join(missing) + ": what "
                      + ("they" if len(missing) > 1 else "it") + " would show is left out.")
     omitted = feed.get("omitted") if isinstance(feed.get("omitted"), dict) else {}
+    # the feed's own lanes: their titles, and how many tasks each holds
+    said = {e["id"]: e for e in _entries(feed, "lanes") if isinstance(e.get("id"), str)}
 
-    lanes = {lane: {"id": lane, "title": title, "count": 0, "omitted": 0, "rows": [], "events": []}
-             for lane, title in LANES}
+    lanes = {lane: {"id": lane, "title": clean(said.get(lane, {}).get("title"), 40) or title, "count": 0, "omitted": 0,
+                    "rows": [], "events": []} for lane, title in LANES}
     extra = {}                                   # lanes a newer feed names that this version doesn't know
-    unknown_stage = unknown_outcome = skipped = 0
+    unknown_stage = unknown_outcome = skipped = left_alone = 0
     for key, lane, at_field in _LISTS:
         raw = feed.get(key)
         skipped += sum(1 for e in raw if not isinstance(e, dict)) if isinstance(raw, list) else 0
         for entry in _entries(feed, key):
-            if key == "recent" and entry.get("outcome") in ("stuck", "blocked"):
-                continue                         # the same task stands under Needs you while it is stuck
-            if key == "recent" and entry.get("outcome") not in ("merged", "rejected"):
+            worded = isinstance(entry.get("phrase"), str) and bool(clean(entry["phrase"], 300))
+            if ("lane" in entry and entry["lane"] is None) or ("lane" not in entry and entry.get("kind") == "ignored"):
+                left_alone += 1                  # what the fleet leaves alone stands in no lane
+                continue
+            outcome = entry.get("outcome") if key == "recent" else None
+            if key == "recent" and outcome != "merged" and outcome not in NOT_MERGED and not worded:
                 unknown_outcome += 1
                 continue
-            if key == "working" and working_phrase(entry) is None and not isinstance(entry.get("phrase"), str):
+            if key == "working" and working_phrase(entry) is None and not worded:
                 unknown_stage += 1
             row = _row(key, lane, at_field, entry, now, zone)
             named = clean(entry.get("lane"), 40) if isinstance(entry.get("lane"), str) else ""
@@ -384,14 +436,13 @@ def view(feed, now=None):
                     extra.setdefault(to, {"id": to, "title": named, "count": 0, "omitted": 0, "rows": [], "events": []})
                 row["lane"] = to
             box = lanes.get(row["lane"]) or extra[row["lane"]]
-            if key == "recent" and entry.get("outcome") == "rejected" and not named:
-                box["events"].append(row)
-            else:
-                box["rows"].append(row)
+            # in `recent`, only a merge is finished work: the rest are events under Done
+            box["events" if key == "recent" and outcome != "merged" and row["lane"] == "done" else "rows"].append(row)
         if lane != "done":                       # `recent` is cut to its newest 20 by design, not for room
             lanes[lane]["omitted"] = _int(omitted.get(key)) or 0
     for box in list(lanes.values()) + list(extra.values()):
-        box["count"] = len(box["rows"]) + box["omitted"]
+        counted = _int(said.get(box["id"], {}).get("count")) if box["id"] != "done" else None
+        box["count"] = max(counted, len(box["rows"])) if counted is not None else len(box["rows"]) + box["omitted"]
     if unknown_stage:
         notes.append(f"{unknown_stage} working {NOUN}{'s are' if unknown_stage > 1 else ' is'} at a stage this "
                      "bromigOS doesn't know, shown as Working.")
@@ -408,19 +459,24 @@ def view(feed, now=None):
         w = windows.get(name) if isinstance(windows.get(name), dict) else {}
         counts[name] = {k: _int(w.get(k)) for k in _COUNTS}
     counts["merged_today"] = counts["today"]["merged"]
-    said = feed.get("warnings") if isinstance(feed.get("warnings"), list) else []
+    warned = feed.get("warnings") if isinstance(feed.get("warnings"), list) else []
     more = _int(omitted.get("warnings")) or 0
-    warnings = [w for w in (clean(x, 300) for x in said) if w] + ([f"and {more} more warnings the feed left out"]
-                                                                    if more else []) + notes
+    warnings = [w for w in (clean(x, 300) for x in warned) if w] + ([f"and {more} more warnings the feed left out"]
+                                                                      if more else []) + notes
     written = _moment(feed.get("generated_at"))
+    ignored = _int(feed.get("ignored"))
     return {"schema": SCHEMA, "noun": NOUN, "business": clean(feed.get("business"), 60) or "?",
             "control_repo": feed["control_repo"] if isinstance(feed.get("control_repo"), str)
             and _REPO.fullmatch(feed["control_repo"]) else "", "url": _link(feed.get("tick_url")),
-            "state": chk["state"], "fresh": chk["fresh"], "headline": headline(counts, chk),
+            "state": chk["state"], "fresh": chk["fresh"],
+            "headline": headline(counts, chk, clean(feed.get("headline"), 200) if isinstance(feed.get("headline"), str) else ""),
             "generated_at": chk["generated_at"], "stale_after": chk["stale_after"],
             "updated": _when(written, now, zone), "age_s": chk["age_s"], "age": chk["age"], "timezone": zone_name,
+            "driver": feed.get("driver") if feed.get("driver") in ("heartbeat", "schedule") else None,
+            "ignored": ignored if ignored is not None else left_alone,
             "lanes": list(lanes.values()) + list(extra.values()), "counts": counts,
-            "accounts": [_account(e, now, zone) for e in _entries(feed, "accounts")], "warnings": warnings}
+            "accounts": [_account(e, now, zone) for e in _entries(feed, "accounts")],
+            "schedules": [_schedule(e, now, zone) for e in _entries(feed, "schedules")], "warnings": warnings}
 
 
 # ------------------------------------------------------------------ reading: GitHub, through gh
@@ -486,33 +542,12 @@ def read_github(repo, label=STATE_LABEL, timeout=30):
     raise ReadError("no-issue", f"{repo} has no Status issue yet: the fleet's job writes it on its first run")
 
 
-# ------------------------------------------------------------------ reading: an in-lab mirror, over HTTP
-def read_url(url, timeout=8, headers=None, context=None):
-    """The feeds an in-lab mirror holds (optional: a lab that keeps one). GET `url` answers
-    {"schema": 1, "feeds": [{"business", "received_at", "feed"}, …]}. Returns one entry per feed:
-    {"business", "received_at", "feed"}, or {"business", "received_at", "error"} for a feed this
-    version can't read. ReadError when the mirror doesn't answer or answers something else."""
-    if not isinstance(url, str) or not re.match(r"^https?://[^\s/]+", url):
-        raise ReadError("failed", "the mirror's address must start with http:// or https://")
-    req = urllib.request.Request(url, headers={"Accept": "application/json", **(headers or {})})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=context) as r:
-            raw = r.read(MAX_BYTES + 1)
-    except urllib.error.HTTPError as e:
-        code = e.code
-        e.close()
-        if code in (401, 403):
-            raise ReadError("no-access", f"the mirror refused the request (HTTP {code}): check the source's "
-                                         "auth_ref") from None
-        raise ReadError("failed", f"the mirror answered HTTP {code}") from None
-    except (OSError, ValueError) as e:
-        raise ReadError("failed", f"the mirror didn't answer: {clean(getattr(e, 'reason', e), 120)}") from None
-    if len(raw) > MAX_BYTES:
-        raise ReadError("bad-feed", "the mirror's answer is larger than any feed")
-    try:
-        doc = json.loads(raw.decode("utf-8"))
-    except (ValueError, RecursionError):
-        raise ReadError("bad-feed", "the mirror didn't answer with JSON") from None
+# ------------------------------------------------------------------ reading: your lab's status mirror, over HTTP
+def read_envelope(doc):
+    """The feeds in a status mirror's answer, {"schema": 1, "feeds": [{"business", "received_at",
+    "feed"}, …]}: one entry per feed, {"business", "received_at", "feed"}, or {"business",
+    "received_at", "error"} for a feed this version can't read. `business` is the mirror's name
+    for it. An empty list is a mirror that has no report yet. ReadError for anything else."""
     if not isinstance(doc, dict) or isinstance(doc.get("schema"), bool) or doc.get("schema") != SCHEMA \
             or not isinstance(doc.get("feeds"), list):
         raise ReadError("bad-feed", 'the mirror\'s answer is not {"schema": 1, "feeds": […]}')
@@ -527,6 +562,41 @@ def read_url(url, timeout=8, headers=None, context=None):
             one["error"] = str(e)
         out.append(one)
     return out
+
+
+def fetch_url(url, timeout=8, headers=None, context=None, etag=None):
+    """(entries, etag) from your lab's status mirror: GET `url` (…/v1/feed), read by read_envelope.
+    With `etag`, an earlier answer's, an unchanged answer (304) gives (None, etag). ReadError when
+    the mirror doesn't answer or answers something else."""
+    if not isinstance(url, str) or not re.match(r"^https?://[^\s/]+", url):
+        raise ReadError("failed", "the mirror's address must start with http:// or https://")
+    asked = {"Accept": "application/json", **(headers or {}), **({"If-None-Match": etag} if etag else {})}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=asked), timeout=timeout, context=context) as r:
+            raw, tag = r.read(MAX_BYTES + 1), r.headers.get("ETag")
+    except urllib.error.HTTPError as e:
+        code = e.code
+        e.close()
+        if code == 304 and etag:
+            return None, etag
+        if code in (401, 403):
+            raise ReadError("no-access", f"the mirror refused the request (HTTP {code}): check the source's "
+                                         "auth_ref") from None
+        raise ReadError("failed", f"the mirror answered HTTP {code}") from None
+    except (OSError, ValueError) as e:
+        raise ReadError("failed", f"the mirror didn't answer: {clean(getattr(e, 'reason', e), 120)}") from None
+    if len(raw) > MAX_BYTES:
+        raise ReadError("bad-feed", "the mirror's answer is larger than any feed")
+    try:
+        doc = json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError):
+        raise ReadError("bad-feed", "the mirror didn't answer with JSON") from None
+    return read_envelope(doc), tag if isinstance(tag, str) and len(tag) <= 200 and clean(tag, 200) == tag else None
+
+
+def read_url(url, timeout=8, headers=None, context=None):
+    """The feeds your lab's status mirror holds (fetch_url without an etag): one entry per feed."""
+    return fetch_url(url, timeout, headers, context)[0]
 
 
 # ------------------------------------------------------------------ one read a minute
@@ -640,8 +710,8 @@ def card(result, visible=None):
 def render_text(v, width=80, everything=False):
     """One business's picture in plain text, at most `width` columns (an address is never broken,
     so a very long one can stand out): the headline, then each lane's tasks with their links.
-    Done is collapsed: a count, the newest DONE_ROWS merged tasks and the attempts that were turned
-    down, a line each. everything: every finished task, in full."""
+    Done is collapsed: a count, the newest DONE_ROWS merged tasks and the work that ended without
+    a merge, a line each. everything: every finished task and each schedule's links, in full."""
     width = max(40, int(width))
 
     def wrap(text, indent="", hang=None):
@@ -652,7 +722,10 @@ def render_text(v, width=80, everything=False):
     def task(row, word="since"):
         meta = [f"{word} {row['when']}" if row["when"] else "", row["why"],
                 f"account {row['account']}" if row["account"] is not None else "",
-                f"attempt {row['attempt']}" if row["attempt"] else ""]
+                f"attempt {row['attempt']}" if row["attempt"] else "",
+                f"{row['turns']} turns" if row["turns"] is not None else "",
+                f"{max(1, round(row['minutes']))} min" if row["minutes"] is not None else "",
+                "reviewed by " + " and ".join(row["reviewers"]) if row["reviewers"] else ""]
         out = wrap(f"{row['label']}  {row['phrase']}", "  ", "        ") + wrap(row["title"], "      ")
         out += wrap(" · ".join(m for m in meta if m), "      ")
         out += ["      " + row["url"]] if row["url"] else []
@@ -679,7 +752,7 @@ def render_text(v, width=80, everything=False):
         if lane["id"] != "done":
             lines += ["", f"{lane['title'].upper()} ({lane['count']})"]
             for row in rows:
-                lines += task(row)
+                lines += task(row, "filed" if lane["id"] == "proposed" else "since")
             if lane["omitted"]:
                 lines += wrap(f"+{lane['omitted']} more the feed left out for room", "  ")
             continue
@@ -695,11 +768,24 @@ def render_text(v, width=80, everything=False):
         if not everything:
             lines += wrap((f"+{hidden} more · " if hidden else "") + "bromigos lab tasks --all lists them with their "
                           "links", "  ")
+    if v["schedules"]:
+        lines += ["", "SCHEDULES"]
+        for sch in v["schedules"]:
+            lines += wrap(" · ".join(p for p in (
+                sch["name"] or sch["id"], sch["when"], f"next {sch['next']}" if sch["next"] else "",
+                (f"last run {sch['last']}" + (f": {sch['last_words']}" if sch["last_words"] else "")) if sch["last"]
+                else "no run seen") if p), "  ", "      ")
+            if everything:
+                lines += [f"      {text}: {url}" for text, url in [("run", sch["url"]), ("digest", sch["digest_url"])] +
+                          [(t["label"], t["url"]) for t in sch["tickets"]] if url]
     for name, words in (("today", "Today"), ("seven_days", "7 days")):
         w = v["counts"][name]
         if any(n is not None for n in w.values()):
             lines += ([""] if name == "today" else []) + wrap(f"{words}: " + " · ".join(
                 f"{w[k] if w[k] is not None else '?'} {k}" for k in _COUNTS), "", "  ")
+    if v["ignored"]:
+        lines += wrap(f"{v['ignored']} more that the fleet leaves alone {'is' if v['ignored'] == 1 else 'are'}n't shown.",
+                      "", "  ")
     if v["warnings"]:
         lines += ["", "WARNINGS"]
         for w in v["warnings"]:
@@ -718,11 +804,22 @@ SETUP = """No task source yet. Add your fleet's control repository to ~/.config/
 Or look at one now: bromigos lab tasks --repo my-org/agents (docs/lab.md, "Tasks")."""
 
 
+def assemble(fleets, errors, configured=True, now=None):
+    """The document every Tasks screen reads, from the pictures (view() of each feed, with its
+    `source`) and what couldn't be read: {"schema": 1, "generatedAt", "configured", "state",
+    "fleets": [view + {"source"}, …], "errors": {source: why}}. state: ok (every feed read and
+    fresh, nothing needs you), warn (something needs you, or a feed is stale or switched off),
+    unreachable (no feed could be read) or empty (no source). `bromigos lab tasks --json` prints
+    it, and the Lab board's GET /api/fleet answers it."""
+    now = _now(now)
+    bad = any(not v["fresh"] or v["counts"]["needs_you"] for v in fleets)
+    state = "empty" if not configured else "unreachable" if not fleets else "warn" if bad or errors else "ok"
+    return {"schema": SCHEMA, "generatedAt": int(now.timestamp()), "configured": bool(configured), "state": state,
+            "fleets": list(fleets), "errors": dict(errors)}
+
+
 def document(adapters, now=None):
-    """What `bromigos lab tasks --json` prints: {"schema": 1, "generatedAt", "configured", "state",
-    "fleets": [view + {"source"}, …], "errors": {source: why}}. state: ok (every feed read and fresh,
-    nothing needs you), warn (something needs you, or a feed is stale or switched off), unreachable
-    (no feed could be read) or empty (no source)."""
+    """assemble() of what each `fleet` source reads now (adapters/labfleet.py)."""
     now = _now(now)
     fleets, errors = [], {}
     for a in adapters:
@@ -734,10 +831,7 @@ def document(adapters, now=None):
                     errors[f"{a.name}: {one.get('business') or '?'}"] = one.get("error") or "the feed could not be read"
         except ReadError as e:
             errors[a.name] = str(e)
-    bad = any(not v["fresh"] or v["counts"]["needs_you"] for v in fleets)
-    state = "empty" if not adapters else "unreachable" if not fleets else "warn" if bad or errors else "ok"
-    return {"schema": SCHEMA, "generatedAt": int(now.timestamp()), "configured": bool(adapters), "state": state,
-            "fleets": fleets, "errors": errors}
+    return assemble(fleets, errors, bool(adapters), now)
 
 
 def main(argv=None, prog="bromigos lab tasks"):
@@ -751,7 +845,8 @@ def main(argv=None, prog="bromigos lab tasks"):
     p.add_argument("--width", type=int, default=80, help="columns of the plain-text picture (default 80)")
     p.add_argument("--repo", metavar="OWNER/NAME", help="read this control repository instead of homelab.toml's "
                                                         "fleet sources (through your gh login)")
-    p.add_argument("--url", help="read this in-lab mirror instead of homelab.toml's fleet sources")
+    p.add_argument("--url", help="read your lab's status mirror at this address instead of homelab.toml's fleet "
+                                 "sources")
     a = p.parse_args(argv)
     from . import registry
     from .adapters import labfleet

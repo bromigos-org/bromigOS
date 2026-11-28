@@ -7,7 +7,7 @@
 #   Caddy         as caddy, on port 8080, with the package's own site
 #   the reader    as root, whenever the API marks `wanted` or `door` (it ends itself when nobody looks)
 #   the follower  as bromigos-labjobs, while a browser is signed in, when /etc/bromigos/labjobs.toml
-#                 names a ComfyUI
+#                 names a ComfyUI or a fleet's status mirror
 #
 # The action helper isn't started: there is no server under a container for the page to act on,
 # and the default server.toml here allows no action.
@@ -81,7 +81,7 @@ if [ -r /etc/bromigos/labjobs.toml ]; then
   ) &
   pids+=($!)
 else
-  log "no /etc/bromigos/labjobs.toml: the lab's creation jobs aren't followed"
+  log "no /etc/bromigos/labjobs.toml: the lab's creation jobs and a fleet's tasks aren't followed"
 fi
 
 log "the Lab board is on port 8080 ($(tr '\n' ' ' < /etc/bromigos-board-container.versions 2>/dev/null))"

@@ -5,8 +5,9 @@
 """bromigos-activity (`bromigos activity`): what this computer is doing (docs/activity.md).
 
   bromigos activity [list]            the jobs still going, then the newest that ended: this
-                                      computer's, and its lab's (ComfyUI generations and
-                                      pipeline runs, docs/activity.md "Lab jobs")
+                                      computer's, and its lab's (ComfyUI generations, pipeline
+                                      runs and a fleet of coding agents' tasks, docs/activity.md
+                                      "Lab jobs")
       --all                           every job kept (the last 30 days, 200 at most)
       --limit N                       at most N (default 20)
       --lab                           the lab's jobs only
@@ -83,8 +84,9 @@
       --poll S                        seconds between looks at each ComfyUI (default 2)
       --idle S --wanted FILE          stop when nobody touched FILE for S seconds
       --allow-dropin PATH             write the systemd drop-in that lets the machine's follower
-                                      connect to labjobs.toml's ComfyUIs and nothing else, and
-                                      reload systemd when it changed (root; the board runs it)
+                                      connect to labjobs.toml's ComfyUIs and status mirrors and
+                                      nothing else, and reload systemd when it changed (root; the
+                                      board runs it)
 
 Where there's no systemd (a container), `run` runs the job in this terminal, with the same record.
 
@@ -103,7 +105,10 @@ import threading
 import time
 
 here = os.path.dirname(os.path.realpath(__file__))
-for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), "/usr/lib/bromigos/lib")):
+# this file's own tree first: lib/ beside it, and in a checkout the lab console's too (homelab/lib:
+# what reads a fleet's feed); then the installed libraries
+for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), os.path.join(os.path.dirname(here), "homelab", "lib"),
+                           "/usr/lib/bromigos/lib")):
     if os.path.isdir(candidate):
         sys.path.insert(0, candidate)
 
@@ -180,7 +185,7 @@ def cmd_show(env, args):
     except KeyError as e:
         say(str(e.args[0]))
         return 1
-    tail = [] if rec.get("lab") else A.log_tail(env, rec, number(got.get("--log"), 20))
+    tail = [] if rec.get("lab") or rec.get("task") else A.log_tail(env, rec, number(got.get("--log"), 20))
     if "--json" in got:
         print(json.dumps({"schema": A.SCHEMA, "job": rec, "log_tail": tail}, indent=1))
     else:
