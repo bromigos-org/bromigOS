@@ -274,11 +274,11 @@ Without WebGL the words stand: the line, the readouts, the alarm, the deck list 
 deck plan need no hologram. A model that fails to load is asked for again by the next
 view.
 
-What ships (`public/holo/`, [ASSETS.md](ASSETS.md)): the station, the rack and the
-workstation, each as a lighter bake for the station, and the rack and the workstation in
-full for a machine's page. The storage, node, router and battery meshes aren't shipped,
-because their licence isn't cleared. When a clean one lands, it is added to the manifest
-and nothing else changes.
+What ships (`public/holo/`, [ASSETS.md](ASSETS.md)): the station, the rack, the
+workstation, the storage server, the node, the router and the battery backup. Each has a
+lighter bake for the station. All but the station and the battery backup also keep a full
+mesh for a machine's own page; the battery backup is one small bake that serves both. A
+kind of machine with no model is drawn as its icon.
 
 The crew's paintings come from the repository's `mascot/` at build time
 (`scripts/art.mjs`, into `public/lamplight/`, which isn't committed): the five cut-outs
