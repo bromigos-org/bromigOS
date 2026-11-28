@@ -3,6 +3,7 @@ from . import infra, kube, media, misc, models, prometheus, voice  # noqa: F401 
 # the lab's own services (docs/homelab.md, "Adapters"): gpus, logs, edge, storage, games, media library, AI, CI, backups
 from . import labai, labbackup, labci, labedge, labenergy, labgames, labgpu, labmedia, labobserve, labstorage  # noqa: F401
 from . import labrequests  # noqa: F401  (Seerr and the download clients: the requests capability)
+from . import labfleet  # noqa: F401  (a fleet of coding agents' Status issue: the tasks capability)
 from . import labcards  # noqa: F401  (their console cards, when the console is installed)
 
 from . import provisioned  # noqa: F401 (explicit provision targets, read-only)

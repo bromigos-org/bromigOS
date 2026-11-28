@@ -656,6 +656,64 @@ VECTOR does all this when you ask him: "download Cowboy Bebop", "get season 2 of
 "what's coming up?". He tells you what he found and asks before he requests, unless you
 plainly asked him to download one thing. When it's in your library, he tells you.
 
+## Tasks from your coding agents
+
+A *fleet* is a set of coding agents that work through your repositories' issues by
+themselves. If you run one, the lab console shows what it's doing.
+
+A fleet has a *control repository*, and its scheduled job keeps an issue there titled
+`Status`. bromigOS reads that issue through `gh`, GitHub's command, with your own login.
+It only reads.
+
+Add the control repository to `~/.config/bromigos/homelab.toml`:
+
+```toml
+[[source]]
+name = "tasks"
+type = "fleet"
+repo = "my-org/agents"
+```
+
+Put your own repository in place of `my-org/agents`. You need `gh` installed and signed
+in. To sign in, run `gh auth login`.
+
+A **Tasks** card then appears in `bromigos lab status`, in the dashboard and in
+**Settings › Lab**. It leads with one sentence, such as "2 need you · 3 working · 1 waiting
+· 4 merged today". Under it come the tasks that need you, then the ones being worked on.
+Hover over a task for its link.
+
+To see every task with its links:
+
+```bash
+bromigos lab tasks
+```
+
+Each task is in one of five groups:
+
+| Group | What it means |
+|---|---|
+| Needs you | The agents stopped. "Stuck" means they gave up. "Blocked" means the task can't be done as asked. |
+| Proposed | A task the fleet proposes. It shows when the fleet lists any. |
+| Working | An agent is on it: writing, running checks, reviewing, fixing or merging. |
+| Waiting | It's queued. The reason is beside it. |
+| Done | It was merged. A change a reviewer turned down shows as "Not merged". |
+
+**"No update for 1 h 40 min"** means the fleet's job hasn't written its status for that
+long. The fleet is switched off, or its job is disabled or failing. The tasks you see are
+the last ones it wrote. **"SWITCHED OFF"** means the status says so itself.
+
+If the card says *unreachable*, it also says why: `gh` isn't installed or signed in, your
+login can't read the repository, or the fleet hasn't written its first status yet.
+
+For several businesses, add one source for each control repository. Give each its own
+`name`.
+
+For power users: `bromigos lab tasks --json` prints the same picture as JSON, `--all` lists
+every finished task, and `--repo my-org/agents` reads a repository that isn't in
+`homelab.toml`. [The developer
+docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#tasks) have the
+status's format and every option.
+
 ## Shortcuts to other commands
 
 - `bromigos lab connect` is the same as `bromigos setup homelab`.

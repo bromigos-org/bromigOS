@@ -70,6 +70,10 @@ SCHEMAS = {
     # Seerr's requests (kind movie | tv), and the download clients' downloads (kind torrent |
     # usenet | soulseek: progress %, speed B/s, eta_s): adapters/labrequests.py
     "requests": ("name", "kind", "state", "progress", "speed", "eta_s", "size", "left", "client"),
+    # a fleet of coding agents (adapters/labfleet.py): one record per business (kind "fleet": its headline in
+    # `phrase`, the whole picture in `view`), then one per task (kind "task": lane needs_you | proposed |
+    # working | waiting | done)
+    "tasks": ("name", "kind", "business", "lane", "repo", "number", "title", "phrase", "url", "since", "state"),
 }
 
 
@@ -241,6 +245,8 @@ youtube_downloader = _lab("youtube-downloader", "YouTube downloaders (Pinchflat)
 youtube_downloader.__name__ = "youtube_downloader"
 requests = _lab("requests", "Media requests (Seerr) and what the download clients are fetching (qBittorrent, SABnzbd, "
                             "slskd)")
+tasks = _lab("tasks", "What a fleet of coding agents is doing: per business its headline, then every task with its lane "
+                       "and phrase (a control repository's Status issue; fleet.py)")
 video = _lab("video", "A media server's video libraries, collections and playlists (Jellyfin, Plex): what the den TV plays")
 
 

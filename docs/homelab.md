@@ -300,6 +300,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `ocr` | `name, endpoint, up, model, via`: where the `ocr` job kind sends pages |
 | `youtube-downloader` | `name, kind, up, videos, newest, newest_at, queue, errors, state, link`. The first record is the downloader itself (`kind` is `downloader`, with `queue`, `errors`, `sources` and `recent`). Then there's one per channel or playlist. Read it from Python as `H.youtube_downloader()`. |
 | `requests` | `name, kind, state, progress, speed, eta_s, size, left, client`. Seerr's requests (`kind` movie or tv), and what qBittorrent, SABnzbd and slskd are downloading (`kind` torrent, usenet or soulseek; `progress` in %, `speed` in bytes a second). `bromigos lab media` joins them with the *arr queues ([lab.md](lab.md#media-requests)). Read it from Python as `H.requests()`. |
+| `tasks` | `name, kind, business, lane, repo, number, title, phrase, url, since`. What a fleet of coding agents is doing ([lab.md](lab.md#tasks)). The first record of each business is the business itself (`kind` is `fleet`, with its headline in `phrase` and the whole picture in `view`). Then there's one per task (`kind` is `task`; `lane` is needs_you, proposed, working, waiting or done). |
 | `energy` | `name, kind, production_w, consumption_w, net_w, today_wh, consumed_today_wh, lifetime_wh, battery_pct, battery_w, inverters, state`. `net_w` is positive while you draw from the grid and negative while you send to it. |
 
 `media` and `video` are different things. `media` is a server that *makes* pictures and
@@ -371,6 +372,7 @@ bromigos homelab adapters
 | `vault` | secrets | `https://host:8200`. It reads `sys/health` only. |
 | `herdr` | agents | the herdr command on this machine |
 | `github` | ci | your `gh` login. `orgs = [...]` for open pull requests, `repos = [...]` for the latest runs. |
+| `fleet` | tasks | your `gh` login. `repo = "my-org/agents"` names a fleet's control repository. |
 | `lab` | snapshot, hosts | a Lab API serving the snapshot at `GET /api/status`, with a bearer `auth_ref` |
 | `gnosis` | knowledge | a Gnosis gate. Options: `auth_ref`, `write_auth_ref`, `tenant`, `spaces`, `labels`, `orgs`, `roots`, `search_spaces`. |
 | `bromigos-voice` | voice | a bromigOS voice server, such as `https://tts.example.org` |
@@ -389,6 +391,9 @@ A few of these need more words:
   is usually self-signed, so set `tls_ca`, or `tls_verify = false`.
 - **netdata** takes `chart` or `chart.dimension` as a metrics query, such as
   `system.ram.used`.
+- **fleet** reads what a fleet of coding agents is doing from the `Status` issue of its
+  control repository. It's the source of the Tasks card and of `bromigos lab tasks`.
+  [Tasks](lab.md#tasks) has its options, its words and what "no update" means.
 
 ### Adapters for the lab's own services
 
@@ -890,7 +895,7 @@ bromigOS's cards use these orders:
 | 70 | Alerts |
 | 80 | Jobs |
 | 90 | Vault |
-| 100 and up | generic cards, Agents (120), CI and pull requests (130) |
+| 100 and up | generic cards, Agents (120), Tasks (125), CI and pull requests (130) |
 
 **A card that isn't a capability** comes from an adapter method, `cards(self)`, which
 returns a list of cards. Each card needs a `title`, and the rest is filled in. If the

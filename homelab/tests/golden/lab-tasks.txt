@@ -1,0 +1,51 @@
+EXAMPLE · 2 need you · 3 working · 1 waiting · 4 merged today
+Updated 12:40 (Europe/Berlin) · my-org/agents
+Accounts: 1 Available · 2 Resting until 15:45
+
+NEEDS YOU (2)
+  app#41  Stuck · 3 fix rounds and a clean restart did not make it green
+      Checkout: totals are wrong when a coupon is applied
+      since 09:12
+      https://github.com/my-org/app/issues/41
+      PR #44: https://github.com/my-org/app/pull/44
+  site#9  Blocked · the task needs a production credential the agents do not
+        hold
+      Rotate the newsletter provider's key
+      since Fri 27 Nov 17:03
+      https://github.com/my-org/site/issues/9
+
+WORKING (3)
+  app#57  Writing
+      Add CSV export to the orders page
+      since 12:31 · account 1 · attempt 1
+      https://github.com/my-org/app/issues/57
+      run: https://github.com/my-org/agents/actions/runs/7000000091
+  app#49  Fixing · round 2
+      Search: an empty query returns a server error
+      since 12:20 · account 1 · attempt 3
+      https://github.com/my-org/app/issues/49
+      PR #55: https://github.com/my-org/app/pull/55
+      run: https://github.com/my-org/agents/actions/runs/7000000088
+  site#14  Checks running
+      Footer links point at the old domain
+      waiting for 2 check(s): build, test · attempt 1
+      https://github.com/my-org/site/issues/14
+      PR #15: https://github.com/my-org/site/pull/15
+
+WAITING (1)
+  site#12  Queued · ready; no free account this tick
+      Docs: explain what `--json` prints & where <details> goes
+      https://github.com/my-org/site/issues/12
+
+DONE (4 merged today · 9 in 7 days)
+  app#52  Merged · 11:58 · Fix the date picker on small screens
+  site#11  Merged · 10:41 · Add a sitemap
+  app#50  Merged · 09:05 · Orders page: sort by date
+  app#49  Not merged · 11:20 · Search: an empty query returns a server error
+  +2 more · bromigos lab tasks --all lists them with their links
+
+Today: 6 started · 4 merged · 1 stuck · 0 blocked · 1 rejected
+7 days: 19 started · 9 merged · 1 stuck · 1 blocked · 3 rejected
+
+WARNINGS
+  ! the checks of site#14 could not be read this tick: HTTP 502
