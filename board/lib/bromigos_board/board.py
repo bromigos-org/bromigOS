@@ -4,7 +4,9 @@ The cards pass the shipped commands' --json through unchanged (`storage`, `backu
 `updates`). What the page draws first is worked out here from those same documents, and from
 nothing else: the one status line, what needs you (the alerts that need a person, and jobs
 waiting for an answer), what fixed itself (jobs that rolled back) and this machine's row. A part
-whose command couldn't run is null, and the page says it can't check.
+whose command couldn't run is null, and the page says it can't check. One thing comes from
+beside the snapshot: a fleet's tasks that need a person, which the API reads from the lab
+follower's records (`tasks`).
 """
 from . import SCHEMA, door, paths
 
@@ -31,6 +33,21 @@ def apps_of(snap):
     if isinstance(a, dict) and isinstance(a.get("apps"), list):
         return a["apps"]
     return a if isinstance(a, list) else None
+
+
+def tasks_need(tasks):
+    """A fleet's tasks that need a person, as needs-you rows: the task's title, its phrase
+    ("Stuck · …") as the detail, and the business as the machine it is on (it is on no server).
+    Each opens as its job on Activity."""
+    out = []
+    for j in tasks or []:
+        if not isinstance(j, dict) or j.get("state") != "needs-you" or not isinstance(j.get("id"), str):
+            continue
+        t = j.get("task") if isinstance(j.get("task"), dict) else {}
+        out.append({"id": j["id"], "machine": str(t.get("business") or t.get("fleet") or "the fleet"), "subject": j.get("subject"),
+                    "severity": "warn", "words": j.get("title") or "", "detail": str(j.get("stage") or ""),
+                    "since": j.get("started_at") or j.get("updated_at"), "go": "activity", "job": j["id"]})
+    return out
 
 
 def needs_you(snap, host):
@@ -143,21 +160,24 @@ def hardware(snap):
             "gpu_name": name if isinstance(name, str) and name else None, "gpu_vram_gb": _num(hw.get("gpu_vram_gb"))}
 
 
-def shape(snap, now_ms):
-    """The page's board document from one snapshot (board.json)."""
+def shape(snap, now_ms, tasks=None):
+    """The page's board document from one snapshot (board.json). `tasks`: a fleet's task records
+    that need a person; they count in what needs you and in the status line, and not against
+    this machine's row, since they are on no machine."""
     host = snap.get("host") if isinstance(snap.get("host"), str) else ""
     at = int(snap.get("at") or 0)
     age = max(0, (now_ms - at) // 1000)
     stale = age > MAX_AGE_S
     system = snap.get("system") if isinstance(snap.get("system"), dict) else None
     apps = apps_of(snap)
-    needs = needs_you(snap, host)
+    here = needs_you(snap, host)
+    needs = here + tasks_need(tasks)
     state, words = status(snap, stale, needs, apps)
     roles = list(((system or {}).get("roles") or {}).get("enabled") or [])
     # the machine's row: whether it answers, and whether something on it needs a person. What
     # the status line adds (an app that isn't running, a part that couldn't be read) is the
     # status line's; the row doesn't say "can't check" of a machine that answered.
-    machine_state = "unknown" if stale else "warn" if needs else "ok"
+    machine_state = "unknown" if stale else "warn" if here else "ok"
     doc = {
         "schema": SCHEMA, "at": at, "max_age_s": MAX_AGE_S, "age_s": age, "stale": stale,
         "lab": door.lab(host, paths.address_of(snap.get("settings"))),

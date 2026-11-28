@@ -4,8 +4,10 @@
 # /var/cache/bromigos-labjobs, for the API to read and serve. Started with the reader while a
 # signed-in browser is connected (bromigos-board-lab.path, through bromigos-board-lab-start.service);
 # it stops when nobody has looked for 45 seconds. Its own user; it listens on nothing, and may
-# connect only to the exact addresses of the ComfyUIs in /etc/bromigos/labjobs.toml (the drop-in
-# bromigos-board-lab-start.service writes before it starts it; none without that file).
+# connect only to the exact addresses of the ComfyUIs and of a fleet's status mirror in
+# /etc/bromigos/labjobs.toml (the drop-in bromigos-board-lab-start.service writes before it
+# starts it; none without that file). It keeps each fleet's last report beside jobs.json too
+# (fleet.json; docs/board.md, "A fleet's tasks").
 [Unit]
 Description=bromigOS Lab board: follow the lab's creation jobs
 Documentation=file:///usr/share/doc/bromigos-board/board.md

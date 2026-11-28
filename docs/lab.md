@@ -682,38 +682,51 @@ When the feed can't be read, the card is *unreachable* and says why in plain wor
 
 ### The words
 
-Every surface uses the same words, and they all come from `fleet.py`. The noun is *task*.
-A task sits in one of five *lanes*, in this order, and its *phrase* says where it is:
+Every surface uses the same words. The noun is *task*. A task sits in one of five
+*lanes*, in this order, and its *phrase* says where it is: Needs you, Proposed, Working,
+Waiting, Done.
 
-| Lane | From the feed's | Phrase |
+**The words are the fleet's own.** A feed gives each task its `lane` and its `phrase`, the
+lanes' titles and counts, and a `headline`. bromigOS shows them as given and maps nothing
+again. So a task of the feed's `waiting` list can stand under Needs you ("Not started ·
+re-apply agent-ready yourself"), and new wording shows without a new bromigOS. A lane
+bromigOS doesn't know goes after the five.
+
+Three rules bromigOS adds:
+
+- In the feed's `recent` list, only a merge is finished work ("Merged"). Work that ended
+  without one ("Not merged · *why*": stuck, blocked, or turned down by a reviewer) is an
+  *event*. It shows as a line under Done, and isn't a task of its own.
+- A task whose `lane` is null is one the fleet leaves alone. It stands in no lane. The
+  picture counts it (`ignored`).
+- A reason is said once. When a phrase ends in the task's `why`, the row's own `why` is
+  empty.
+
+**A feed without those words.** A feed written before it carried lanes and phrases gets
+them from `fleet.py`, and nowhere else. Each task stands in the lane of its list:
+
+| The feed's list | Lane | Phrase |
 |---|---|---|
-| Needs you | `needs_person` | "Stuck · *why*" or "Blocked · *why*" |
-| Proposed | `proposed`, when the feed has it | "Proposed · *why*" |
-| Working | `working` | by its stage, in the next table |
-| Waiting | `waiting` | "Queued · *why*" |
-| Done | `recent`, the merged ones | "Merged" |
-
-A working task's phrase comes from its `stage` and `step`:
+| `needs_person` | Needs you | "Stuck · *why*" or "Blocked · *why*" |
+| `proposed` | Proposed | "Proposed" |
+| `working` | Working | by its stage, in the next table |
+| `waiting` | Waiting | "Queued · *why*" for the kind `queued`, else "Waiting · *why*" |
+| `recent` | Done | "Merged", or "Not merged · *why*" as an event |
 
 | `stage` | Phrase |
 |---|---|
-| `agent` | "Writing". "Starting" while `step` is `queued`. |
-| `checks` | "Checks running" |
+| `agent` | By its `step`: "Starting" (`queued`, `prepare`), "Writing" (`agent`), "Checking the change" (`verify`), "Reviewing" (`review`), "Second review" (`second_review`), "Opening the pull request" (`finish`). "Working" when the step isn't known. |
+| `checks` | "Checks running". "Waiting for checks" when no check has reported yet. |
 | `review` | "Reviewing". "Second review" when `step` is `second_review`. |
-| `fixing` | "Fixing · round N". N is `attempt` minus one, since `attempt` counts the run that wrote the change too. |
+| `fixing` | "Fixing". The round is the fleet's to count, so only the feed's own phrase says "Fixing · round 2". |
 | `merging` | "Merging" |
 
-Two more rules:
-
-- A reviewer turning an attempt down is an event, not a lane. It shows as a line under
-  Done: "Not merged · *why*".
-- A feed can name a row's `lane` and `phrase` itself. bromigOS then shows them as given. A
-  lane it doesn't know goes after the five.
-
 The *headline* is one sentence, such as "2 need you · 3 working · 1 waiting · 4 merged
-today". It says "Nothing needs you" only when the feed was read and is fresh. An account
-the agents work through reads "Available" or "Resting until 15:45". Times are in the
-feed's `timezone`.
+today". For a fresh feed it is the feed's own. Without one it is made the same way:
+proposals only when there are any, and the merges left out when their count isn't known.
+It says "Nothing needs you" only when the feed was read and is fresh. An account the
+agents work through reads "Available" or "Resting until 15:45". Times are in the feed's
+`timezone`.
 
 ### Fresh, stale and switched off
 
@@ -768,10 +781,10 @@ NEEDS YOU (2)
 | Option | What it does |
 |---|---|
 | `--json` | Print the document below instead. |
-| `--all` | List every finished task with its links. Without it, Done is a count and a line each for the newest. |
+| `--all` | List every finished task and each schedule's run with their links. Without it, Done is a count and a line each for the newest. |
 | `--width N` | Wrap at N columns instead of 80. |
 | `--repo OWNER/NAME` | Read this control repository, whatever `homelab.toml` says. |
-| `--url URL` | Read this [mirror](#an-in-lab-mirror), whatever `homelab.toml` says. |
+| `--url URL` | Read [your lab's status mirror](#your-labs-status-mirror) at this address, whatever `homelab.toml` says. |
 
 It exits 0 when every feed was read, is fresh and nothing needs you. It exits 1 when a task
 needs you, a feed is stale or switched off, or one couldn't be read. With `--json` it exits
@@ -779,7 +792,9 @@ needs you, a feed is stale or switched off, or one couldn't be read. With `--jso
 
 `--json` prints `{"schema", "generatedAt", "configured", "state", "fleets", "errors"}`.
 `state` is `ok`, `warn`, `unreachable` or `empty`. `errors` maps a source to why it
-couldn't be read. Each entry of `fleets` is one business's picture, from `fleet.view`:
+couldn't be read. The Lab board answers the same document at `GET /api/fleet`
+([board.md](board.md#a-fleets-tasks)). Each entry of `fleets` is one business's picture,
+from `fleet.view`:
 
 ```json
 {"source": "tasks", "business": "Example", "control_repo": "my-org/agents",
@@ -788,20 +803,29 @@ couldn't be read. Each entry of `fleets` is one business's picture, from `fleet.
  "generated_at": "2026-11-28T11:40:03Z", "updated": "12:40", "timezone": "Europe/Berlin",
  "lanes": [{"id": "needs_you", "title": "Needs you", "count": 2, "omitted": 0,
             "rows": [{"label": "app#41", "repo": "app", "number": 41, "title": "…",
-                      "phrase": "Stuck · …", "when": "09:12", "url": "https://…",
-                      "links": [{"text": "PR #44", "url": "https://…"}]}],
+                      "phrase": "Stuck · …", "why": "", "when": "09:12", "today": true,
+                      "url": "https://…", "links": [{"text": "PR #44", "url": "https://…"}]}],
             "events": []}],
  "counts": {"needs_you": 2, "working": 3, "today": {"merged": 4}, "seven_days": {"merged": 9}},
  "accounts": [{"number": 2, "state": "resting", "phrase": "Resting until 15:45"}],
- "warnings": ["…"]}
+ "schedules": [{"id": "weekly-review", "name": "Weekly review", "when": "mondays 07:00",
+                "next": "Mon 30 Nov 07:00", "last": "Mon 23 Nov 07:00",
+                "last_words": "filed a digest and 1 ticket", "url": "https://…",
+                "tickets": [{"label": "site#20", "url": "https://…"}]}],
+ "ignored": 1, "driver": "heartbeat", "warnings": ["…"]}
 ```
 
-A lane's `count` includes the tasks the feed left out for room (`omitted`). Done's `rows`
-are the merged tasks, and its `events` are the attempts that were turned down.
+A lane's `count` is the feed's own count of its tasks, the ones it left out for room
+(`omitted`) included. Done's `rows` are the merged tasks, and its `events` are the work
+that ended without a merge. A merged row also says, when the feed knows, the run's
+`account`, `turns`, `minutes` and `reviewers`. `schedules` are the fleet's scheduled jobs:
+when each runs next, and what its last run did. `driver` says what started the run that
+wrote the feed: `heartbeat` (the fleet's own clock), `schedule`, or null.
 
 ### The feed
 
-The feed is one JSON object with `"schema": 1`. `fleet.parse_body` takes it out of the
+The feed is one JSON object with `"schema": 1`. The fleet's own documentation is its
+contract; this is what bromigOS reads of it. `fleet.parse_body` takes it out of the
 issue's body, and refuses a body that doesn't hold exactly one line reading `` ```json ``.
 It never searches a body for JSON, and it never reads the Markdown part. It also refuses
 JSON that isn't an object, and any other `schema` number.
@@ -813,17 +837,21 @@ These are the fields bromigOS reads:
 | `generated_at`, `stale_after` | when the feed was written and when it goes stale, in UTC |
 | `business`, `control_repo`, `timezone` | the business's name, its control repository and its time zone |
 | `enabled` | false when the fleet is switched off |
+| `headline`, `lanes` | the fleet's own sentence, and each lane's `id`, `title` and `count` |
 | `accounts` | each account's `number`, `state` (available or resting) and `until` |
 | `working` | tasks on their way: `stage`, `step`, `attempt`, `account`, `started_at` |
 | `waiting` | tasks left where they are, with `why` |
 | `needs_person` | tasks that stopped: `kind` (stuck or blocked), `why`, `since` |
-| `recent` | what ended in the last seven days: `outcome` and `at` |
-| `proposed` | tasks the fleet suggests. Optional. |
+| `recent` | what ended in the last seven days: `outcome`, `at`, `why`, and the run's `account`, `turns`, `minutes` and `reviewers` |
+| `proposed` | tasks that wait for your yes, with `filed_at` |
+| `schedules` | the scheduled jobs: `id`, `name`, `when`, `next_at`, `last_run_at`, `last_words`, `tickets` and their addresses |
+| `ignored`, `driver` | how many tasks the fleet leaves alone, and what started the run that wrote the feed |
 | `counts` | `today` and `seven_days`: started, merged, stuck, blocked, rejected |
 | `warnings`, `omitted` | what the job couldn't read, and how many rows each list left out for room |
 
 Every task has `repo`, `issue`, `pr`, `title` and its addresses (`url`, `issue_url`,
-`pr_url`, `run_url`), and may have `lane` and `phrase`.
+`pr_url`, `run_url`), and its `lane` and `phrase`. A feed from before those words has
+neither, and reads as [The words](#the-words) says.
 
 bromigOS ignores a field it doesn't know. When an expected field is missing, the picture
 leaves that part out and says so under `warnings`. Nothing crashes.
@@ -843,33 +871,46 @@ Nothing reads that text as markup. The dashboard shows a card's cells and row hi
 plain text, so `[bold]` stays `[bold]`. An address is shown only when it's a plain `http`
 or `https` one.
 
-### An in-lab mirror
+### Your lab's status mirror
 
-This part is optional. A lab can keep a *mirror*: a small service of its own that holds
-the feeds, so the desktop doesn't ask GitHub. bromigOS doesn't ship one. A `fleet` source
-with `url` reads a mirror instead of a repository:
+This part is optional. A fleet can leave a copy of its feed with a *status mirror*: a
+small service of the fleet's own, inside your lab, that holds each business's newest
+feed. A screen in the lab can then show the tasks with no GitHub login. bromigOS doesn't
+ship a mirror. A `fleet` source with `url` reads one instead of a repository:
 
 ```toml
 [[source]]
 name = "tasks"
 type = "fleet"
-url = "https://board.mylab.example/api/fleet"
+url = "http://status-mirror.mylab.example:8082/v1/feed"
 ```
 
 The mirror answers a GET with `{"schema": 1, "feeds": [{"business", "received_at",
-"feed"}, …]}`, where each `feed` is a feed as above. The card gets one section per
-business. `business = "Example"` keeps one of them. `auth_ref` and `tls_ca` work as for
-any [source](homelab.md#a-source).
+"feed"}, …]}`, where each `feed` is a feed as above and `business` is the mirror's name
+for it. The card gets one section per business. `business = "example"` keeps one of them.
+`auth_ref` and `tls_ca` work as for any [source](homelab.md#a-source).
+
+A mirror holds nothing for up to ten minutes after its own restart, until the fleet's next
+run. The card then says "no report yet". `fleet.fetch_url` sends an earlier answer's `ETag`
+back, and an unchanged answer costs a 304.
+
+The [Lab board](board.md#a-fleets-tasks) reads the same mirror through its job follower,
+with a `[[fleet]]` table in `labjobs.toml`, and keeps the last report it got.
 
 ### Tests for tasks
 
-`homelab/tests/test_lab_fleet.py` reads a recorded issue body with made-up names
-(`tests/fixtures/fleet-status-body.txt`). It runs a stand-in `gh` and a stand-in mirror on
-this machine, so it needs no network and no GitHub login. It covers:
+`homelab/tests/test_lab_fleet.py` reads two recorded feeds with made-up names: an issue
+body from before the feed carried lanes and phrases (`tests/fixtures/fleet-status-body.txt`),
+and a status mirror's answer with them (`tests/fixtures/fleet-mirror.json`). It runs a
+stand-in `gh` and a stand-in mirror on this machine, so it needs no network and no GitHub
+login. It covers:
 
 - the refusals: no fence, two fences, JSON that isn't an object, another schema;
 - fresh, stale and switched off;
-- the phrase of every stage, and `lane` and `phrase` given by the feed;
+- the phrase of every stage, and `lane`, `phrase`, lane counts and `headline` given by the
+  feed;
+- events under Done, tasks the fleet leaves alone, and the schedules;
+- the mirror: its answer, an unchanged one (304), an empty one, and what isn't one;
 - missing fields, one at a time;
 - hostile titles: escape sequences, line breaks, direction controls, very long ones;
 - the card through the console, and the command's text (`tests/golden/lab-tasks.txt`) and

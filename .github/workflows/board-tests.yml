@@ -13,6 +13,9 @@ on:
       - "lib/bromigos_activity.py"
       - "lib/bromigos_labjobs.py"
       - "bin/bromigos-activity"
+      # a fleet's tasks: the feed's reader, and the recorded feed the tests read
+      - "homelab/lib/bromigos_homelab/fleet.py"
+      - "homelab/tests/fixtures/fleet-mirror.json"
       - "homelab/lib/bromigos_homelab/provcatalog.py"
       - "homelab/lib/bromigos_homelab/localprovision.py"
       - "homelab/share/provision-catalogue.toml"

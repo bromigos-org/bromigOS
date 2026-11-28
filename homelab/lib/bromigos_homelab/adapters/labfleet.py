@@ -7,12 +7,11 @@ the reading, the words and the picture; docs/lab.md, "Tasks").
     repo = "my-org/agents"              # the control repository, read through your gh login
     # label = "agent-state"             # the label its Status issue carries
 
-    [[source]]                          # optional: an in-lab mirror that holds the feeds, instead of GitHub
+    [[source]]                          # optional: your lab's status mirror, which holds the feeds, instead of GitHub
     name = "tasks"
     type = "fleet"
-    url = "https://board.mylab.example/api/fleet"
-    # business = "Example"              # only this business's feed; without it, every feed the mirror holds
-    # auth_ref = "@file:~/.config/bromigos/fleet-token"
+    url = "http://status-mirror.mylab.example:8082/v1/feed"
+    # business = "example"              # only this business's feed (the mirror's name for it); without it, every one
 
 Read-only, on this machine: `gh api` with your own login for a repository, a GET for a mirror.
 Each answer is kept for a minute (fleet.cached), so a view that refreshes every few seconds doesn't
@@ -52,8 +51,8 @@ class Fleet(L.LabAdapter):
         if want:
             entries = [e for e in entries if e["business"].lower() == str(want).lower()]
         if not entries:
-            raise fleet.ReadError("no-issue", f"the mirror holds no feed for {fleet.clean(want, 60)}" if want else
-                                  "the mirror holds no feed yet")
+            raise fleet.ReadError("no-report", f"the mirror holds no feed for {fleet.clean(want, 60)}" if want else
+                                  fleet.NO_REPORT)
         return entries
 
     def views(self, now=None):

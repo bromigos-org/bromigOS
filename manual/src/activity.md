@@ -75,6 +75,37 @@ bromigos activity cancel comfy-studio-a92f
 tool of your own can show its steps, are in
 [the activity reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/activity.md#lab-jobs).
 
+## Your coding agents' tasks
+
+A *fleet* is a set of coding agents that work through your repositories' issues by
+themselves. If you run one, its tasks show in the same list, as jobs of their own:
+
+```text
+STATE      WHEN        JOB                  WHAT
+needs you  3 h ago     task.example.app.41  app#41 Checkout: totals are wrong, by agent example: Stuck · 3 fix rounds did not make it green
+running    31 min ago  task.example.app.49  app#49 Search: an empty query fails, by agent example: Fixing · round 2
+```
+
+`bromigos activity show task.example.app.41` shows one task with its links. A task that
+needs you is answered in its own repository, not here, so it has no question.
+
+On a bromigOS Server, the [Lab board](server.md) shows them too: on Activity, on the post,
+and under "what needs you" on Home. To set it up, name your fleet's feed in
+`/etc/bromigos/labjobs.toml`:
+
+```toml
+[[fleet]]
+name = "tasks"
+url = "http://status-mirror.mylab.example:8082/v1/feed"
+```
+
+`url` is your lab's *status mirror*, a small service of the fleet's own that holds its
+newest report. Put your own address there. [The lab console](lab.md#tasks-from-your-coding-agents)
+says what a fleet is and shows every task at a terminal.
+
+If the fleet stops reporting, its running tasks read *interrupted* after 90 minutes and
+say since when. A task that needed you still does.
+
 ## When a job needs you
 
 Some jobs can't finish without you. Replacing a drive is one: the server gets ready, then

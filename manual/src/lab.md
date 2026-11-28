@@ -692,8 +692,8 @@ Each task is in one of five groups:
 
 | Group | What it means |
 |---|---|
-| Needs you | The agents stopped. "Stuck" means they gave up. "Blocked" means the task can't be done as asked. |
-| Proposed | A task the fleet proposes. It shows when the fleet lists any. |
+| Needs you | Only you can move it on. "Stuck" means the agents gave up. "Blocked" means the task can't be done as asked. Other lines say what to do. |
+| Proposed | A ticket the fleet filed that waits for your yes. |
 | Working | An agent is on it: writing, running checks, reviewing, fixing or merging. |
 | Waiting | It's queued. The reason is beside it. |
 | Done | It was merged. A change a reviewer turned down shows as "Not merged". |
@@ -707,6 +707,9 @@ login can't read the repository, or the fleet hasn't written its first status ye
 
 For several businesses, add one source for each control repository. Give each its own
 `name`.
+
+On a bromigOS Server, the Lab board shows the same tasks on its Activity page
+([Activity](activity.md#your-coding-agents-tasks)).
 
 For power users: `bromigos lab tasks --json` prints the same picture as JSON, `--all` lists
 every finished task, and `--repo my-org/agents` reads a repository that isn't in

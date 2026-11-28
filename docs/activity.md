@@ -358,7 +358,8 @@ done
 
 The lab's creation jobs show beside the computer's own: each ComfyUI generation (an image, an
 edit, a cut-out, a video, a 3D model) and each run of a multi-step tool that writes a **job
-feed**, such as an asset pipeline. They are activity records too, with the same states and
+feed**, such as an asset pipeline. So do the tasks of a fleet of coding agents
+([below](#a-fleets-tasks)). They are activity records too, with the same states and
 steps, so `bromigos activity`, the [Lab board](board.md) and the start page show them with
 no second format. `lib/bromigos_labjobs.py` reads them.
 
@@ -371,7 +372,7 @@ bromigos activity cancel comfy-studio-a92f9df3-…   # a queued generation leave
 ```
 
 A lab job's id says where it is from: `comfy-<instance>-<prompt id>` for a ComfyUI prompt,
-`feed-<run>` for a feed run. Stopping a lab job needs no root: it is the ComfyUI's, not the
+`feed-<run>` for a feed run, `task.<business>.<repository>.<number>` for a fleet's task. Stopping a lab job needs no root: it is the ComfyUI's, not the
 system's. A feed run can't be stopped from outside; the program that writes it stops it.
 
 ### Which ComfyUIs
@@ -458,11 +459,14 @@ outputs, and an estimated progress.
 `bromigos activity follow` keeps the lab's jobs in a state folder, live: it reads each
 ComfyUI every 2 seconds while something runs or waits (every 30 seconds otherwise), listens
 on its websocket, fetches the newest outputs once, and makes
-thumbnails (with Pillow). Pages that can't reach the network themselves read its files:
+thumbnails (with Pillow). It asks each fleet's source once a minute at most
+([A fleet's tasks](#a-fleets-tasks)). Pages that can't reach the network themselves read its
+files:
 
 | | A person's | The machine's (`--system`) |
 |---|---|---|
 | Records | `$XDG_RUNTIME_DIR/bromigos-labjobs/jobs.json` | `/run/bromigos-labjobs/jobs.json` |
+| Each fleet's last report | `fleet.json`, in the same folder | `/run/bromigos-labjobs/fleet.json` |
 | Pictures, clips, models | `~/.cache/bromigos/labjobs/` | `/var/cache/bromigos-labjobs/` |
 
 Media files are named by their content (`pv-`, `th-`, `of-`, `fm-` and 16 hex digits), and
@@ -471,7 +475,10 @@ folder keeps 512 MB at most, as a hard limit: the oldest go first, and a file th
 isn't kept. A picture of more than 40 million pixels is never decoded for a thumbnail. Feed
 files, `jobs.json` and the follower's answers are read only when they are regular files (never
 through a link, never a pipe), and a feed file only when root or its folder's owner owns it. A reader uses a `jobs.json` only while it
-is less than 15 seconds old; otherwise `bromigos activity` reads each ComfyUI itself.
+is less than 15 seconds old; otherwise `bromigos activity` reads each ComfyUI itself. Between
+two looks the follower writes `jobs.json` again with the time it is now, so an idle
+follower's records stay readable. `fleet.json` is used however old it is: each feed says
+itself when it is stale.
 `bromigos activity watch` runs a follower of its own while it watches, when none is running.
 
 ### Job feeds
@@ -549,6 +556,79 @@ bromigos activity emit ships end succeeded 1 ship made
 
 The machine's follower reads a system feed's pictures only from the feed's own folder and
 `[feed] media` folders.
+
+### A fleet's tasks
+
+A *fleet* is a set of coding agents that work through the issues of one business's
+repositories by themselves. Its *tasks* show as lab jobs too. [lab.md](lab.md#tasks) says
+what a fleet is and where its *feed* comes from: one JSON document that says what every
+task is doing.
+
+Name where the feed is, in `/etc/bromigos/labjobs.toml` or, for a person, in
+`~/.config/bromigos/labjobs.toml`:
+
+```toml
+[[fleet]]
+name = "tasks"                                              # short: letters and digits
+url = "http://status-mirror.mylab.example:8082/v1/feed"     # your lab's status mirror
+# file = "/srv/fleet/feed.json"                             # or a feed file on this machine, not both
+# business = "example"                                      # one business of the mirror's; without it, all
+```
+
+A *status mirror* is a small service of the fleet's own, inside the lab, that holds each
+business's newest feed. bromigOS doesn't ship one. It answers
+`{"schema": 1, "feeds": [{"business", "received_at", "feed"}, …]}`, with an `ETag`. A feed
+file holds the same answer, or one feed.
+
+The lab console's library reads the feed, checks it and cleans every text in it
+(`bromigos_homelab.fleet`, from the `bromigos-lab` package). Without that package, a
+`[[fleet]]` table says what is missing and shows no task.
+
+Each task becomes one record of kind `agent.task`. Its id is
+`task.<business>.<repository>.<number>`, such as `task.example.app.41`.
+
+| The task's lane | `state` | What else the record says |
+|---|---|---|
+| Needs you | `needs-you` | `waiting_for` is `you`. `question` is null: it is answered in its repository. |
+| Working | `running` | `started_at` is when its run started. |
+| Waiting | `queued` when its phrase says Queued, else `waiting` | |
+| Done, merged today | `succeeded` | `ended_at` is when it was merged. `result.summary` is "Merged". |
+
+Proposed tasks and work that ended without a merge have no record.
+
+Every such record has these, beside the usual fields:
+
+- `title` is the task's `repo#number` and its title.
+- `stage` is its *phrase*, such as "Stuck · …" or "Fixing · round 2". `steps` holds one
+  step with the same words, so a list of steps shows it. `step` and `pct` are null.
+- `notes` hold its links as words (`app#41: https://…`, `PR #44: https://…`), a reason the
+  phrase doesn't carry, and for a merged task the run's account, turns, minutes and
+  reviewers.
+- `requested_by` is `{"via": "lab", "device": null, "agent": "<business>"}`, so it reads "by
+  agent example".
+- `can` is empty and `cancel_safe` is false. A task is stopped in its repository.
+  `bromigos activity cancel` and `answer` refuse it.
+- `task` holds its facts: `source`, `fleet`, `business`, `repo`, `number`, `issue`, `pr`,
+  `label`, `lane`, `phrase`, `why`, `url`, `links`, `account`, `attempt`, `stale` and
+  `report_at`. It has no `lab` object.
+
+`updated_at` moves only when the task changes. A task that leaves the feed has no record
+at the next look.
+
+**A report that is old.** A feed says when it goes stale, 90 minutes after it was written.
+A report past that isn't deleted at once:
+
+- A task that needed you is still `needs-you`. Its step's `detail` says the report is old.
+- A task that was running or waiting reads `interrupted`. `error.code` is `stale`, and
+  `error.words` say since when and what it was doing.
+- A day past stale, the report has no records.
+
+A feed that says the fleet is switched off is treated the same way.
+
+```bash
+bromigos activity list --lab                 # the tasks, with the lab's other jobs
+bromigos activity show task.example.app.41   # one task: its phrase and its links
+```
 
 ## When a job fails
 
@@ -864,6 +944,12 @@ alert.
 (`tests/activity/fixtures/comfyui/`, names scrubbed) as records, the websocket's frames, the
 follower's files, stopping a prompt, feeds and their writer, the command line, and the relay
 node. A stand-in answers every request; no ComfyUI is called.
+
+`tests/activity/test_fleet_tasks.py` covers a fleet's tasks: the follower against a stand-in
+status mirror on this machine (an answer, a 304, an empty mirror, one that doesn't answer,
+what isn't a mirror's answer, another schema, two businesses), a feed file, the records,
+a stale report, hostile titles, and the command line. The feed is a recorded one with made-up
+names (`homelab/tests/fixtures/fleet-mirror.json`).
 
 `tests/activity/fixtures/` holds real output of the lab's provisioning, which the parser is
 checked against. One test also reads the repository for every `::word` line a command prints,

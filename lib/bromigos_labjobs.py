@@ -1,7 +1,7 @@
 """Lab jobs (docs/activity.md, "Lab jobs"): what the lab is making, read as activity records,
 so `bromigos activity`, the Lab board and the start page show it beside the server's own jobs.
 
-Two sources:
+Three sources:
 
   ComfyUI        each configured ComfyUI's queue and history (GET /queue, /history), and its
                  websocket (/ws) for the node that runs, the sampler's steps and the preview
@@ -12,6 +12,11 @@ Two sources:
                  ::item, ::note, ::error), plus thumbnails and outputs. A feed reads exactly as
                  a job run under `bromigos activity run` would: the lines go through the same
                  record (bromigos_activity.Job.feed), in memory.
+  a fleet        the tasks of a fleet of coding agents ([[fleet]] in labjobs.toml: your lab's
+                 status mirror, or a feed file), one record of kind agent.task per task that
+                 needs you, is being worked on or waits, and per task merged today. The feed is
+                 read, checked and cleaned by the lab console's bromigos_homelab.fleet
+                 (docs/lab.md, "Tasks"); without bromigos-lab a [[fleet]] table says so.
 
   instances(where)            the ComfyUIs this machine is set to watch
   jobs(env, …)                every lab job as a record (newest first)
@@ -19,7 +24,9 @@ Two sources:
   cancel(env, id)             take a queued prompt out of the queue, or interrupt a running one
   Feed(run, title)            write a feed: the house lines' methods, plus media() and end()
   Follower(where)             keeps <state>/jobs.json and a media folder, live (polls and the
-                              websocket); `bromigos activity follow` runs it
+                              websocket), and <state>/fleet.json, the last report of each fleet;
+                              `bromigos activity follow` runs it
+  fleet_document(where)       what the Lab board's GET /api/fleet answers, from fleet.json
 
 ComfyUI sends a prompt's progress and preview frames only to the client that queued it. A
 ComfyUI with the relay node (lib/comfyui_relay) copies them to every `bromigos-watch-*` client
@@ -40,6 +47,7 @@ A relative media path is relative to the feed file's folder. The file is
 """
 import base64
 import contextlib
+import datetime as dt
 import hashlib
 import json
 import os
@@ -72,6 +80,9 @@ FOLLOWER_USER = "bromigos-labjobs"              # the machine's follower's user:
 
 COMFY_ID = re.compile(r"comfy-([a-z0-9]{1,24})-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\Z")
 FEED_ID = re.compile(r"feed-([a-z0-9][a-z0-9._-]{0,63})\Z")
+# a fleet's task: task.<the business>.<the repository>.<the issue's number>
+TASK_ID = re.compile(r"task\.([a-z0-9][a-z0-9-]{0,39})\.([a-z0-9][a-z0-9._-]{0,99})\.([0-9]{1,9})\Z")
+TASK_KIND = "agent.task"
 RUN_OK = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 PROMPT_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 MEDIA_NAME = re.compile(r"(pv|th|of|fm)-[0-9a-f]{16}\.(png|jpg|webp|gif|mp4|webm|glb)\Z")
@@ -97,6 +108,10 @@ TIMEOUT_S = 4.0
 STATE_FRESH_MS = 15_000     # a follower's jobs.json older than this isn't used
 PREVIEW_EVERY_S = 1.0       # a running prompt's preview is written at most this often
 IDLE_POLL_S = 30.0          # the follower's look while nothing runs or waits (the websocket still says when one starts)
+FLEET_POLL_MS = 60_000      # a fleet's source is asked this often at most (If-None-Match: an unchanged answer is 304)
+FLEET_MAX = 2 * 1024 * 1024             # bytes of one answer of a status mirror, or of a feed file
+FLEET_KEEP_MS = 24 * 3600_000           # a report this long past its `stale_after` shows no tasks any more
+FLEET_SOURCES = 8           # [[fleet]] tables read at most
 
 # the stages a graph's nodes fall in, in the order they run, and how much of a job each is
 STAGES = (("load", "Load the models", 10), ("inputs", "Read the inputs", 2), ("prompt", "Read the prompt", 5),
@@ -125,7 +140,7 @@ def _activity():
 
 
 def is_lab_id(text):
-    return bool(isinstance(text, str) and (COMFY_ID.match(text) or FEED_ID.match(text)))
+    return bool(isinstance(text, str) and (COMFY_ID.match(text) or FEED_ID.match(text) or TASK_ID.match(text)))
 
 
 def _slug(text, n=24):
@@ -347,7 +362,8 @@ def _toml(path):
 
 
 def config(where):
-    """{"comfyui": [{"name", "url", "from"}], "feed_dirs": [...], "media_roots": [...]}.
+    """{"comfyui": [{"name", "url", "from"}], "feed_dirs": [...], "media_roots": [...],
+    "fleet": [{"name", "url" | "file", "business", "from"}]}.
 
     The ComfyUIs: labjobs.toml's [[comfyui]] (name, url), then for a person their creation
     settings: create.toml's [comfyui.<name>] endpoints, BROMIGOS_COMFYUI_URL (as "homelab")
@@ -369,12 +385,23 @@ def config(where):
 
     def expand(d):
         return os.path.join(home, d[2:]) if d.startswith("~/") else d
-    feed_dirs, media_roots = [], []
+    feed_dirs, media_roots, fleet = [], [], []
     for path in where.config_files():
         doc = _toml(path)
         for c in doc.get("comfyui") or []:
             if isinstance(c, dict):
                 add(c.get("name") or "comfyui", resolve(c.get("url") or c.get("endpoint") or "", env), path)
+        # a fleet of coding agents ([[fleet]]): your lab's status mirror (url), or a feed file on this machine
+        for c in doc.get("fleet") if isinstance(doc.get("fleet"), list) else []:
+            if not isinstance(c, dict) or len(fleet) >= FLEET_SOURCES:
+                continue
+            name = _slug(c.get("name") or "fleet")
+            url = resolve(c.get("url") or "", env).strip() if c.get("url") else ""
+            file = expand(c["file"]) if isinstance(c.get("file"), str) and c["file"].startswith(("/", "~/")) else ""
+            if any(f["name"] == name for f in fleet) or bool(url) == bool(file) or (url and not _url_ok(url)):
+                continue
+            fleet.append({"name": name, "url": url, "file": file, "from": path,
+                          "business": _cut(c.get("business"), 60).lower() if isinstance(c.get("business"), str) else ""})
         feed = doc.get("feed") if isinstance(doc.get("feed"), dict) else {}
         feed_dirs += [expand(d) for d in feed.get("dirs") or [] if isinstance(d, str)]
         media_roots += [expand(d) for d in feed.get("media") or [] if isinstance(d, str)]
@@ -395,20 +422,26 @@ def config(where):
                 for o in out:
                     if o["name"] == _slug(c.get("name") or "comfyui"):
                         o["relay_token"] = resolve(str(c["relay_token"]), env).strip()
-    return {"comfyui": out, "feed_dirs": feed_dirs, "media_roots": media_roots}
+    return {"comfyui": out, "feed_dirs": feed_dirs, "media_roots": media_roots, "fleet": fleet}
 
 
 def instances(where):
     return config(where)["comfyui"]
 
 
+def fleets(where):
+    """The fleets this machine is set to read: labjobs.toml's [[fleet]] tables."""
+    return config(where)["fleet"]
+
+
 def allow_addresses(where, resolve_host=None):
-    """The exact addresses the machine's follower may connect to: each configured ComfyUI's host,
-    resolved now (systemd's IPAddressAllow takes addresses, not names). Nothing else: no other
-    private range, no link-local, and this machine only when an instance names it."""
+    """The exact addresses the machine's follower may connect to: each configured ComfyUI's host
+    and each fleet's status mirror's, resolved now (systemd's IPAddressAllow takes addresses, not
+    names). Nothing else: no other private range, no link-local, and this machine only when an
+    instance names it."""
     resolve_host = resolve_host or (lambda host: {a[4][0] for a in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)})
     out = set()
-    for inst in instances(where):
+    for inst in instances(where) + [f for f in fleets(where) if f["url"]]:
         host = urllib.parse.urlsplit(inst["url"]).hostname
         if not host:
             continue
@@ -424,7 +457,8 @@ def allow_dropin(where, resolve_host=None):
     allow_addresses (none: it may connect nowhere)."""
     addrs = allow_addresses(where, resolve_host)
     lines = ["# Written by bromigos activity follow --allow-dropin from /etc/bromigos/labjobs.toml's",
-             "# ComfyUIs (docs/board.md, \"The lab's jobs\"): the follower connects to these addresses only.",
+             "# ComfyUIs and status mirrors (docs/board.md, \"The lab's jobs\"): the follower connects to these",
+             "# addresses only.",
              "[Service]", "IPAddressAllow="]
     if addrs:
         lines.append("IPAddressAllow=" + " ".join(addrs))
@@ -1241,6 +1275,303 @@ class Feed:
         return False
 
 
+# ------------------------------------------------------------------ a fleet's tasks
+
+def _fleet():
+    """bromigos_homelab.fleet (the lab console's, bromigos-lab): it reads a feed, checks it, and
+    cleans every text in it (docs/lab.md, "Tasks"). None where it isn't installed, or is older
+    than the status mirror's reader."""
+    try:
+        from bromigos_homelab import fleet
+    except Exception:
+        return None
+    return fleet if hasattr(fleet, "read_envelope") and hasattr(fleet, "assemble") else None
+
+
+NO_FLEET = "The lab console (bromigos-lab) isn't installed here, or is older than this: a fleet's tasks need it."
+
+
+def _ms(iso):
+    """Unix milliseconds of a feed's time ("2026-11-28T11:40:03Z"), or None."""
+    try:
+        return int(dt.datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+    except (TypeError, ValueError):
+        return None
+
+
+def fleet_read(src, etag=None):
+    """One look at a [[fleet]] source: ("ok", [entries], etag), ("same", None, etag) when the
+    answer hasn't changed, or ("down", why, None). An entry is {"business", "received_at", "feed"},
+    or {"business", "received_at", "error"} for a feed this version can't read.
+
+    A status mirror (`url`) is asked with If-None-Match, with no proxy and no redirect, a whole
+    deadline and a size cap. A feed file (`file`) is read as a feed's own file is: never through
+    a link, and only when root or its folder's owner owns it. It holds a mirror's answer, or one
+    feed. Either way the document is checked by bromigos_homelab.fleet, and every text in it is
+    cleaned before anything is kept."""
+    F = _fleet()
+    if F is None:
+        return "down", NO_FLEET, None
+    if src.get("url"):
+        req = urllib.request.Request(src["url"], headers={"Accept": "application/json", **({"If-None-Match": etag} if etag else {})})
+        try:
+            with _OPENER.open(req, timeout=TIMEOUT_S) as r:
+                data = Http._read(None, r, FLEET_MAX, DEADLINE_S)
+                tag = r.headers.get("ETag")
+        except urllib.error.HTTPError as e:
+            code = e.code
+            e.close()
+            if code == 304 and etag:
+                return "same", None, etag
+            return "down", f"the status mirror answered HTTP {code}", None
+        except Exception as e:
+            late = isinstance(e, (TimeoutError, socket.timeout))
+            return "down", "the status mirror " + ("didn't answer in time" if late else "isn't answering"), None
+        tag = tag if isinstance(tag, str) and 0 < len(tag) <= 200 and clean(tag) == tag else None
+    else:
+        data = read_regular(src["file"], FLEET_MAX, feed_owners(src["file"]))
+        if data is None:
+            return "down", ("the feed file can't be read: it isn't there, isn't a plain file, or isn't root's or its "
+                            "folder's owner's"), None
+        tag = hashlib.sha256(data).hexdigest()[:16]
+        if tag == etag:
+            return "same", None, etag
+    if len(data) > FLEET_MAX:
+        return "down", "the answer is larger than any feed", None
+    try:
+        doc = json.loads(data)
+    except (ValueError, RecursionError):
+        return "down", "the answer isn't JSON", None
+    if isinstance(doc, dict) and "feeds" not in doc and "generated_at" in doc:      # a feed file can hold one feed
+        doc = {"schema": 1, "feeds": [{"business": doc.get("business"), "received_at": None, "feed": doc}]}
+    try:
+        entries = F.read_envelope(doc)
+    except F.ReadError as e:
+        return "down", str(e), None
+    for e in entries:
+        e["business"] = _slug_name(e["business"])
+        if "feed" in e:                             # kept as text that is safe to print, whoever wrote it
+            e["feed"] = _scrub(F, e["feed"])
+    if src.get("business"):
+        entries = [e for e in entries if e["business"] == _slug_name(src["business"])]
+    return "ok", entries, tag
+
+
+def _scrub(F, doc, depth=0):
+    """A feed with every text in it cleaned (bromigos_homelab.fleet.clean: one line, no control
+    or invisible character, no escape sequence), before it is kept in fleet.json."""
+    if isinstance(doc, str):
+        return F.clean(doc, 2000)
+    if depth < 12 and isinstance(doc, list):
+        return [_scrub(F, v, depth + 1) for v in doc[:500]]
+    if depth < 12 and isinstance(doc, dict):
+        # an address isn't mended: one that holds anything but plain text is no address
+        return {F.clean(k, 80): None if isinstance(v, str) and str(k).endswith("url") and F.clean(v, 2000) != v
+                else _scrub(F, v, depth + 1) for k, v in list(doc.items())[:200]}
+    return doc if isinstance(doc, (int, float, bool)) or doc is None else None
+
+
+def _slug_name(text, n=40):
+    """A business's name as the status mirror writes it: lower-case letters, digits and dashes."""
+    return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")[:n].strip("-") or "fleet"
+
+
+def task_id(business, repo, number):
+    """task.<business>.<repository>.<number>, or None for a task with no number or no plain name."""
+    rid = f"task.{_slug_name(business)}.{str(repo or '').lower()}.{number}"
+    return rid if isinstance(number, int) and not isinstance(number, bool) and TASK_ID.match(rid) else None
+
+
+def _task_record(env, src_name, business, view, row, now, seen):
+    """One task of a fleet's feed as an activity record (kind agent.task), or None for a row with
+    no number. `view` and `row` are bromigos_homelab.fleet.view's: every text in them is cleaned.
+
+      needs you   -> needs-you (no question: it is answered in the repository, not here)
+      working     -> running
+      waiting     -> queued when its phrase says Queued, else waiting
+      done        -> succeeded (only what was merged today is given)
+
+    From a report that isn't fresh (stale, or switched off), a task that needed you still does;
+    one that was running or waiting reads interrupted, with why: nothing says it still runs."""
+    A = _activity()
+    rid = task_id(business, row["repo"], row["number"])
+    if rid is None:
+        return None
+    lane, phrase, fresh = row["lane"], row["phrase"], view["fresh"]
+    state = {"needs_you": "needs-you", "working": "running", "done": "succeeded"}.get(lane) or \
+        ("queued" if phrase.startswith("Queued") else "waiting")
+    report = _ms(view["generated_at"])
+    if not fresh and state in ("running", "queued", "waiting"):
+        state = "interrupted"
+    at = _ms(row["at"])
+    sig = hashlib.sha256(json.dumps([state, lane, phrase, row["title"], row["why"], row["url"], row["links"], fresh,
+                                     view["state"]], sort_keys=True).encode()).hexdigest()[:16]
+    was = seen.get(rid) if isinstance(seen.get(rid), dict) else {}
+    first = was.get("first") if isinstance(was.get("first"), int) else min(now, at or now)
+    changed = was.get("changed") if was.get("sig") == sig and isinstance(was.get("changed"), int) else now
+    seen[rid] = {"first": first, "changed": changed, "sig": sig}
+    if lane == "done":
+        took = int(row["minutes"] * 60_000) if row.get("minutes") else 0
+        started, ended = min(first, (at or now) - took), at or now
+    else:
+        started = at or first
+        ended = (_ms(view["stale_after"]) or report or now) if state == "interrupted" else None
+    agent = _slug_name(business, A.MAX_ID)
+    clock = _MemoryEnv(env)
+    clock.now = started
+    rec = A.new_record(clock, rid, TASK_KIND, _cut(f"{row['label']} {row['title']}".strip(), A.MAX_TITLE),
+                       {"type": "task", "id": _cut(row["label"], A.MAX_ID), "name": _cut(row["label"], A.MAX_LABEL)},
+                       agent=agent if A.AGENT_OK.match(agent) else None)
+    rec["requested_by"] = dict(rec["requested_by"], via="lab", device=None)
+    step = {"needs-you": "waiting", "running": "running", "queued": "todo", "waiting": "waiting", "succeeded": "done",
+            "interrupted": "skipped"}[state]
+    links = [{"text": row["label"], "url": row["url"]}] if row["url"] else []
+    links += [x for x in row["links"] if x.get("url") and x["url"] != row["url"]]
+    facts = " · ".join(b for b in (
+        f"account {row['account']}" if row.get("account") is not None else "",
+        f"{row['turns']} turns" if row.get("turns") is not None else "",
+        f"{max(1, round(row['minutes']))} min" if row.get("minutes") else "",
+        "reviewed by " + " and ".join(row["reviewers"]) if row.get("reviewers") else "") if b)
+    notes = [{"id": None, "words": _cut(w, A.MAX_WORDS), "at": started} for w in
+             [row["why"]] + ([facts] if facts else []) + [f"{x['text']}: {x['url']}" for x in links] if w]
+    old = None if fresh else ("The fleet is switched off" if view["state"] == "off" else "The fleet hasn't reported") + (
+        f" since {view['updated']}" if view["updated"] else "") + (f" ({view['age']} ago)" if view["age"] else "")
+    rec.update(
+        state=state, waiting_for="you" if state == "needs-you" else None, stage=_cut(phrase, A.MAX_DETAIL),
+        steps=[{"id": "now", "label": _cut(phrase, A.MAX_LABEL), "state": step, "started_at": started, "ended_at": ended,
+                "detail": _cut(old + ": this is the last it said.", A.MAX_DETAIL) if old else None, "progress": None}],
+        notes=notes[:A.MAX_NOTES], started_at=started, updated_at=max(changed, started), ended_at=ended, log=None,
+        cancel_note=None if ended else "A fleet's task is stopped in its own repository, not from here.")
+    if state == "succeeded":
+        rec["result"] = {"ok": True, "summary": _cut(phrase, A.MAX_WORDS), "undo": None}
+    elif state == "interrupted":
+        rec["error"] = {"step": None, "code": "stale", "fix": None,
+                        "words": _cut(f"{old}. It was: {phrase}.", A.MAX_WORDS)}
+        rec["result"] = {"ok": False, "summary": "No report says how it went on.", "undo": None}
+    rec["task"] = {"source": src_name, "fleet": _slug_name(business), "business": view["business"], "repo": row["repo"],
+                   "number": row["number"], "issue": row["issue"], "pr": row["pr"], "label": row["label"], "lane": lane,
+                   "phrase": phrase, "why": row["why"], "url": row["url"], "links": links, "account": row.get("account"),
+                   "attempt": row.get("attempt"), "stale": not fresh, "report_at": report}
+    return rec
+
+
+def task_records(env, sources, now=None, seen=None):
+    """A fleet's tasks as activity records, from what each source last gave ([{"name", "feeds": […]}]):
+    one per task that needs you, is being worked on or waits, and per task merged today. A task
+    that left the feed has no record. A report that isn't fresh keeps its records, marked
+    (_task_record), until it is FLEET_KEEP_MS past its `stale_after`: then it has none.
+    `seen` ({id: {first, changed, sig}}) keeps when each was first seen and last changed."""
+    F = _fleet()
+    if F is None:
+        return []
+    now = now or env.now_ms()
+    seen = {} if seen is None else seen
+    when = dt.datetime.fromtimestamp(now / 1000, dt.timezone.utc)
+    out, ids = [], set()
+    for src in sources or []:
+        for entry in src.get("feeds") or []:
+            feed = entry.get("feed") if isinstance(entry, dict) else None
+            if not isinstance(feed, dict):
+                continue
+            try:
+                view = F.view(F.validate(feed), when)
+            except Exception:              # a feed kept from an older version that this one can't read
+                continue
+            if not view["fresh"]:
+                since = _ms(view["stale_after"]) or _ms(view["generated_at"])
+                if since is None or now - since > FLEET_KEEP_MS:
+                    continue
+            lanes = {lane["id"]: lane for lane in view["lanes"]}
+            rows = [r for lane in ("needs_you", "working", "waiting") for r in lanes[lane]["rows"]]
+            rows += [r for r in lanes["done"]["rows"] if r.get("today")]
+            for row in rows:
+                rec = _task_record(env, str(src.get("name") or "fleet"), entry.get("business") or view["business"], view,
+                                   row, now, seen)
+                if rec is not None and rec["id"] not in ids:
+                    ids.add(rec["id"])
+                    out.append(rec)
+    for rid in [r for r in seen if r not in ids]:
+        del seen[rid]
+    return out
+
+
+def read_fleet(where):
+    """The follower's fleet.json, the last report of each fleet, from the first state folder this
+    reader may use that has one; None with none. Unlike jobs.json it is used however old it is:
+    each feed says itself when it is stale."""
+    for state, _media in where.state_dirs():
+        data = read_regular(os.path.join(state, "fleet.json"), FLEET_MAX * FLEET_SOURCES, state_owners(where, state))
+        doc = None
+        with contextlib.suppress(ValueError, TypeError, RecursionError):
+            doc = json.loads(data) if data else None
+        if isinstance(doc, dict) and isinstance(doc.get("sources"), list):
+            return clean_doc(doc)
+    return None
+
+
+def fleet_now(where, now=None):
+    """Each [[fleet]] source read once, now, without a follower: [{"name", "state", "words", "feeds"}]."""
+    out = []
+    for src in fleets(where):
+        what, got, _ = fleet_read(src)
+        out.append({"name": src["name"], "state": "down" if what == "down" else "ok" if got else "empty",
+                    "words": got if what == "down" else "" if got else "no report yet", "feeds": got if what == "ok" else []})
+    return out
+
+
+def fleet_document(where, now=None):
+    """What the Lab board's GET /api/fleet answers, from the follower's fleet.json and nothing
+    else (no network): bromigos_homelab.fleet.assemble's document, the one `bromigos lab tasks
+    --json` prints ({"schema", "generatedAt", "configured", "state", "fleets", "errors"}), each
+    fleet with its `source`, the mirror's name for it (`mirror`) and when the mirror got it
+    (`received_at`); and "sources": [{"name", "state", "words", "checked_at", "read_at"}], the
+    follower's word on each. A source that gave nothing is in `errors`, in plain words."""
+    F = _fleet()
+    now = now or where.env.now_ms()
+    doc = read_fleet(where) or {}
+    sources = [s for s in doc.get("sources") or [] if isinstance(s, dict) and isinstance(s.get("name"), str)]
+    try:
+        configured = bool(sources) or bool(fleets(where))
+    except Exception:
+        configured = bool(sources)
+    if F is None:
+        return {"schema": SCHEMA, "generatedAt": now // 1000, "configured": configured,
+                "state": "unreachable" if configured else "empty", "fleets": [],
+                "errors": {"board": NO_FLEET} if configured else {}, "sources": []}
+    when = dt.datetime.fromtimestamp(now / 1000, dt.timezone.utc)
+    views, errors, said = [], {}, []
+    for s in sources:
+        feeds = [e for e in s.get("feeds") or [] if isinstance(e, dict)]
+        shown = 0
+        for e in feeds:
+            try:
+                view = F.view(F.validate(e.get("feed")), when)
+            except Exception as err:
+                errors[f"{s['name']}: {e.get('business') or '?'}"] = _cut(e.get("error") or str(err), 300)
+                continue
+            shown += 1
+            views.append(dict(view, source=s["name"], mirror=e.get("business"), received_at=e.get("received_at")))
+        state = s.get("state") if s.get("state") in ("ok", "empty", "down") else "down"
+        words = _cut(s.get("words"), 300)
+        if state != "ok":
+            errors[s["name"]] = (words or "it gave no report") + (": this is the last report it gave" if shown else "")
+        said.append({"name": s["name"], "state": state, "words": words, "checked_at": s.get("checked_at"),
+                     "read_at": s.get("read_at")})
+    out = F.assemble(views, errors, configured, when)
+    out["sources"] = said
+    return out
+
+
+def plain_task(rec, now_ms):
+    """The lines `bromigos activity show` adds for a fleet's task: whose it is, and its links."""
+    t = rec.get("task") or {}
+    lines = ["", f"Fleet    {t.get('business') or t.get('fleet')}  ·  {t.get('label')}  ·  "
+                 f"{str(t.get('lane') or '').replace('_', ' ')}"]
+    if t.get("stale"):
+        lines.append("Report   old: the fleet hasn't reported for a while, so this is the last it said")
+    return lines + ["", "A fleet's task is answered and stopped in its own repository, at the links above."]
+
+
 # ------------------------------------------------------------------ reading everything
 
 def read_state(where):
@@ -1268,11 +1599,11 @@ def state_owners(where, state):
     return {os.getuid()}
 
 
-def jobs(env=None, where=None, live=True, feeds=True, comfy=True, http=None, files=True):
+def jobs(env=None, where=None, live=True, feeds=True, comfy=True, http=None, files=True, tasks=True):
     """Every lab job as a record, newest first. From a follower's fresh jobs.json when there is
-    one; else, with `live`, read now from each ComfyUI. Feed runs from their files too, unless
-    `files` is False. The board's API passes live=False and files=False: it has no network, and
-    a feed's own paths aren't for a browser."""
+    one; else, with `live`, read now from each ComfyUI and each fleet's source. Feed runs from
+    their files too, unless `files` is False. The board's API passes live=False and files=False:
+    it has no network, and a feed's own paths aren't for a browser. `tasks`: a fleet's tasks too."""
     where = where or Where(env)
     now = where.env.now_ms()
     out, have = [], set()
@@ -1280,11 +1611,14 @@ def jobs(env=None, where=None, live=True, feeds=True, comfy=True, http=None, fil
     if doc is not None:
         for j in doc["jobs"]:
             if isinstance(j, dict) and isinstance(j.get("id"), str) and (
-                    comfy and COMFY_ID.match(j["id"]) or feeds and FEED_ID.match(j["id"])):
+                    comfy and COMFY_ID.match(j["id"]) or feeds and FEED_ID.match(j["id"]) or tasks and TASK_ID.match(j["id"])):
                 out.append(j)
                 have.add(j["id"])
-    elif comfy and live:
-        out += read_now(where, now, http)[0]
+    elif live:
+        if comfy:
+            out += read_now(where, now, http)[0]
+        if tasks and http is None and fleets(where):
+            out += task_records(where.env, fleet_now(where, now), now)
     if feeds and files:
         out += [r for r in feed_records(where, now) if r["id"] not in have]
     return sorted(out, key=_order)
@@ -1313,8 +1647,11 @@ def _order(r):
 
 def find(env, text, where=None, http=None):
     """A lab job by its whole id, or by a part only one has. KeyError otherwise. A ComfyUI
-    prompt's id reads no feed file, and a feed's no ComfyUI."""
-    all_jobs = jobs(env, where, http=http, feeds=not COMFY_ID.match(text or ""), comfy=not FEED_ID.match(text or ""))
+    prompt's id reads no feed file, a feed's no ComfyUI, and a fleet's task neither."""
+    kind = "comfy" if COMFY_ID.match(text or "") else "feed" if FEED_ID.match(text or "") else \
+        "task" if TASK_ID.match(text or "") else None
+    all_jobs = jobs(env, where, http=http, feeds=kind in (None, "feed"), comfy=kind in (None, "comfy"),
+                    tasks=kind in (None, "task"))
     hits = [j for j in all_jobs if j["id"] == text] or [j for j in all_jobs if text and text in j["id"]]
     if len(hits) != 1:
         raise KeyError(f"no job {text!r}" if not hits else f"{text!r} matches {len(hits)} jobs: " + ", ".join(h["id"] for h in hits[:5]))
@@ -1590,6 +1927,8 @@ class Follower:
         self.answered = set()
         self.said = {}
         self.graphs = {}          # (instance, prompt id) -> its graph, for the stage of a node
+        self.fleet = None         # [[fleet]] name -> what it last gave (state, words, etag, feeds, …); None: not read yet
+        self.fleet_seen = {}      # task id -> when it was first seen and last changed
         self._current = None      # (instance, prompt id) the websocket last said runs
         self._pending_preview = None
 
@@ -1772,8 +2111,61 @@ class Follower:
                 hit = self.feed_media[p] = (st.st_mtime, name, thumb or name)
             m["media"], m["thumb"] = hit[1], hit[2]
 
+    def _fleet_pass(self, now):
+        """Each [[fleet]] source, asked at most every FLEET_POLL_MS (an unchanged answer costs a
+        304), and its tasks as records. What each last gave is kept in fleet.json beside
+        jobs.json, so a mirror that is empty after its own restart, or doesn't answer, still has
+        its last report here: the feed's own `stale_after` says when that is too old."""
+        srcs = fleets(self.where)
+        if self.fleet is None:                      # what a follower before this one kept
+            self.fleet = {}
+            kept = read_fleet(self.where) if srcs else None
+            for s in (kept or {}).get("sources") or []:
+                if isinstance(s, dict) and isinstance(s.get("name"), str):
+                    self.fleet[s["name"]] = {k: s.get(k) for k in ("target", "state", "words", "etag", "feeds", "read_at")}
+            if isinstance((kept or {}).get("seen"), dict):
+                self.fleet_seen = {k: v for k, v in kept["seen"].items() if TASK_ID.match(str(k)) and isinstance(v, dict)}
+        if not srcs and not self.fleet:
+            return []
+        wrote = False
+        for name in [n for n in self.fleet if n not in {s["name"] for s in srcs}]:
+            del self.fleet[name]
+            wrote = True
+        for src in srcs:
+            target = (src["url"] or src["file"]) + (f" (only {src['business']})" if src["business"] else "")
+            st = self.fleet.setdefault(src["name"], {})
+            if st.get("target") != target:          # another address or business: nothing of the old one is kept
+                st.clear()
+                st["target"] = target
+            if isinstance(st.get("checked_at"), int) and 0 <= now - st["checked_at"] < FLEET_POLL_MS:
+                continue
+            what, got, tag = fleet_read(src, st.get("etag") if st.get("feeds") else None)
+            st["checked_at"], wrote = now, True
+            if what == "ok" and got:
+                st.update(state="ok", words="", etag=tag, feeds=got, read_at=now)
+            elif what == "ok":                      # the mirror started again: nothing until the fleet's next run
+                st.update(state="empty", etag=None, words="no report yet: the status mirror holds none until the "
+                                                          "fleet's next run")
+            elif what == "same":
+                st.update(state="ok", words="")
+            else:
+                st.update(state="down", words=_cut(got, 300), etag=None)
+                if st.get("said") != got:
+                    self.log(f"bromigos activity follow: the fleet {src['name']} wasn't read: {got}")
+            st["said"] = got if what == "down" else None
+        before = json.dumps(self.fleet_seen, sort_keys=True)
+        states = [dict(st, name=name) for name, st in self.fleet.items()]
+        records = task_records(self.where.env, states, now, self.fleet_seen)
+        if wrote or json.dumps(self.fleet_seen, sort_keys=True) != before:
+            os.makedirs(self.state, mode=0o750, exist_ok=True)
+            _activity().write_json(os.path.join(self.state, "fleet.json"), {
+                "schema": SCHEMA, "at": now, "seen": self.fleet_seen,
+                "sources": [{"name": n, **{k: st.get(k) for k in ("target", "state", "words", "etag", "checked_at", "read_at")},
+                             "feeds": st.get("feeds") or []} for n, st in self.fleet.items()]}, 0o640)
+        return records
+
     def pass_once(self):
-        """Read every ComfyUI and feed once, and write jobs.json."""
+        """Read every ComfyUI, feed and fleet once, and write jobs.json."""
         now = self.where.env.now_ms()
         wfs = workflows(self.where)
         records, notes = [], []
@@ -1840,6 +2232,12 @@ class Follower:
             records.append(r)
         for p in [p for p in self.feed_media if p not in seen]:
             del self.feed_media[p]
+        try:
+            records += self._fleet_pass(now)
+        except OSError:
+            raise
+        except Exception as e:                      # a fleet that can't be read never hides the lab's jobs
+            self.log(f"bromigos activity follow: the fleet's tasks couldn't be read ({type(e).__name__}: {e})")
         records.sort(key=_order)
         self.handle_asks()
         keep = set()
@@ -1865,6 +2263,16 @@ class Follower:
                 if isinstance(m, dict):
                     m.pop("path", None)
         A.write_json(os.path.join(self.state, "jobs.json"), public, 0o640)
+        self._written = public
+
+    def restamp(self):
+        """Say the records still stand: jobs.json again with the time it is now. Between two
+        looks an idle follower waits up to 30 seconds, and a reader uses a jobs.json only while
+        it is under 15 seconds old (that is how it knows the follower is alive): without this,
+        what the lab last made, and a fleet's tasks, would come and go on the pages."""
+        if getattr(self, "_written", None) is not None:
+            self._written["at"] = self.where.env.now_ms()
+            _activity().write_json(os.path.join(self.state, "jobs.json"), self._written, 0o640)
 
     def handle_asks(self):
         """Root's requests to stop a prompt (cancel's hand-off): each answered once, in the state
@@ -1934,14 +2342,21 @@ class Follower:
                         return 0
                 # while nothing runs or waits, a look every 30 s; the websocket's first word of a
                 # prompt (another client's, through the relay) brings the next look forward
-                busy = any(r["state"] in ("queued", "running") for r in got) or any(self.live.values())
+                # (a fleet's tasks aren't this follower's to watch closely: its source is asked once a minute)
+                busy = any(r["state"] in ("queued", "running") and not r.get("task") for r in got) or any(self.live.values())
                 every = self.poll_s if busy else self.idle_poll_s
-                waited = 0.0
+                waited, stamped = 0.0, time.monotonic()
                 while waited < every - (time.monotonic() - t0) and not self.stop.is_set():
                     sleep(min(self.poll_s, max(0.2, every - (time.monotonic() - t0))))
                     waited += self.poll_s
                     if any(self.live.values()):
                         break
+                    if time.monotonic() - stamped >= STATE_FRESH_MS / 2000:      # well inside the readers' 15 s
+                        try:
+                            self.restamp()
+                        except OSError:
+                            pass                                    # the next look says so
+                        stamped = time.monotonic()
         finally:
             self.stop.set()
 

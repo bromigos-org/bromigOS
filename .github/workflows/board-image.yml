@@ -7,8 +7,8 @@
 # `packages` has published a main build, and on a change to the image's own files.
 #
 # A pull request builds the image from the packages already published and runs this checkout's
-# board library and start script inside it (board/container/test.sh --checkout). GitHub's
-# runners, never the lab's: this repo is public.
+# board library, start script, job follower and feed reader inside it (board/container/test.sh
+# --checkout). GitHub's runners, never the lab's: this repo is public.
 name: board image
 
 on:
@@ -28,6 +28,11 @@ on:
       - "board/caddy/**"
       - "board/bromigos-board.tmpfiles"
       - "board/bromigos-board.sysusers"
+      # the job follower and the feed's reader, which the test runs from this checkout too
+      - "lib/bromigos_labjobs.py"
+      - "lib/bromigos_activity.py"
+      - "bin/bromigos-activity"
+      - "homelab/lib/bromigos_homelab/fleet.py"
       - ".github/workflows/board-image.yml"
   workflow_dispatch:
 

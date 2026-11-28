@@ -10,8 +10,12 @@ client: it serves the page's files and passes /api here.
   DELETE /api/session/{id}    sign another browser out
   GET    /api/board           everything the board shows (signed in)
   GET    /api/activity        the jobs, live, as server-sent events (signed in): this server's and
-                              the lab's (ComfyUI generations, job feeds: the lab follower's files)
+                              the lab's (ComfyUI generations, job feeds and a fleet's tasks: the lab
+                              follower's files)
   GET    /api/lab             the lab follower's ComfyUIs: answering, live, relayed (signed in)
+  GET    /api/fleet           a fleet of coding agents' tasks: per business the headline, the lanes
+                              with their rows, the accounts, the schedules and whether the report
+                              is stale (signed in; the lab follower's fleet.json, never the network)
   GET    /api/lab/media/NAME  a preview, thumbnail or output the lab follower keeps (signed in)
   POST   /api/actions         {verb, app[, delete_data, code]}: restart, add or remove an app, as a
                               job (signed in; deleting its data needs a fresh console code too)
@@ -307,7 +311,7 @@ async def get_board(request):
     if snap is None:
         return error(503, ("gathering", "The board is reading this server. It's ready in a few seconds."),
                      headers={"Retry-After": "5"})
-    return JSONResponse(board.shape(snap, paths.now_ms()))
+    return JSONResponse(board.shape(snap, paths.now_ms(), tasks=await run_in_threadpool(tasks_needing_you)))
 
 
 def _activity():
@@ -339,6 +343,21 @@ def jobs_now(limit=50):
         if why != _jobs_trouble[0]:           # said once in the service's log, not at every look
             _jobs_trouble[0] = why
             print(f"bromigos-board: the activity records can't be read ({why}): the stream has no jobs", file=sys.stderr, flush=True)
+        return []
+
+
+def tasks_needing_you():
+    """A fleet's tasks that need a person (docs/board.md, "A fleet's tasks"), as the lab follower's
+    jobs.json has them now: the same records the activity stream carries, so Home counts a task
+    exactly while Activity shows it. [] with no follower, no fleet, or a bromigos-core older than
+    this board."""
+    try:
+        L = _labjobs()
+        if not hasattr(L, "TASK_KIND"):
+            return []
+        return [j for j in L.jobs(where=lab_where(), live=False, files=False, comfy=False, feeds=False)
+                if j.get("kind") == L.TASK_KIND and j.get("state") == "needs-you"]
+    except Exception:
         return []
 
 
@@ -420,6 +439,37 @@ async def get_lab(request):
             insts.append({"name": i["name"], "state": "ok" if i.get("state") == "ok" else "down",
                           "words": str(i.get("words") or ""), "live": bool(i.get("live")), "relay": bool(i.get("relay"))})
     return JSONResponse({"schema": SCHEMA, "following": doc is not None, "at": (doc or {}).get("at"), "instances": insts})
+
+
+def fleet_now():
+    """The fleets' document from the lab follower's fleet.json (bromigos_labjobs.fleet_document):
+    the same shape `bromigos lab tasks --json` prints. Where this server's bromigos-core or
+    bromigos-lab is older than the board, an empty one that says so."""
+    try:
+        L = _labjobs()
+        if hasattr(L, "fleet_document"):
+            return L.fleet_document(lab_where())
+        why = "This server's bromigos-core is older than its Lab board: update it to see a fleet's tasks."
+    except Exception as e:
+        why = f"The fleet's report couldn't be read ({type(e).__name__})."
+    return {"schema": SCHEMA, "generatedAt": paths.now_ms() // 1000, "configured": False, "state": "empty", "fleets": [],
+            "errors": {"board": why}, "sources": []}
+
+
+async def get_fleet(request):
+    """A fleet of coding agents' tasks, for the page: {"schema", "generatedAt", "configured",
+    "state", "fleets": [view, …], "errors", "sources", "following"}. Each fleet is one business's
+    picture: its headline, its lanes with their rows, its accounts and schedules, and whether its
+    report is fresh, stale or switched off. Every text in it was cleaned where it was read
+    (bromigos_homelab.fleet); it is text all the same, never markup. `following` is false while
+    the follower hasn't written for 15 seconds: the report is then the last one it kept."""
+    rec = session_of(request)
+    if not rec:
+        return error(401, SIGNED_OUT)
+    touch_wanted()
+    doc = await run_in_threadpool(fleet_now)
+    state, _ = await run_in_threadpool(lab_state)
+    return JSONResponse(dict(doc, following=state is not None))
 
 
 async def get_lab_media(request):
@@ -566,6 +616,7 @@ ROUTES = [
     Route("/api/board", get_board, methods=["GET"]),
     Route("/api/activity", get_activity, methods=["GET"]),
     Route("/api/lab", get_lab, methods=["GET"]),
+    Route("/api/fleet", get_fleet, methods=["GET"]),
     Route("/api/lab/media/{name}", get_lab_media, methods=["GET"]),
     Route("/api/actions", post_actions, methods=["POST"]),
     Route("/api/activity/{job}/{verb}", post_job_action, methods=["POST"]),

@@ -28,7 +28,7 @@ RUN set -eu; \
     pacman-key --add /tmp/bromigos.asc; pacman-key --lsign-key "$FPR"; \
     printf '\n[bromigos]\nSigLevel = Required DatabaseOptional\nServer = %s/$repo%s/$arch\n' "$REPO" "$sub" >> /etc/pacman.conf; \
     pacman -Syu --noconfirm --needed bromigos-keyring bromigos-board python-pillow; \
-    pacman -Q bromigos-board bromigos-board-web bromigos-core > /etc/bromigos-board-container.versions; \
+    pacman -Q bromigos-board bromigos-board-web bromigos-core bromigos-lab > /etc/bromigos-board-container.versions; \
     pacman -Scc --noconfirm; rm -rf /var/lib/pacman/sync /tmp/bromigos.asc /etc/pacman.d/gnupg/S.* /var/cache/pacman/pkg
 
 COPY bromigos-board-container /usr/local/bin/bromigos-board-container

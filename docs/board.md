@@ -26,7 +26,8 @@ gathers the readings, the Caddy site, and what the page never shows.
   ([activity.md](activity.md#the-record)). `#job/ID` opens one job. A job's answers, Stop
   and Start again are controls on a server that lets the page: see
   [What the page may do](#what-the-page-may-do). The lab's creation jobs show here too:
-  see [The lab's jobs](#the-labs-jobs).
+  see [The lab's jobs](#the-labs-jobs). So do the tasks of a fleet of coding agents: see
+  [A fleet's tasks](#a-fleets-tasks).
 - **The door and signing in.** Signed out, every address shows the door: the ways in and
   the apps to open, nothing else. **Sign in** takes the one-time code that
   `sudo bromigos server board code` prints at the server.
@@ -672,7 +673,7 @@ the same users and the same folders:
 | The API | `bromigos-board`, on `/run/bromigos-board.sock` | Always |
 | Caddy, with the package's own site | `caddy`, on port 8080, plain HTTP | Always |
 | The reader | root | When the page asks, as on a server |
-| The lab follower | `bromigos-labjobs` | While a browser is signed in, when `/etc/bromigos/labjobs.toml` names a ComfyUI |
+| The lab follower | `bromigos-labjobs` | While a browser is signed in, when `/etc/bromigos/labjobs.toml` is there |
 
 The action helper isn't started, and the settings the script writes allow no action:
 there is no server under a container for the page to act on. If any part ends, the
@@ -693,6 +694,15 @@ What to give it:
 - **The lab's ComfyUIs.** Mount `/etc/bromigos/labjobs.toml` ([activity.md](activity.md#lab-jobs))
   for the lab's creation jobs to show on Activity and on the post. A relay token is a
   reference there (`@env:NAME` or `@file:/path`), never the token itself.
+- **A fleet's status mirror.** In the same `labjobs.toml`, a `[[fleet]]` table with the
+  mirror's address shows a fleet's tasks on Activity, on the post and on Home
+  ([A fleet's tasks](#a-fleets-tasks)). The mirror must let the board's pods connect.
+
+  ```toml
+  [[fleet]]
+  name = "tasks"
+  url = "http://status-mirror.mylab.example:8082/v1/feed"
+  ```
 - **HTTPS at the ingress.** The session cookie is for HTTPS only. The ingress holds the
   certificate and sends plain HTTP to port 8080.
 
@@ -703,7 +713,8 @@ kubectl exec deploy/board -- bromigos-board code
 ```
 
 **What it shows.** Activity and the post are whole: they are drawn from job records, and
-the follower reads those from the lab's ComfyUIs. The pages about a server (its drives,
+the follower reads those from the lab's ComfyUIs and from a fleet's status mirror. The
+pages about a server (its drives,
 its apps, its updates) read the container itself, which has none, so they show their empty
 states. Reading a cluster's own nodes and apps into those pages is not built yet.
 
@@ -728,7 +739,8 @@ a browser or a proxy sends can. A value that isn't a plain name is ignored.
 
 `board/container/test.sh IMAGE` starts the image and uses it: the page and the post's art,
 the door, a sign-in at the address and at no other, the signed-in board and its jobs, a
-stand-in ComfyUI followed, each part as its own user, and a restart. CI runs it on every
+stand-in ComfyUI followed, a stand-in status mirror followed and its tasks on the board,
+each part as its own user, and a restart. CI runs it on every
 pull request that touches the board's library or the image, and again before it publishes
 (`.github/workflows/board-image.yml`). The image is built after `packages` has published
 a main build, tagged `edge` and with the two packages' versions (the service's, then the
@@ -974,6 +986,7 @@ Every answer is JSON with `Cache-Control: no-store`. An error is
 | `DELETE /api/session/<id>` | signed in | Signs that browser out |
 | `GET /api/board` | signed in | The board, worked out from the reader's `board.json` |
 | `GET /api/activity` | signed in | The jobs, live, as server-sent events |
+| `GET /api/fleet` | signed in | A fleet's tasks, business by business ([A fleet's tasks](#a-fleets-tasks)) |
 | `POST /api/actions` | signed in | Restarts, adds or removes an app, as a job ([Actions](#actions)) |
 
 The status codes:
@@ -1369,6 +1382,144 @@ sudo cat /run/bromigos-labjobs/jobs.json | head         # what it last wrote
 bromigos activity list --lab                            # the same jobs at a terminal
 ```
 
+### A fleet's tasks
+
+A *fleet* is a set of coding agents that work through the issues of one business's
+repositories by themselves ([lab.md](lab.md#tasks)). Its *tasks* show on the board as jobs:
+on Activity, on the post, and in Home's "what needs you". The service has it all. The page
+has no Tasks page of its own yet, so it shows each task with the job card it already has.
+
+**Where the tasks come from.** The fleet's scheduled job writes a *feed*: one JSON
+document that says what every task is doing. The follower reads it from one of two places,
+named in `/etc/bromigos/labjobs.toml`:
+
+```toml
+[[fleet]]
+name = "tasks"
+url = "http://status-mirror.mylab.example:8082/v1/feed"
+```
+
+| Option | What it does |
+|---|---|
+| `url` | Your lab's *status mirror*: a small service of the fleet's own, inside the lab, that holds each business's newest feed. bromigOS doesn't ship one. |
+| `file` | A feed file on this machine instead, as an absolute path. It holds a mirror's answer, or one feed. |
+| `business` | Keep one business of the mirror's, by the mirror's name for it. Without it, every business. |
+| `name` | The source's name. Give each `[[fleet]]` table its own. |
+
+A table has `url` or `file`, not both. The board itself holds no GitHub login and asks
+GitHub nothing.
+
+**How the follower reads it.**
+
+- It asks each source once a minute at most, and sends the last answer's `ETag` back. An
+  unchanged answer is a 304 with no body.
+- It keeps the last report in `/run/bromigos-labjobs/fleet.json`, beside `jobs.json`. A
+  mirror is empty for up to ten minutes after its own restart, until the fleet's next run.
+  The board then still shows the last report, and says the mirror has no report yet.
+- The same holds when the mirror doesn't answer. The follower says so once in its log.
+- It reads a mirror with no proxy, no redirect, a whole deadline of 15 seconds and a cap
+  of 2 MB. It reads a feed file as it reads a job feed: never through a link, and only
+  when root or the folder's owner owns it.
+- On a server, the follower's unit may connect to the mirror's exact addresses, added to
+  the same drop-in as the ComfyUIs' (`bromigos activity follow --allow-dropin`).
+- It asks no more often because tasks are running. A fleet's own run takes ten minutes.
+
+The lab console's library reads the feed, checks it and cleans every text in it
+(`bromigos_homelab.fleet`, from `bromigos-lab`). The follower and the API use that one
+reader, so the board says the same words as `bromigos lab tasks`.
+
+**A task as a job record.** The follower makes one record of kind `agent.task` per task,
+and writes them into `jobs.json` with the lab's other jobs
+([activity.md](activity.md#a-fleets-tasks) has every field):
+
+| The task's lane | The record's state | On the page |
+|---|---|---|
+| Needs you | `needs-you`, with no question | A card marked NEEDS YOU, in the list of jobs that ask |
+| Working | `running` | A card in the going list, and a crew member on the post |
+| Waiting | `queued` when its phrase says Queued, else `waiting` | A card in the going list |
+| Done, merged today | `succeeded` | A card in the ended list |
+
+Proposed tasks, and work that ended without a merge, have no record. `GET /api/fleet` has
+them.
+
+A record carries the task's *phrase* ("Stuck · …", "Fixing · round 2") as its stage and as
+its one step, so the card shows it. Its notes hold the task's links as words, which the job's
+sheet lists. The record says "by agent" and the business's name, as every job an AI agent
+asked for does. A task that needs you has no question, because it is answered in its
+repository and not on the page. So the card offers no answer and no command.
+
+**What the page shows today.** This is read from the page's code, not from a browser:
+
+- **Activity.** `components/JobCard.tsx` draws a record that has no `lab` object as a
+  server's job: the title, a line with the state, the kind, when it started and "by agent
+  example", the one step with the phrase, and the state's chip. The job's sheet (`#job/ID`)
+  adds the notes, where the links are, as text. The filter counts tasks among "This
+  server's jobs", since that is every job without a `lab` object.
+- **The post.** A kind that starts with `agent.` goes to the hologram table
+  ([Which job goes where](#which-job-goes-where)), and so does any job an agent asked for.
+  A running task has a crew member working there. One that needs you has one standing on
+  an amber ring. A queued or waiting task isn't drawn, like every such job.
+- **Home.** Each task that needs you is a row under "what needs you": its title, its
+  phrase, and the business where a machine's name stands. It opens the job's sheet. The
+  status line counts it. It doesn't count against the server's own row, because a task is
+  on no machine.
+
+**A report that is old.** The feed says when it goes stale, 90 minutes after it was
+written. Past that, the fleet's job isn't running. The records then say so rather than
+vanish:
+
+- A task that needed you still does. Its step says the report is old.
+- A task that was running or waiting reads `interrupted`, with why: "The fleet hasn't
+  reported since 12:40 (1 h 40 min ago). It was: Writing." Nothing says it still runs, so
+  the post draws nobody for it.
+- A day past stale, the report has no records any more. `GET /api/fleet` still has it.
+
+A task that leaves the feed loses its record at the next look.
+
+**The API.** `GET /api/fleet`, signed in, answers the fleets' document from `fleet.json`.
+It is the document `bromigos lab tasks --json` prints ([lab.md](lab.md#the-command)), with
+three things more:
+
+```json
+{"schema": 1, "generatedAt": 1795866720, "configured": true, "state": "warn", "following": true,
+ "fleets": [{"source": "tasks", "mirror": "example", "received_at": "2026-11-28T11:40:09Z",
+             "business": "Example", "state": "fresh", "fresh": true,
+             "headline": "3 need you · 2 proposed · 3 working · 1 waiting · 4 merged today",
+             "lanes": [{"id": "needs_you", "title": "Needs you", "count": 3, "rows": [{"label": "app#41", "…": "…"}]}],
+             "accounts": [{"number": 2, "state": "resting", "phrase": "Resting until 15:45"}],
+             "schedules": [{"id": "weekly-review", "last_words": "filed a digest and 1 ticket"}],
+             "warnings": []}],
+ "errors": {},
+ "sources": [{"name": "tasks", "state": "ok", "words": "", "checked_at": 1795866720000, "read_at": 1795866720000}]}
+```
+
+- `fleets[].mirror` and `received_at` are the mirror's name for the business and when it
+  got the feed.
+- `sources` is the follower's word on each `[[fleet]]` table: `ok`, `empty` (no report
+  yet) or `down`, and when it last asked and last read.
+- `following` is false while the follower hasn't written for 15 seconds. The report is
+  then the last one it kept.
+
+`state` is `ok`, `warn`, `unreachable` or `empty`, and `errors` says in words what couldn't
+be read. With no `[[fleet]]` table, `configured` is false and `fleets` is empty.
+
+`bromigos-board`, `bromigos-core` and `bromigos-lab` are three packages. A board that is
+newer than the other two answers `GET /api/fleet` with no fleets and says which package to
+update. It never fails.
+
+**Text other people wrote.** A task's title and a reason come from whoever wrote the
+issue. The feed's reader removes escape sequences, control characters and invisible
+characters, puts each text on one line and cuts it, before anything is kept. So
+`fleet.json`, the records and the API's answers hold plain text. An address that isn't a
+plain `http` or `https` one is left out. The page then draws every string as text, as it
+does all its data.
+
+```bash
+sudo cat /run/bromigos-labjobs/fleet.json | head       # the last report of each fleet
+bromigos activity list --lab                           # the tasks, with the lab's other jobs
+bromigos activity show task.example.app.41             # one task, with its links
+```
+
 ### The files
 
 | Path | What |
@@ -1385,10 +1536,10 @@ bromigos activity list --lab                            # the same jobs at a ter
 | `/run/bromigos-board/requests/` | The page's actions, waiting for root's helper. The board's user's |
 | `/run/bromigos-board/results/` | The helper's answers. Root's |
 | `/var/lib/bromigos-board-root/codes/` | Root's own note of each code it made. Root's only |
-| `/run/bromigos-labjobs/` | The lab follower's `jobs.json` and its answers. The `bromigos-labjobs` user's, read by the board's group |
+| `/run/bromigos-labjobs/` | The lab follower's `jobs.json`, its answers, and `fleet.json`, each fleet's last report. The `bromigos-labjobs` user's, read by the board's group |
 | `/var/cache/bromigos-labjobs/` | The lab's previews, thumbnails and outputs. The same |
 | `/run/bromigos-labjobs-asks/` | What root's helper asks the follower (stopping a generation). Root's |
-| `/etc/bromigos/labjobs.toml` | The ComfyUIs and feed folders the follower reads ([activity.md](activity.md#which-comfyuis)) |
+| `/etc/bromigos/labjobs.toml` | The ComfyUIs, feed folders and fleets the follower reads ([activity.md](activity.md#which-comfyuis)) |
 
 ### The service's tests
 
@@ -1402,6 +1553,10 @@ also check that Caddy reads the site and puts its 403 first. With `systemd-analy
 have systemd check the units' text. The `board-tests` workflow runs them on every pull
 request that touches `board/`.
 
+`test_fleet.py` covers a fleet's tasks: `GET /api/fleet`, the tasks on the stream, Home's
+count, a stale report, hostile titles, and a server whose other packages are older. The
+follower in it is the real one, reading a recorded feed with made-up names.
+
 The same workflow runs `board/tests/board-integration.sh` on a throwaway machine, as real
 root under its real systemd. It installs the board where the package puts it, then checks
 what a stand-in root can't show: who owns each folder once tmpfiles made them, that the
@@ -1412,6 +1567,9 @@ requests is each handled once with none lost, that a refusal fails no unit, and 
 the board's user made deletes nothing. Never run it on a computer you use.
 
 ### Not built yet, on the server's side
+
+- A Tasks page for a fleet's tasks. The service answers `GET /api/fleet`; the page doesn't
+  ask it yet, and shows each task as a job ([A fleet's tasks](#a-fleets-tasks)).
 
 - Updating an app or putting its last version back: `bromigos lab apps` doesn't do those yet.
 - Signing in from the phone, or with a Bromigos account.

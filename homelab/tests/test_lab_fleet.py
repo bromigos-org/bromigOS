@@ -1,7 +1,8 @@
 """Tasks: a fleet of coding agents read from its control repository's Status issue (fleet.py,
 adapters/labfleet.py, the Tasks card, `bromigos lab tasks`), against a recorded issue body
-(tests/fixtures/fleet-status-body.txt: placeholder names only), a stand-in `gh` and a stand-in
-mirror. No network, no GitHub login.
+(tests/fixtures/fleet-status-body.txt: a feed from before it carried lanes and phrases), a
+status mirror's recorded answer (tests/fixtures/fleet-mirror.json: a feed with them), a stand-in
+`gh` and a stand-in mirror. Placeholder names only. No network, no GitHub login.
 
     PYTHONPATH=lib:../lib python -m unittest discover -s tests
     LAB_TASKS_GOLDEN_UPDATE=1 …      rewrite tests/golden/lab-tasks.txt after a deliberate change
@@ -38,6 +39,8 @@ LAB = os.path.join(os.path.dirname(HERE), "bin", "bromigos-lab")
 GOLDEN = os.path.join(HERE, "golden", "lab-tasks.txt")
 with open(os.path.join(HERE, "fixtures", "fleet-status-body.txt")) as _f:
     BODY = _f.read()
+with open(os.path.join(HERE, "fixtures", "fleet-mirror.json")) as _f:
+    MIRROR = json.load(_f)
 NOW = datetime(2026, 11, 28, 11, 52, 0, tzinfo=timezone.utc)      # twelve minutes after the feed was written
 BOT = {"login": "github-actions[bot]"}
 SOURCE = '[[source]]\nname = "tasks"\ntype = "fleet"\nrepo = "my-org/agents"\n'
@@ -47,6 +50,11 @@ UNSAFE = re.compile("[\x00-\x09\x0b-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u202a-\u202
 
 def feed():
     return fleet.parse_body(BODY)
+
+
+def worded():
+    """The feed the status mirror holds: one that names each task's lane and phrase itself."""
+    return json.loads(json.dumps(MIRROR["feeds"][0]["feed"]))
 
 
 def lanes(v):
@@ -196,7 +204,7 @@ class ViewTest(unittest.TestCase):
                           ("site#9", "Blocked · the task needs a production credential the agents do not hold",
                            "Fri 27 Nov 17:03")])                      # the feed's time zone, not UTC
         self.assertEqual([(r["label"], r["phrase"], r["when"], r["why"]) for r in by["working"]["rows"]],
-                         [("app#57", "Writing", "12:31", ""), ("app#49", "Fixing · round 2", "12:20", ""),
+                         [("app#57", "Writing", "12:31", ""), ("app#49", "Fixing", "12:20", ""),
                           ("site#14", "Checks running", "", "waiting for 2 check(s): build, test")])
         self.assertEqual([(r["label"], r["phrase"]) for r in by["waiting"]["rows"]],
                          [("site#12", "Queued · ready; no free account this tick")])
@@ -213,23 +221,28 @@ class ViewTest(unittest.TestCase):
         self.assertEqual([(r["label"], r["phrase"], r["when"]) for r in d["rows"]],
                          [("app#52", "Merged", "11:58"), ("site#11", "Merged", "10:41"), ("app#50", "Merged", "09:05"),
                           ("app#47", "Merged", "08:30"), ("site#7", "Merged", "Thu 26 Nov 16:00")])
-        self.assertEqual([(r["label"], r["phrase"], r["when"]) for r in d["events"]], [("app#49", "Not merged", "11:20")])
-        # a stuck or blocked task stands under Needs you, not twice
-        self.assertNotIn("app#41", [r["label"] for r in d["rows"] + d["events"]])
+        # work that ended without a merge is an event under Done, never a finished task
+        self.assertEqual([(r["label"], r["phrase"], r["when"]) for r in d["events"]],
+                         [("app#49", "Not merged", "11:20"), ("app#41", "Not merged · stuck", "09:12"),
+                          ("site#9", "Not merged · blocked", "Fri 27 Nov 17:03")])
+        self.assertNotIn("app#41", [r["label"] for r in d["rows"]])
+        self.assertEqual(d["count"], 5)
         f = feed()
         f["recent"][1]["why"] = "the change deletes a test instead of fixing it"
         self.assertEqual(lanes(fleet.view(f, NOW))["done"]["events"][0]["phrase"],
                          "Not merged · the change deletes a test instead of fixing it")
 
     def test_every_stage_has_its_phrase(self):
-        want = [(work("agent", "queued"), "Starting"), (work("agent", "prepare"), "Writing"),
-                (work("agent", "agent"), "Writing"), (work("agent", "verify"), "Writing"),
-                (work("agent", None), "Writing"), (work("checks"), "Checks running"),
+        want = [(work("agent", "queued"), "Starting"), (work("agent", "prepare"), "Starting"),
+                (work("agent", "agent"), "Writing"), (work("agent", "verify"), "Checking the change"),
+                (work("agent", "review"), "Reviewing"), (work("agent", "second_review"), "Second review"),
+                (work("agent", "finish"), "Opening the pull request"), (work("agent", None), "Working"),
+                (work("checks"), "Checks running"), (work("checks", why="no checks yet; waiting"), "Waiting for checks"),
                 (work("review", "queued"), "Reviewing"), (work("review", "review"), "Reviewing"),
                 (work("review", "second_review"), "Second review"), (work("review", "finish"), "Reviewing"),
-                (work("fixing", "agent", attempt=2), "Fixing · round 1"),
-                (work("fixing", "queued", attempt=4), "Fixing · round 3"),
-                (work("fixing", "agent", attempt=1), "Fixing · round 1"), (work("fixing", "agent"), "Fixing"),
+                # a fix run's round is the fleet's to count: the feed's phrase says it, a feed without one doesn't
+                (work("fixing", "agent", attempt=2), "Fixing"), (work("fixing", "queued"), "Fixing"),
+                (work("fixing", "verify", attempt=3, phrase="Fixing · round 2"), "Fixing · round 2"),
                 (work("merging"), "Merging")]
         f = dict(feed(), working=[w for w, _phrase in want])
         v = fleet.view(f, NOW)
@@ -252,7 +265,11 @@ class ViewTest(unittest.TestCase):
         f["waiting"] = [dict(f["waiting"][0], kind="has-pr", why=None), dict(f["waiting"][0], kind="untrusted", why="who?")]
         by = lanes(fleet.view(f, NOW))
         self.assertEqual([r["phrase"] for r in by["needs_you"]["rows"]], ["Stuck", "Needs you · x"])
-        self.assertEqual([r["phrase"] for r in by["waiting"]["rows"]], ["Queued", "Queued · who?"])
+        self.assertEqual([r["phrase"] for r in by["waiting"]["rows"]], ["Waiting", "Waiting · who?"])
+        f["waiting"] = [dict(f["waiting"][0], kind="queued", why=None), dict(f["waiting"][0], kind="ignored")]
+        v = fleet.view(f, NOW)
+        self.assertEqual([r["phrase"] for r in lanes(v)["waiting"]["rows"]], ["Queued"])
+        self.assertEqual(v["ignored"], 1)                             # what the fleet leaves alone is in no lane
 
     def test_a_feed_that_names_lane_and_phrase_is_shown_as_it_says(self):
         f = feed()
@@ -262,7 +279,7 @@ class ViewTest(unittest.TestCase):
         f["needs_person"][0].update(lane="On hold", phrase="Parked until Monday")
         f["proposed"] = [{"repo": "site", "issue": 20, "title": "Add a dark theme", "why": "three people asked",
                           "url": "https://github.com/my-org/site/issues/20",
-                          "issue_url": "https://github.com/my-org/site/issues/20", "since": "2026-11-28T10:00:00Z"},
+                          "issue_url": "https://github.com/my-org/site/issues/20", "filed_at": "2026-11-28T10:00:00Z"},
                          {"repo": "app", "issue": 21, "title": "Drop the old API", "phrase": "Suggested by the weekly review",
                           "lane": "proposed"}]
         v = fleet.view(f, NOW)
@@ -273,8 +290,8 @@ class ViewTest(unittest.TestCase):
                          [("site#9", "Blocked · the task needs a production credential the agents do not hold"),
                           ("app#49", "Wants a decision")])
         self.assertEqual([(r["label"], r["phrase"], r["when"]) for r in by["proposed"]["rows"]],
-                         [("site#20", "Proposed · three people asked", "11:00"),
-                          ("app#21", "Suggested by the weekly review", "")])
+                         [("site#20", "Proposed", "11:00"), ("app#21", "Suggested by the weekly review", "")])
+        self.assertEqual(by["proposed"]["rows"][0]["why"], "three people asked")
         self.assertEqual([(r["label"], r["phrase"]) for r in by["working"]["rows"]],
                          [("app#57", "Drafting the change"), ("site#14", "Checks running")])
         self.assertEqual(by["waiting"]["rows"][0]["phrase"], "Next in line")
@@ -286,15 +303,16 @@ class ViewTest(unittest.TestCase):
 
     def test_unknown_fields_are_ignored(self):
         f = feed()
-        f.update(colour="teal", fleet={"size": 3}, schedules="often")
-        f["working"][0].update(mood="keen", lane=None, phrase=None)
+        f.update(colour="teal", fleet={"size": 3}, heartbeat="often")
+        f["working"][0].update(mood="keen", phrase=None)
         f["accounts"][0]["plan"] = "max"
         self.assertEqual(fleet.view(f, NOW), fleet.view(feed(), NOW))
 
     def test_nothing_needs_you_only_for_a_fresh_feed(self):
         f = dict(feed(), needs_person=[])
         self.assertEqual(fleet.view(f, NOW)["headline"], "Nothing needs you · 3 working · 1 waiting · 4 merged today")
-        self.assertEqual(fleet.view(dict(f, working=[], waiting=[], counts={}), NOW)["headline"], "Nothing needs you")
+        self.assertEqual(fleet.view(dict(f, working=[], waiting=[], counts={}), NOW)["headline"],
+                         "Nothing needs you · 0 working · 0 waiting")
         for v in (fleet.view(f, NOW + timedelta(hours=3)), fleet.view(dict(f, enabled=False), NOW)):
             self.assertNotIn("Nothing needs you", v["headline"])
         one = dict(feed(), needs_person=feed()["needs_person"][:1])
@@ -408,7 +426,7 @@ class HostileTextTest(unittest.TestCase):
         self.assertEqual(rows["app#3"]["title"], "line one line two line three line four five six")
         self.assertEqual(rows["app#8"]["title"], self.TITLES["markup"])
         self.assertLessEqual(max(len(r["title"]) for r in rows.values()), 160)
-        self.assertLessEqual(max(len(r["phrase"]) for r in rows.values()), 200)
+        self.assertLessEqual(max(len(r["phrase"]) for r in rows.values()), 300)
         self.assertEqual(rows["app#1"]["phrase"][:11], "Typing fast")
         self.assertEqual(v["lanes"][-1]["title"], "Side quest")
         self.assertEqual((v["business"], v["accounts"][0]["phrase"]), ("Example Inc", "Unknown"))
@@ -576,8 +594,146 @@ class GitHubTest(unittest.TestCase):
         self.assertEqual(len(gh.calls), 1)
 
 
+class WordedFeedTest(unittest.TestCase):
+    """A feed that names each task's lane and phrase, the lanes' counts and the headline: shown as
+    it says, with nothing mapped again here."""
+
+    def test_the_lanes_the_counts_and_the_headline_are_the_feeds_own(self):
+        f = worded()
+        v = fleet.view(f, NOW)
+        self.assertEqual(v["headline"], f["headline"])
+        self.assertEqual(v["headline"], "3 need you · 2 proposed · 3 working · 1 waiting · 4 merged today")
+        self.assertEqual([(lane["id"], lane["title"], lane["count"], len(lane["rows"]), len(lane["events"])) for lane in v["lanes"]],
+                         [("needs_you", "Needs you", 3, 3, 0), ("proposed", "Proposed", 2, 2, 0), ("working", "Working", 3, 3, 0),
+                          ("waiting", "Waiting", 1, 1, 0), ("done", "Done", 5, 5, 3)])
+        self.assertEqual((v["driver"], v["ignored"], v["counts"]["needs_you"]), ("heartbeat", 1, 3))
+        by = lanes(v)
+        # an entry of `waiting` that only its owner can move stands under Needs you, as the feed says
+        self.assertEqual([(r["label"], r["phrase"]) for r in by["needs_you"]["rows"]],
+                         [("app#41", "Stuck · 3 fix rounds and a clean restart did not make it green"),
+                          ("site#9", "Blocked · the task needs a production credential the agents do not hold"),
+                          ("app#60", "Not started · re-apply agent-ready yourself")])
+        self.assertEqual([(r["label"], r["phrase"]) for r in by["working"]["rows"]],
+                         [("app#57", "Writing"), ("app#49", "Fixing · round 2"), ("site#14", "Checks running")])
+        self.assertEqual([(r["label"], r["phrase"], r["when"]) for r in by["proposed"]["rows"]],
+                         [("site#20", "Proposed by Weekly review", "Mon 23 Nov 07:04"), ("app#21", "Proposed", "Fri 20 Nov 10:15")])
+        self.assertEqual([(r["label"], r["phrase"]) for r in by["waiting"]["rows"]], [("site#12", "Queued · no Claude account is free")])
+        # what the fleet leaves alone is counted and shown in no lane
+        self.assertNotIn("site#3", [r["label"] for lane in v["lanes"] for r in lane["rows"] + lane["events"]])
+        self.assertEqual([(r["label"], r["phrase"]) for r in by["done"]["events"]],
+                         [("app#49", "Not merged · the reviewer asked for changes"),
+                          ("app#41", "Not merged · 3 fix rounds and a clean restart did not make it green"),
+                          ("site#9", "Not merged · the task needs a production credential the agents do not hold")])
+        self.assertEqual([r["phrase"] for r in by["done"]["rows"]], ["Merged"] * 5)
+        json.dumps(v)
+
+    def test_a_reason_is_said_once(self):
+        by = lanes(fleet.view(worded(), NOW))
+        self.assertEqual([r["why"] for r in by["needs_you"]["rows"]],
+                         ["", "", "the start label was applied by someone whose labelling does not count"])
+        self.assertEqual(by["waiting"]["rows"][0]["why"], "ready; no Claude account is free for it (2 resting)")
+        self.assertEqual(by["working"]["rows"][2]["why"], "waiting for 2 check(s): build, test")
+        self.assertEqual([r["why"] for r in by["done"]["events"]], ["", "", ""])
+        text = fleet.render_text(fleet.view(worded(), NOW), everything=True)
+        self.assertEqual(text.count("3 fix rounds and a clean restart did not make it green"), 2)      # the task, and its event
+
+    def test_new_wording_and_new_titles_are_shown_as_given(self):
+        f = worded()
+        f["working"][0]["phrase"] = "Drafting the change"
+        f["waiting"][0].update(lane="needs_you", phrase="Ready to merge · mark the draft ready for review")
+        f["lanes"][0]["title"] = "Wants you"
+        f["headline"] = "4 want you · 3 working"
+        v = fleet.view(f, NOW)
+        by = lanes(v)
+        self.assertEqual((v["headline"], by["needs_you"]["title"]), ("4 want you · 3 working", "Wants you"))
+        self.assertEqual(by["working"]["rows"][0]["phrase"], "Drafting the change")
+        self.assertEqual([(r["label"], r["phrase"]) for r in by["needs_you"]["rows"]][2],
+                         ("site#12", "Ready to merge · mark the draft ready for review"))
+        self.assertEqual((len(by["needs_you"]["rows"]), by["waiting"]["rows"]), (4, []))
+        self.assertIn("WANTS YOU (4)", fleet.render_text(v))
+        # the feed's sentence is for a fresh feed only, and is text like any other
+        self.assertEqual(fleet.view(f, NOW + timedelta(hours=3))["headline"], "No update for 3 h 11 min")
+        self.assertEqual(fleet.view(dict(f, enabled=False), NOW)["headline"], "SWITCHED OFF")
+        hostile = fleet.view(dict(f, headline="2 need you\x1b[31m\nnow\u202e " + "!" * 900), NOW)["headline"]
+        self.assertEqual((hostile[:14], len(hostile)), ("2 need you now", 200))
+        self.assertIsNone(UNSAFE.search(hostile))
+
+    def test_a_feed_without_those_words_gets_the_same_lanes_from_its_lists(self):
+        f = worded()
+        for key in ("headline", "lanes", "ignored", "driver"):
+            del f[key]
+        for key in ("working", "waiting", "needs_person", "proposed", "recent"):
+            for e in f[key]:
+                del e["lane"], e["phrase"]
+        v = fleet.view(f, NOW)
+        by = lanes(v)
+        self.assertEqual(v["headline"], "2 need you · 2 proposed · 3 working · 2 waiting · 4 merged today")
+        self.assertEqual([r["phrase"] for r in by["working"]["rows"]], ["Writing", "Fixing", "Checks running"])
+        self.assertEqual([(r["label"], r["phrase"][:9]) for r in by["waiting"]["rows"]],
+                         [("site#12", "Queued · "), ("app#60", "Waiting ·")])
+        self.assertEqual((v["ignored"], v["driver"]), (1, None))
+        self.assertEqual([r["phrase"] for r in by["proposed"]["rows"]], ["Proposed", "Proposed"])
+        self.assertEqual(len(by["done"]["events"]), 3)
+
+    def test_what_ended_says_who_did_it_and_how_long_it_took(self):
+        v = fleet.view(worded(), NOW)
+        first = lanes(v)["done"]["rows"][0]
+        self.assertEqual((first["account"], first["turns"], first["minutes"], first["reviewers"], first["today"]),
+                         (2, 31, 12.4, ["gate"], True))
+        self.assertEqual([r["today"] for r in lanes(v)["done"]["rows"]], [True, True, True, True, False])
+        self.assertEqual(lanes(v)["done"]["rows"][1]["reviewers"], ["gate", "second"])
+        self.assertEqual((lanes(v)["done"]["rows"][4]["turns"], lanes(v)["done"]["rows"][4]["reviewers"]), (None, None))
+        text = fleet.render_text(v, everything=True)
+        self.assertIn("      at 11:58 · account 2 · 31 turns · 12 min · reviewed by gate", text.splitlines())
+        self.assertIn("      at 10:41 · account 1 · 18 turns · 6 min · reviewed by gate and second", text.splitlines())
+        odd = worded()
+        odd["recent"][0].update(turns="many", minutes=True, reviewers=["gate\x1b[31m", 7, "x" * 90, "a", "b", "c"])
+        row = lanes(fleet.view(odd, NOW))["done"]["rows"][0]
+        self.assertEqual((row["turns"], row["minutes"], row["reviewers"][0], len(row["reviewers"]), len(row["reviewers"][2])),
+                         (None, None, "gate", 4, 40))
+
+    def test_schedules(self):
+        v = fleet.view(worded(), NOW)
+        self.assertEqual(v["schedules"], [{
+            "id": "weekly-review", "name": "Weekly review", "when": "mondays 07:00", "next_at": "2026-11-30T06:00:00Z",
+            "next": "Mon 30 Nov 07:00", "last_run_at": "2026-11-23T06:00:20Z", "last": "Mon 23 Nov 07:00",
+            "last_words": "filed a digest and 1 ticket", "url": "https://github.com/my-org/agents/actions/runs/7000000001",
+            "digest_url": "https://github.com/my-org/agents/issues/31",
+            "tickets": [{"label": "site#20", "url": "https://github.com/my-org/site/issues/20"}]}])
+        lines = fleet.render_text(v, everything=True).splitlines()
+        at = lines.index("SCHEDULES")
+        self.assertEqual(lines[at + 1:at + 6], [
+            "  Weekly review · mondays 07:00 · next Mon 30 Nov 07:00 · last run Mon 23 Nov",
+            "      07:00: filed a digest and 1 ticket", "      run: https://github.com/my-org/agents/actions/runs/7000000001",
+            "      digest: https://github.com/my-org/agents/issues/31", "      site#20: https://github.com/my-org/site/issues/20"])
+        self.assertIn("1 more that the fleet leaves alone isn't shown.", lines)
+        old = fleet.view(feed(), NOW)["schedules"][0]                # a feed from before `last_words`: its outcome
+        self.assertEqual((old["last_words"], old["tickets"]), ("success", []))
+        odd = fleet.view(dict(worded(), schedules=[{"id": "x\x1b[31m", "tickets": [{"repo": "a b", "issue": 1}, 5],
+                                                    "last_run_url": "javascript:alert(1)"}, "nope"]), NOW)["schedules"]
+        self.assertEqual(odd, [{"id": "x", "name": "", "when": "", "next_at": None, "next": "", "last_run_at": None, "last": "",
+                                "last_words": "", "url": "", "digest_url": "", "tickets": [{"label": "a b#1", "url": ""}]}])
+
+    def test_the_card_and_the_document(self):
+        v = fleet.view(worded(), NOW)
+        card = fleet.card({"ok": True, "errors": {}, "items": [{"kind": "fleet", "name": v["business"], "view": v}]})
+        self.assertEqual(card["summary"], "3 need you · 2 proposed · 3 working · 1 waiting · 4 merged today")
+        self.assertEqual([(i["task"], i["state"]) for i in card["items"]],
+                         [("Example", "ok"), ("app#41", "warn"), ("site#9", "warn"), ("app#60", "warn"), ("site#20", "unknown"),
+                          ("app#21", "unknown"), ("app#57", "ok"), ("app#49", "ok"), ("site#14", "ok"), ("+1 more", "unknown")])
+        doc = fleet.assemble([dict(v, source="tasks")], {}, True, NOW)
+        self.assertEqual({k: doc[k] for k in ("schema", "generatedAt", "configured", "state", "errors")},
+                         {"schema": 1, "generatedAt": int(NOW.timestamp()), "configured": True, "state": "warn", "errors": {}})
+        self.assertEqual(doc["fleets"][0]["source"], "tasks")
+        self.assertEqual(fleet.assemble([], {}, False, NOW)["state"], "empty")
+        self.assertEqual(fleet.assemble([], {"tasks": "no"}, True, NOW)["state"], "unreachable")
+        quiet = fleet.view(dict(worded(), needs_person=[], waiting=[], lanes=[], headline=None), NOW)
+        self.assertEqual(fleet.assemble([quiet], {}, True, NOW)["state"], "ok")
+
+
 class Mirror:
-    """A stand-in for an in-lab mirror: one HTTP server on this machine, answering `answer`."""
+    """A stand-in for a lab's status mirror: one HTTP server on this machine, answering `answer`
+    with an ETag, and 304 to a request that sends that ETag back."""
 
     def __init__(self, answer, code=200):
         self.answer, self.code, self.seen = answer, code, []
@@ -589,8 +745,15 @@ class Mirror:
             def do_GET(self):
                 mirror.seen.append((self.path, self.headers.get("Authorization"), self.headers.get("Accept")))
                 body = mirror.answer if isinstance(mirror.answer, bytes) else json.dumps(mirror.answer).encode()
+                tag = '"%08x"' % (hash(body) & 0xffffffff)
+                if mirror.code == 200 and self.headers.get("If-None-Match") == tag:
+                    self.send_response(304)
+                    self.send_header("ETag", tag)
+                    self.end_headers()
+                    return
                 self.send_response(mirror.code)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("ETag", tag)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -598,7 +761,7 @@ class Mirror:
             def log_message(self, *a):
                 pass
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/api/fleet"
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v1/feed"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         return self
 
@@ -623,13 +786,14 @@ class MirrorTest(unittest.TestCase):
     def test_reads_every_feed_the_mirror_holds(self):
         with Mirror(self.answer()) as m:
             got = fleet.read_url(m.url, headers={"Authorization": "Bearer EXAMPLE"})
-        self.assertEqual(m.seen, [("/api/fleet", "Bearer EXAMPLE", "application/json")])
+        self.assertEqual(m.seen, [("/v1/feed", "Bearer EXAMPLE", "application/json")])
         self.assertEqual([(e["business"], e["received_at"], "feed" in e) for e in got],
                          [("Example", "2026-11-28T11:40:09Z", True), ("Second", "2026-11-28T11:41:00Z", True),
                           ("Newer", "2026-11-28T11:41:30Z", False)])
         self.assertEqual(got[0]["feed"], feed())
         self.assertIn("is schema 2 and this bromigOS reads schema 1", got[2]["error"])
-        self.assertEqual(fleet.view(got[1]["feed"], NOW)["headline"], "Nothing needs you · 1 waiting · 4 merged today")
+        self.assertEqual(fleet.view(got[1]["feed"], NOW)["headline"],
+                         "Nothing needs you · 0 working · 1 waiting · 4 merged today")
 
     def test_says_what_is_wrong(self):
         def fails(answer, code=200):
@@ -646,10 +810,28 @@ class MirrorTest(unittest.TestCase):
         with self.assertRaises(fleet.ReadError) as e:                 # nothing listens there any more
             fleet.read_url(url, timeout=2)
         self.assertEqual(e.exception.kind, "failed")
-        for bad in ("file:///etc/hostname", "ftp://board.mylab.example/x", "board.mylab.example", "", None):
+        for bad in ("file:///etc/hostname", "ftp://status-mirror.mylab.example/x", "status-mirror.mylab.example", "", None):
             with self.assertRaises(fleet.ReadError) as e:
                 fleet.read_url(bad)
             self.assertIn("http:// or https://", str(e.exception))
+
+    def test_an_unchanged_answer_is_not_sent_again(self):
+        with Mirror(MIRROR) as m:
+            entries, tag = fleet.fetch_url(m.url)
+            self.assertEqual(([e["business"] for e in entries], entries[0]["feed"]), (["example"], worded()))
+            self.assertRegex(tag, r'^"[0-9a-f]{8}"$')
+            self.assertEqual(fleet.fetch_url(m.url, etag=tag), (None, tag))
+            m.answer = {"schema": 1, "feeds": []}                     # the mirror restarted: nothing yet, and no error
+            self.assertEqual(fleet.fetch_url(m.url, etag=tag)[0], [])
+            self.assertEqual(fleet.read_url(m.url), [])
+        self.assertEqual(fleet.read_envelope(MIRROR)[0]["received_at"], "2026-11-28T11:40:09Z")
+
+    def test_a_mirror_with_no_report_yet_says_so(self):
+        with Mirror({"schema": 1, "feeds": []}) as m:
+            a = labfleet.Fleet({"name": "tasks", "type": "fleet", "url": m.url})
+            with self.assertRaises(registry.Unreachable) as e:
+                a.tasks()
+        self.assertIn("no report yet: your lab's status mirror holds no feed until the fleet's next run", str(e.exception))
 
     def test_a_mirror_source_gives_a_section_per_business(self):
         with Mirror(self.answer()) as m:
@@ -702,7 +884,7 @@ class CardTest(unittest.TestCase):
         self.assertEqual([(r["name"], r["lane"], r["state"]) for r in rest][:4],
                          [("app#41", "needs_you", "warn"), ("site#9", "needs_you", "warn"), ("app#57", "working", "ok"),
                           ("app#49", "working", "ok")])
-        self.assertEqual(len(rest), 12)
+        self.assertEqual(len(rest), 14)
         self.assertEqual(list(rest[0])[:11], list(caps.SCHEMAS["tasks"]))
 
     def test_the_card_document(self):
@@ -717,7 +899,7 @@ class CardTest(unittest.TestCase):
             ("Example", "2 need you · 3 working · 1 waiting · 4 merged today", "ok"),
             ("app#41", "Stuck · 3 fix rounds and a clean restart did not make it green", "warn"),      # needs you first
             ("site#9", "Blocked · the task needs a production credential the agents do not hold", "warn"),
-            ("app#57", "Writing", "ok"), ("app#49", "Fixing · round 2", "ok"), ("site#14", "Checks running", "ok"),
+            ("app#57", "Writing", "ok"), ("app#49", "Fixing", "ok"), ("site#14", "Checks running", "ok"),
             ("+1 more", "1 waiting", "unknown")])
         self.assertEqual(c["items"][0]["title"], "updated 12:40 · account 1: Available; account 2: Resting until 15:45")
         self.assertEqual((c["items"][1]["title"], c["items"][1]["since"], c["items"][1]["url"]),
@@ -833,7 +1015,7 @@ class CommandTest(unittest.TestCase):
         self.assertLessEqual(max(len(line) for line in lines), 80)
         heads = [line for line in lines if re.match(r"[A-Z][A-Z ]+( \(|$)", line)]
         self.assertEqual(heads, ["NEEDS YOU (2)", "WORKING (3)", "WAITING (1)", "DONE (4 merged today · 9 in 7 days)",
-                                 "WARNINGS"])
+                                 "SCHEDULES", "WARNINGS"])
         for link in ("https://github.com/my-org/app/issues/41", "PR #44: https://github.com/my-org/app/pull/44",
                      "run: https://github.com/my-org/agents/actions/runs/7000000091"):
             self.assertIn("      " + link, lines)
